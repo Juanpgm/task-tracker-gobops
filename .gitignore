@@ -31,3 +31,9 @@ Thumbs.db
 
 # Firebase service account (NEVER commit)
 **/serviceAccountKey.json
+**/*service_account*.json
+**/firebase-credentials.json
+
+# AWS credentials
+**/*aws*.json
+**/*credentials*.json
