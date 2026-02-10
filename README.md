@@ -33,10 +33,10 @@ nano .env.local
 - **Firebase Service Account**: Descarga JSON desde Firebase Console > Service Accounts
 - **URLs de API**: Ya configuradas para producción
 
-#### Archivos sensibles (NUNCA commitear):
-- `.env.local` (tu configuración personal)
-- Cualquier archivo con `serviceAccountKey.json`
-- Claves privadas o secrets
+#### Archivos de configuración:
+- ✅ **`.env.local`** → Tus credenciales reales (ignoradas por git)
+- ✅ **`.env.example`** → Template público con placeholders
+- ❌ **`.env`** → **NUNCA** uses este archivo (sería commiteado por error)
 
 ### 4. Ejecutar en desarrollo
 ```bash
