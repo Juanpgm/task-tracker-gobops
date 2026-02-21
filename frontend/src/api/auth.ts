@@ -29,12 +29,12 @@ export async function login(email: string, password: string): Promise<void> {
     const backendUser = await apiClient.post<ValidateSessionResponse>('/auth/validate-session', {});
 
     const user: UserProfile = {
+      ...backendUser,
       uid: userCredential.user.uid,
       email: userCredential.user.email || email,
       displayName: backendUser.displayName || userCredential.user.displayName || '',
       role: backendUser.role || '',
       token: idToken,
-      ...backendUser,
     };
 
     authStore.login(user);
@@ -93,12 +93,12 @@ export function initAuthListener(): () => void {
         const backendUser = await apiClient.post<ValidateSessionResponse>('/auth/validate-session', {});
 
         const user: UserProfile = {
+          ...backendUser,
           uid: firebaseUser.uid,
           email: firebaseUser.email || '',
           displayName: backendUser.displayName || firebaseUser.displayName || '',
           role: backendUser.role || '',
           token: idToken,
-          ...backendUser,
         };
 
         authStore.login(user);
@@ -181,12 +181,12 @@ export async function googleAuth(googleToken: string): Promise<void> {
     
     // Create user profile from response
     const user: UserProfile = {
+      ...response,
       uid: response.uid,
       email: response.email || '',
       displayName: response.displayName || '',
       role: response.role || '',
       token: googleToken,
-      ...response,
     };
 
     authStore.login(user);

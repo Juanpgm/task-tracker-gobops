@@ -60,7 +60,8 @@ export type EstadoRequerimiento =
   | 'asignado'
   | 'en-proceso'
   | 'resuelto'
-  | 'cerrado';
+  | 'cerrado'
+  | 'cancelado';
 
 export interface EvidenciaRequerimiento {
   id: string;
@@ -96,9 +97,19 @@ export interface Requerimiento {
   encargado?: string;                // persona asignada del centro gestor
   enlace_id?: string;                // ID del enlace del organismo asignado
   enlace_nombre?: string;            // nombre del enlace (desnormalizado)
+  fecha_propuesta_solucion?: string; // habilitada al asignar enlace
   porcentaje_avance: number;         // 0-100
   historial: RegistroAvance[];
   prioridad: 'baja' | 'media' | 'alta' | 'urgente';
+  // Orfeo / petición oficial
+  numero_orfeo?: string;             // código único del documento oficial
+  fecha_radicado_orfeo?: string;     // fecha de radicado en orfeo
+  documento_peticion_url?: string;   // URL del documento de petición subido
+  documento_peticion_nombre?: string;// nombre del archivo subido
+  // Cancelación
+  motivo_cancelacion?: string;       // argumentación de la cancelación
+  documento_cancelacion_url?: string;// URL del documento oficial de cancelación
+  documento_cancelacion_nombre?: string;
   created_at: string;
   updated_at: string;
 }
@@ -146,4 +157,5 @@ export const KANBAN_COLUMNS: KanbanColumn[] = [
   { id: 'en-proceso', title: 'En Proceso',   color: '#f97316', icon: '🔧' },
   { id: 'resuelto',   title: 'Resueltos',    color: '#22c55e', icon: '✅' },
   { id: 'cerrado',    title: 'Cerrados',     color: '#64748b', icon: '🔒' },
+  { id: 'cancelado',  title: 'Cancelados',   color: '#ef4444', icon: '🚫' },
 ];

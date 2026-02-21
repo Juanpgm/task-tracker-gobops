@@ -3,13 +3,28 @@
   import { seguimientoStore } from '../../stores/seguimientoStore';
   import { KANBAN_COLUMNS } from '../../types/seguimiento';
   import type { Requerimiento, EstadoRequerimiento } from '../../types/seguimiento';
+  import { CENTROS_GESTORES } from '../../data/mock-seguimiento';
   import Button from '../ui/Button.svelte';
 
   let filterVisitaId = '';
   let selectedReq: Requerimiento | null = null;
   let showDetailPanel = false;
   let viewMode: 'kanban' | 'tabla' = 'kanban';
+  let groupBy: 'estado' | 'centro_gestor' = 'estado';
   let enlaceSeleccionado = '';
+  let showFilters = false;
+
+  // Filters
+  let filterCentroGestor = '';
+  let filterComuna = '';
+  let filterBarrio = '';
+  let filterFechaInicio = '';
+  let filterFechaFin = '';
+  let filterEstado = '';
+  let filterPrioridad = '';
+  let filterConEnlace = ''; // 'con' | 'sin' | ''
+  let filterConOrfeo = '';  // 'con' | 'sin' | ''
+  let filterTexto = '';
 
   // Avance form
   let showAvanceForm = false;
@@ -18,28 +33,103 @@
   let avancePorcentaje = 0;
   let avanceEncargado = '';
 
+  // Orfeo form
+  let showOrfeoForm = false;
+  let orfeoNumero = '';
+  let orfeoFechaRadicado = '';
+  let orfeoPeticionFile: FileList | null = null;
+
+  // Propuesta solucion
+  let fechaPropuestaSolucion = '';
+
+  // Cancelar form
+  let showCancelForm = false;
+  let cancelMotivo = '';
+  let cancelDocFile: FileList | null = null;
+
   $: params = $navigationStore.params;
   $: filterVisitaId = params.visitaId || '';
 
   $: allReqs = $seguimientoStore.requerimientos;
-  $: displayReqs = filterVisitaId
-    ? allReqs.filter((r) => r.visita_id === filterVisitaId)
-    : allReqs;
+  $: displayReqs = allReqs.filter((r) => {
+    if (filterVisitaId && r.visita_id !== filterVisitaId) return false;
+    if (filterCentroGestor && !r.centros_gestores.includes(filterCentroGestor)) return false;
+    if (filterComuna && r.solicitante.comuna_corregimiento !== filterComuna) return false;
+    if (filterBarrio && r.solicitante.barrio_vereda !== filterBarrio) return false;
+    if (filterFechaInicio && r.created_at < filterFechaInicio) return false;
+    if (filterFechaFin && r.created_at > filterFechaFin + 'T23:59:59Z') return false;
+    if (filterEstado && r.estado !== filterEstado) return false;
+    if (filterPrioridad && r.prioridad !== filterPrioridad) return false;
+    if (filterConEnlace === 'con' && !r.enlace_id) return false;
+    if (filterConEnlace === 'sin' && r.enlace_id) return false;
+    if (filterConOrfeo === 'con' && !r.numero_orfeo) return false;
+    if (filterConOrfeo === 'sin' && r.numero_orfeo) return false;
+    if (filterTexto) {
+      const q = filterTexto.toLowerCase();
+      const match =
+        r.descripcion.toLowerCase().includes(q) ||
+        r.solicitante.nombre_completo.toLowerCase().includes(q) ||
+        r.solicitante.cedula.includes(q) ||
+        r.id.toLowerCase().includes(q) ||
+        (r.numero_orfeo || '').toLowerCase().includes(q) ||
+        r.centros_gestores.some(cg => cg.toLowerCase().includes(q));
+      if (!match) return false;
+    }
+    return true;
+  });
 
   $: groupedByEstado = (() => {
     const grouped: Record<EstadoRequerimiento, Requerimiento[]> = {
-      'nuevo': [], 'radicado': [], 'en-gestion': [], 'asignado': [], 'en-proceso': [], 'resuelto': [], 'cerrado': [],
+      'nuevo': [], 'radicado': [], 'en-gestion': [], 'asignado': [],
+      'en-proceso': [], 'resuelto': [], 'cerrado': [], 'cancelado': [],
     };
+    for (const req of displayReqs) grouped[req.estado].push(req);
+    return grouped;
+  })();
+
+  $: groupedByCentroGestor = (() => {
+    const grouped: Record<string, Requerimiento[]> = {};
     for (const req of displayReqs) {
-      grouped[req.estado].push(req);
+      const cgs = req.centros_gestores.length > 0 ? req.centros_gestores : ['Sin centro gestor'];
+      for (const cg of cgs) {
+        if (!grouped[cg]) grouped[cg] = [];
+        if (!grouped[cg].find(r => r.id === req.id)) grouped[cg].push(req);
+      }
     }
     return grouped;
   })();
+
+  $: uniqueComunas = [...new Set(allReqs.map(r => r.solicitante.comuna_corregimiento).filter(Boolean))].sort();
+  $: uniqueBarrios = [...new Set(
+    allReqs
+      .filter(r => !filterComuna || r.solicitante.comuna_corregimiento === filterComuna)
+      .map(r => r.solicitante.barrio_vereda).filter(Boolean)
+  )].sort();
+  $: uniqueCentros = CENTROS_GESTORES.map(c => c.nombre);
+
+  $: activeFiltersCount = [filterCentroGestor, filterComuna, filterBarrio, filterFechaInicio, filterFechaFin, filterEstado, filterPrioridad, filterConEnlace, filterConOrfeo, filterTexto].filter(Boolean).length;
+
+  function clearFilters() {
+    filterCentroGestor = '';
+    filterComuna = '';
+    filterBarrio = '';
+    filterFechaInicio = '';
+    filterFechaFin = '';
+    filterEstado = '';
+    filterPrioridad = '';
+    filterConEnlace = '';
+    filterConOrfeo = '';
+    filterTexto = '';
+  }
 
   function selectReq(req: Requerimiento) {
     selectedReq = req;
     showDetailPanel = true;
     showAvanceForm = false;
+    showOrfeoForm = false;
+    showCancelForm = false;
+    enlaceSeleccionado = '';
+    fechaPropuestaSolucion = req.fecha_propuesta_solucion || '';
   }
 
   function closeDetail() {
@@ -54,6 +144,8 @@
     avancePorcentaje = selectedReq.porcentaje_avance;
     avanceEncargado = selectedReq.encargado || '';
     showAvanceForm = true;
+    showOrfeoForm = false;
+    showCancelForm = false;
   }
 
   function getNextEstado(current: EstadoRequerimiento): EstadoRequerimiento {
@@ -77,10 +169,36 @@
       seguimientoStore.asignarEncargado(selectedReq.id, avanceEncargado);
     }
 
-    // Refresh selected
     const updated = $seguimientoStore.requerimientos.find((r) => r.id === selectedReq!.id);
     if (updated) selectedReq = updated;
     showAvanceForm = false;
+  }
+
+  function guardarOrfeo() {
+    if (!selectedReq || !orfeoNumero.trim()) return;
+    const docNombre = orfeoPeticionFile?.[0]?.name;
+    const docUrl = docNombre ? `#local:${docNombre}` : undefined;
+    seguimientoStore.actualizarOrfeo(selectedReq.id, orfeoNumero, orfeoFechaRadicado, docUrl, docNombre);
+    const updated = $seguimientoStore.requerimientos.find((r) => r.id === selectedReq!.id);
+    if (updated) selectedReq = updated;
+    showOrfeoForm = false;
+  }
+
+  function guardarFechaPropuestaSolucion() {
+    if (!selectedReq || !fechaPropuestaSolucion) return;
+    seguimientoStore.asignarFechaPropuestaSolucion(selectedReq.id, fechaPropuestaSolucion);
+    const updated = $seguimientoStore.requerimientos.find((r) => r.id === selectedReq!.id);
+    if (updated) selectedReq = updated;
+  }
+
+  function confirmarCancelacion() {
+    if (!selectedReq || !cancelMotivo.trim()) return;
+    const docNombre = cancelDocFile?.[0]?.name;
+    const docUrl = docNombre ? `#local:${docNombre}` : undefined;
+    seguimientoStore.cancelarRequerimiento(selectedReq.id, cancelMotivo, 'Usuario actual', docUrl, docNombre);
+    const updated = $seguimientoStore.requerimientos.find((r) => r.id === selectedReq!.id);
+    if (updated) selectedReq = updated;
+    showCancelForm = false;
   }
 
   // Keep selectedReq in sync
@@ -114,12 +232,6 @@
     ? allEnlaces.filter((e) => selectedReq!.centros_gestores.includes(e.centro_gestor_nombre))
     : [];
 
-  function getEnlaceNombre(enlaceId: string | undefined): string {
-    if (!enlaceId) return '';
-    const e = $seguimientoStore.enlaces.find((en) => en.id === enlaceId);
-    return e ? e.nombre : '';
-  }
-
   function handleAsignarEnlace() {
     if (!selectedReq || !enlaceSeleccionado) return;
     const enlace = allEnlaces.find((e) => e.id === enlaceSeleccionado);
@@ -139,14 +251,114 @@
     <button class="back-btn" on:click={() => navigationStore.navigate(filterVisitaId ? 'visitas-programadas' : 'home')}>← Volver</button>
     <h2 class="view-title">📊 Tablero de Requerimientos</h2>
     <div class="header-controls">
+      <!-- View toggle -->
       <div class="view-toggle">
         <button class="toggle-btn" class:active={viewMode === 'kanban'} on:click={() => (viewMode = 'kanban')}>▦ Kanban</button>
         <button class="toggle-btn" class:active={viewMode === 'tabla'} on:click={() => (viewMode = 'tabla')}>☰ Tabla</button>
       </div>
+      <!-- GroupBy toggle (kanban only) -->
+      {#if viewMode === 'kanban'}
+        <div class="view-toggle">
+          <button class="toggle-btn" class:active={groupBy === 'estado'} on:click={() => (groupBy = 'estado')} title="Agrupar por estado">Estado</button>
+          <button class="toggle-btn" class:active={groupBy === 'centro_gestor'} on:click={() => (groupBy = 'centro_gestor')} title="Agrupar por centro gestor">C.Gestor</button>
+        </div>
+      {/if}
+      <!-- Filter toggle -->
+      <button class="filter-toggle-btn" class:has-active={activeFiltersCount > 0} on:click={() => (showFilters = !showFilters)}>
+        🔽 Filtros{activeFiltersCount > 0 ? ` (${activeFiltersCount})` : ''}
+      </button>
       <span class="stat">{totalReqs} req.</span>
       <span class="stat">⌀ {avgAvance}%</span>
     </div>
   </header>
+
+  <!-- Filter bar -->
+  {#if showFilters}
+    <div class="filter-bar">
+      <!-- Row 1: text search -->  
+      <div class="filter-row">
+        <div class="filter-group filter-group-wide">
+          <label for="f-texto">🔍 Buscar</label>
+          <input id="f-texto" type="text" bind:value={filterTexto} placeholder="Descripción, solicitante, ID, orfeo, centro gestor…" class="filter-search" />
+        </div>
+      </div>
+      <!-- Row 2: dropdowns -->
+      <div class="filter-row">
+        <div class="filter-group">
+          <label for="f-estado">Estado</label>
+          <select id="f-estado" bind:value={filterEstado}>
+            <option value="">Todos</option>
+            <option value="nuevo">🆕 Nuevo</option>
+            <option value="radicado">📋 Radicado</option>
+            <option value="en-gestion">📞 En Gestión</option>
+            <option value="asignado">👤 Asignado</option>
+            <option value="en-proceso">🔧 En Proceso</option>
+            <option value="resuelto">✅ Resuelto</option>
+            <option value="cerrado">🔒 Cerrado</option>
+            <option value="cancelado">🚫 Cancelado</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="f-prio">Prioridad</label>
+          <select id="f-prio" bind:value={filterPrioridad}>
+            <option value="">Todas</option>
+            <option value="urgente">🔴 Urgente</option>
+            <option value="alta">🟠 Alta</option>
+            <option value="media">🔵 Media</option>
+            <option value="baja">⚪ Baja</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="f-cg">Centro Gestor</label>
+          <select id="f-cg" bind:value={filterCentroGestor}>
+            <option value="">Todos</option>
+            {#each uniqueCentros as cg}<option value={cg}>{cg}</option>{/each}
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="f-com">Comuna</label>
+          <select id="f-com" bind:value={filterComuna} on:change={() => (filterBarrio = '')}>
+            <option value="">Todas</option>
+            {#each uniqueComunas as c}<option value={c}>{c}</option>{/each}
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="f-barrio">Barrio</label>
+          <select id="f-barrio" bind:value={filterBarrio}>
+            <option value="">Todos</option>
+            {#each uniqueBarrios as b}<option value={b}>{b}</option>{/each}
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="f-enlace">Enlace</label>
+          <select id="f-enlace" bind:value={filterConEnlace}>
+            <option value="">Todos</option>
+            <option value="con">✅ Con enlace</option>
+            <option value="sin">❌ Sin enlace</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="f-orfeo">Orfeo</label>
+          <select id="f-orfeo" bind:value={filterConOrfeo}>
+            <option value="">Todos</option>
+            <option value="con">📄 Con orfeo</option>
+            <option value="sin">📭 Sin orfeo</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="f-desde">Desde</label>
+          <input id="f-desde" type="date" bind:value={filterFechaInicio} />
+        </div>
+        <div class="filter-group">
+          <label for="f-hasta">Hasta</label>
+          <input id="f-hasta" type="date" bind:value={filterFechaFin} />
+        </div>
+        {#if activeFiltersCount > 0}
+          <button class="clear-filter-btn" on:click={clearFilters}>✕ Limpiar ({activeFiltersCount})</button>
+        {/if}
+      </div>
+    </div>
+  {/if}
 
   {#if filterVisitaId}
     <div class="filter-banner">
@@ -158,47 +370,85 @@
   {#if viewMode === 'kanban'}
   <div class="kanban-container">
     <div class="kanban-board">
-      {#each KANBAN_COLUMNS as col (col.id)}
-        {@const colReqs = groupedByEstado[col.id] || []}
-        <div class="kanban-column">
-          <div class="column-header" style="border-color: {col.color}">
-            <span class="column-icon">{col.icon}</span>
-            <span class="column-title">{col.title}</span>
-            <span class="column-count" style="background: {col.color}">{colReqs.length}</span>
-          </div>
-          <div class="column-body">
-            {#each colReqs as req (req.id)}
-              <button class="kanban-card" class:selected={selectedReq?.id === req.id} on:click={() => selectReq(req)}>
-                <div class="kcard-top">
-                  <span class="kcard-prioridad" style={getPrioridadStyle(req.prioridad)}>{req.prioridad}</span>
-                  <span class="kcard-id">{req.id}</span>
-                </div>
-                <p class="kcard-desc">{req.descripcion.slice(0, 80)}{req.descripcion.length > 80 ? '...' : ''}</p>
-                <div class="kcard-footer">
-                  <span class="kcard-solicitante">👤 {req.solicitante.nombre_completo.split(' ')[0]}</span>
-                  <div class="kcard-avance">
-                    <div class="mini-bar"><div class="mini-fill" style="width: {req.porcentaje_avance}%"></div></div>
-                    <span>{req.porcentaje_avance}%</span>
+      {#if groupBy === 'estado'}
+        {#each KANBAN_COLUMNS as col (col.id)}
+          {@const colReqs = groupedByEstado[col.id] || []}
+          <div class="kanban-column">
+            <div class="column-header" style="border-color: {col.color}">
+              <span class="column-icon">{col.icon}</span>
+              <span class="column-title">{col.title}</span>
+              <span class="column-count" style="background: {col.color}">{colReqs.length}</span>
+            </div>
+            <div class="column-body">
+              {#each colReqs as req (req.id)}
+                <button class="kanban-card" class:selected={selectedReq?.id === req.id} on:click={() => selectReq(req)}>
+                  <div class="kcard-top">
+                    <span class="kcard-prioridad" style={getPrioridadStyle(req.prioridad)}>{req.prioridad}</span>
+                    <span class="kcard-id">{req.id}</span>
                   </div>
-                </div>
-                <div class="kcard-tags">
-                  {#each req.centros_gestores.slice(0, 2) as cg}
-                    <span class="kcard-tag">{cg.length > 15 ? cg.slice(0, 12) + '...' : cg}</span>
-                  {/each}
-                  {#if req.centros_gestores.length > 2}
-                    <span class="kcard-tag">+{req.centros_gestores.length - 2}</span>
-                  {/if}
-                </div>
-                {#if req.enlace_nombre}
-                  <div class="kcard-enlace">🤝 {req.enlace_nombre}</div>
-                {/if}
-              </button>
-            {:else}
-              <div class="empty-column">Sin requerimientos</div>
-            {/each}
+                  <p class="kcard-desc">{req.descripcion.slice(0, 80)}{req.descripcion.length > 80 ? '...' : ''}</p>
+                  <div class="kcard-footer">
+                    <span class="kcard-solicitante">👤 {req.solicitante.nombre_completo.split(' ')[0]}</span>
+                    <div class="kcard-avance">
+                      <div class="mini-bar"><div class="mini-fill" style="width: {req.porcentaje_avance}%"></div></div>
+                      <span>{req.porcentaje_avance}%</span>
+                    </div>
+                  </div>
+                  <div class="kcard-tags">
+                    {#each req.centros_gestores.slice(0, 2) as cg}
+                      <span class="kcard-tag">{cg.length > 15 ? cg.slice(0, 12) + '...' : cg}</span>
+                    {/each}
+                    {#if req.centros_gestores.length > 2}
+                      <span class="kcard-tag">+{req.centros_gestores.length - 2}</span>
+                    {/if}
+                  </div>
+                  {#if req.enlace_nombre}<div class="kcard-enlace">🤝 {req.enlace_nombre}</div>{/if}
+                  {#if req.numero_orfeo}<div class="kcard-orfeo">📄 Orfeo: {req.numero_orfeo}</div>{/if}
+                </button>
+              {:else}
+                <div class="empty-column">Sin requerimientos</div>
+              {/each}
+            </div>
           </div>
-        </div>
-      {/each}
+        {/each}
+      {:else}
+        {#each Object.entries(groupedByCentroGestor) as [cg, cgReqs] (cg)}
+          <div class="kanban-column">
+            <div class="column-header cg-header" style="border-color: #6366f1">
+              <span class="column-icon">🏢</span>
+              <span class="column-title" title={cg}>{cg.length > 22 ? cg.slice(0,20)+'…' : cg}</span>
+              <span class="column-count" style="background: #6366f1">{cgReqs.length}</span>
+            </div>
+            <div class="column-body">
+              {#each cgReqs as req (req.id + cg)}
+                <button class="kanban-card" class:selected={selectedReq?.id === req.id} on:click={() => selectReq(req)}>
+                  <div class="kcard-top">
+                    <span class="kcard-prioridad" style={getPrioridadStyle(req.prioridad)}>{req.prioridad}</span>
+                    <span class="kcard-id">{req.id}</span>
+                  </div>
+                  <p class="kcard-desc">{req.descripcion.slice(0, 80)}{req.descripcion.length > 80 ? '...' : ''}</p>
+                  <div class="kcard-footer">
+                    <span class="kcard-solicitante">👤 {req.solicitante.nombre_completo.split(' ')[0]}</span>
+                    <div class="kcard-avance">
+                      <div class="mini-bar"><div class="mini-fill" style="width: {req.porcentaje_avance}%"></div></div>
+                      <span>{req.porcentaje_avance}%</span>
+                    </div>
+                  </div>
+                  <div class="kcard-meta-row">
+                    <span class="kcard-estado-chip">{req.estado}</span>
+                  </div>
+                  {#if req.enlace_nombre}<div class="kcard-enlace">🤝 {req.enlace_nombre}</div>{/if}
+                  {#if req.numero_orfeo}<div class="kcard-orfeo">📄 Orfeo: {req.numero_orfeo}</div>{/if}
+                </button>
+              {:else}
+                <div class="empty-column">Sin requerimientos</div>
+              {/each}
+            </div>
+          </div>
+        {:else}
+          <div class="empty-board">No hay requerimientos con los filtros actuales</div>
+        {/each}
+      {/if}
     </div>
   </div>
   {:else}
@@ -307,6 +557,21 @@
               {/if}
             </div>
           </div>
+          <!-- Fecha propuesta de solución habilitada al tener enlace -->
+          <div class="fecha-solucion-box">
+            <label class="fecha-solucion-label">📅 Fecha propuesta de solución</label>
+            <div class="fecha-solucion-row">
+              <input type="date" bind:value={fechaPropuestaSolucion} class="fecha-solucion-input" />
+              <button
+                class="fecha-solucion-btn"
+                on:click={guardarFechaPropuestaSolucion}
+                disabled={!fechaPropuestaSolucion || fechaPropuestaSolucion === (selectedReq.fecha_propuesta_solucion || '')}
+              >Guardar</button>
+            </div>
+            {#if selectedReq.fecha_propuesta_solucion}
+              <span class="fecha-solucion-saved">✅ Propuesta: {new Date(selectedReq.fecha_propuesta_solucion).toLocaleDateString('es-CO')}</span>
+            {/if}
+          </div>
         {:else}
           <p class="panel-info-sm" style="margin-bottom: 0.4rem;">Sin enlace asignado</p>
         {/if}
@@ -322,6 +587,47 @@
           </div>
         {:else}
           <p class="panel-info-sm" style="color: #94a3b8;">No hay enlaces registrados para los centros gestores de este requerimiento</p>
+        {/if}
+
+        <hr />
+
+        <!-- Orfeo / Petición Oficial -->
+        <h4>📄 No. Orfeo / Petición Oficial</h4>
+        {#if selectedReq.numero_orfeo}
+          <div class="orfeo-box">
+            <div class="orfeo-row"><span class="orfeo-label">Orfeo:</span> <strong>{selectedReq.numero_orfeo}</strong></div>
+            {#if selectedReq.fecha_radicado_orfeo}
+              <div class="orfeo-row"><span class="orfeo-label">Radicado:</span> {new Date(selectedReq.fecha_radicado_orfeo).toLocaleDateString('es-CO')}</div>
+            {/if}
+            {#if selectedReq.documento_peticion_nombre}
+              <div class="orfeo-row">📎 <span class="orfeo-doc">{selectedReq.documento_peticion_nombre}</span></div>
+            {/if}
+          </div>
+        {/if}
+        {#if !showOrfeoForm}
+          <button class="action-link" on:click={() => { showOrfeoForm = true; showAvanceForm = false; showCancelForm = false; orfeoNumero = selectedReq?.numero_orfeo || ''; orfeoFechaRadicado = selectedReq?.fecha_radicado_orfeo || ''; }}>
+            {selectedReq.numero_orfeo ? '✏️ Editar Orfeo' : '➕ Registrar Orfeo'}
+          </button>
+        {:else}
+          <div class="avance-form">
+            <h4>📄 Registro Orfeo</h4>
+            <div class="field">
+              <label>Número Orfeo *</label>
+              <input type="text" bind:value={orfeoNumero} placeholder="Ej: 202600123456" />
+            </div>
+            <div class="field">
+              <label>Fecha de Radicado</label>
+              <input type="date" bind:value={orfeoFechaRadicado} />
+            </div>
+            <div class="field">
+              <label>Documento Petición (PDF/imagen)</label>
+              <input type="file" accept=".pdf,.jpg,.jpeg,.png" bind:files={orfeoPeticionFile} />
+            </div>
+            <div class="avance-actions">
+              <Button variant="secondary" size="sm" on:click={() => (showOrfeoForm = false)}>Cancelar</Button>
+              <Button size="sm" on:click={guardarOrfeo} disabled={!orfeoNumero.trim()}>💾 Guardar</Button>
+            </div>
+          </div>
         {/if}
 
         <hr />
@@ -395,8 +701,37 @@
         <hr />
 
         <!-- Avance Form -->
-        {#if !showAvanceForm}
-          <Button on:click={openAvanceForm}>➕ Registrar Avance / Cambiar Estado</Button>
+        {#if !showAvanceForm && !showCancelForm}
+          <div class="panel-actions-row">
+            <Button on:click={openAvanceForm}>➕ Registrar Avance / Estado</Button>
+            {#if selectedReq.estado !== 'cancelado' && selectedReq.estado !== 'cerrado'}
+              <button class="cancel-req-btn" on:click={() => { showCancelForm = true; showAvanceForm = false; showOrfeoForm = false; cancelMotivo = ''; }}>
+                🚫 Cancelar Requerimiento
+              </button>
+            {/if}
+          </div>
+        {:else if showCancelForm}
+          <div class="avance-form cancel-form">
+            <h4>🚫 Cancelar Requerimiento</h4>
+            <p class="cancel-warning">Esta acción cancela el requerimiento. Se requiere argumento y documento oficial del organismo responsable.</p>
+            <div class="field">
+              <label>Motivo de Cancelación *</label>
+              <textarea bind:value={cancelMotivo} rows="3" placeholder="Argumente el motivo oficial de la cancelación..."></textarea>
+            </div>
+            <div class="field">
+              <label>Documento Oficial (PDF/imagen) *</label>
+              <input type="file" accept=".pdf,.jpg,.jpeg,.png" bind:files={cancelDocFile} />
+              <span class="field-hint">Adjunte el documento oficial del organismo que sustenta la cancelación</span>
+            </div>
+            <div class="avance-actions">
+              <Button variant="secondary" size="sm" on:click={() => (showCancelForm = false)}>Cancelar</Button>
+              <button
+                class="confirm-cancel-btn"
+                on:click={confirmarCancelacion}
+                disabled={!cancelMotivo.trim() || !cancelDocFile?.length}
+              >🚫 Confirmar Cancelación</button>
+            </div>
+          </div>
         {:else}
           <div class="avance-form">
             <h4>📝 Nuevo Registro de Avance</h4>
@@ -614,4 +949,87 @@
     .kanban-column { width: 220px; min-width: 220px; }
     .detail-panel { width: 100vw; max-width: 100vw; }
   }
+
+  /* Filter bar */
+  .filter-bar {
+    background: #fff; border-bottom: 1px solid #e2e8f0;
+    padding: 0.5rem 1rem; display: flex; flex-direction: column; gap: 0.5rem;
+  }
+  .filter-row { display: flex; align-items: flex-end; gap: 0.75rem; flex-wrap: wrap; }
+  .filter-group { display: flex; flex-direction: column; gap: 0.15rem; }
+  .filter-group-wide { flex: 1; min-width: 260px; }
+  .filter-search {
+    padding: 0.35rem 0.6rem; border: 1px solid #e2e8f0; border-radius: 6px;
+    font-size: 0.8rem; font-family: inherit; outline: none; background: white;
+    color: #334155; width: 100%;
+  }
+  .filter-search:focus { border-color: #2563eb; }
+  .filter-group label { font-size: 0.65rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
+  .filter-group select, .filter-group input[type="date"] {
+    padding: 0.3rem 0.5rem; border: 1px solid #e2e8f0; border-radius: 6px;
+    font-size: 0.78rem; font-family: inherit; outline: none; background: white;
+    color: #334155;
+  }
+  .filter-group select:focus, .filter-group input[type="date"]:focus { border-color: #2563eb; }
+  .clear-filter-btn {
+    background: #fee2e2; color: #ef4444; border: none; padding: 0.35rem 0.65rem;
+    border-radius: 6px; font-size: 0.75rem; font-weight: 700; cursor: pointer;
+    align-self: flex-end;
+  }
+  .filter-toggle-btn {
+    background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.3rem 0.6rem;
+    border-radius: 6px; font-size: 0.72rem; font-weight: 600; color: #475569; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .filter-toggle-btn:hover { background: #f1f5f9; }
+  .filter-toggle-btn.has-active { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
+
+  /* Empty board */
+  .empty-board { padding: 3rem 2rem; color: #94a3b8; text-align: center; font-size: 0.85rem; width: 100%; }
+
+  /* CG group header */
+  .cg-header { background: #f5f3ff; }
+
+  /* Kanban card extras */
+  .kcard-meta-row { display: flex; gap: 0.25rem; margin-top: 0.25rem; }
+  .kcard-estado-chip { font-size: 0.58rem; background: #e2e8f0; color: #475569; padding: 0.1rem 0.35rem; border-radius: 3px; font-weight: 700; text-transform: capitalize; }
+  .kcard-orfeo { font-size: 0.6rem; color: #7c3aed; font-weight: 600; margin-top: 0.2rem; }
+
+  /* Fecha propuesta solucion */
+  .fecha-solucion-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 0.6rem; margin: 0.5rem 0; }
+  .fecha-solucion-label { font-size: 0.72rem; font-weight: 700; color: #15803d; display: block; margin-bottom: 0.35rem; }
+  .fecha-solucion-row { display: flex; gap: 0.4rem; align-items: center; }
+  .fecha-solucion-input { flex: 1; padding: 0.35rem 0.5rem; border: 1px solid #bbf7d0; border-radius: 6px; font-size: 0.78rem; font-family: inherit; outline: none; }
+  .fecha-solucion-input:focus { border-color: #16a34a; }
+  .fecha-solucion-btn { background: #16a34a; color: white; border: none; padding: 0.35rem 0.65rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .fecha-solucion-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .fecha-solucion-saved { font-size: 0.7rem; color: #16a34a; font-weight: 600; display: block; margin-top: 0.3rem; }
+
+  /* Orfeo section */
+  .orfeo-box { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 8px; padding: 0.6rem; margin-bottom: 0.4rem; }
+  .orfeo-row { font-size: 0.78rem; color: #4c1d95; margin-bottom: 0.15rem; display: flex; gap: 0.4rem; align-items: center; }
+  .orfeo-label { font-weight: 700; color: #7c3aed; font-size: 0.7rem; }
+  .orfeo-doc { font-size: 0.72rem; color: #6d28d9; text-decoration: underline; }
+  .action-link {
+    background: none; border: none; color: #7c3aed; font-size: 0.78rem; font-weight: 600;
+    cursor: pointer; padding: 0.25rem 0; display: inline-block; margin-bottom: 0.25rem;
+  }
+  .action-link:hover { text-decoration: underline; }
+
+  /* Cancel section */
+  .panel-actions-row { display: flex; flex-direction: column; gap: 0.4rem; }
+  .cancel-req-btn {
+    background: none; border: 1px solid #fca5a5; color: #dc2626; border-radius: 6px;
+    padding: 0.4rem 0.75rem; font-size: 0.78rem; font-weight: 600; cursor: pointer;
+    transition: all 0.15s; text-align: center;
+  }
+  .cancel-req-btn:hover { background: #fee2e2; }
+  .cancel-form { border-color: #fca5a5; background: #fff8f8; }
+  .cancel-warning { font-size: 0.75rem; color: #dc2626; background: #fee2e2; border-radius: 6px; padding: 0.5rem; margin-bottom: 0.5rem; }
+  .confirm-cancel-btn {
+    background: #dc2626; color: white; border: none; padding: 0.45rem 0.85rem;
+    border-radius: 6px; font-size: 0.82rem; font-weight: 700; cursor: pointer;
+  }
+  .confirm-cancel-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .field-hint { font-size: 0.68rem; color: #94a3b8; margin-top: 0.15rem; }
 </style>

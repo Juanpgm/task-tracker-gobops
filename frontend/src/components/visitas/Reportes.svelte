@@ -7,6 +7,7 @@
   import Alert from '../ui/Alert.svelte';
   import Card from '../ui/Card.svelte';
   import Modal from '../ui/Modal.svelte';
+  import DashboardRequerimientos from './DashboardRequerimientos.svelte';
 
   let loading = false;
   let reportes: Reporte[] = [];
@@ -15,6 +16,7 @@
   let showDeleteModal = false;
   let deleteTarget: Reporte | null = null;
   let deleting = false;
+  let activeTab: 'dashboard' | 'lista' = 'dashboard';
 
   onMount(loadReportes);
 
@@ -60,65 +62,82 @@
   <header class="view-header">
     <button class="back-btn" on:click={() => navigationStore.goHome()}>← Volver</button>
     <h2 class="view-title">📊 Reportes</h2>
-    <Button variant="ghost" size="sm" on:click={loadReportes} disabled={loading}>
-      🔄 Actualizar
-    </Button>
+    <!-- Tab selector -->
+    <div class="tabs">
+      <button class="tab" class:active={activeTab === 'dashboard'} on:click={() => (activeTab = 'dashboard')}>
+        📊 Dashboard
+      </button>
+      <button class="tab" class:active={activeTab === 'lista'} on:click={() => (activeTab = 'lista')}>
+        📋 Lista de Reportes
+      </button>
+    </div>
+    {#if activeTab === 'lista'}
+      <Button variant="ghost" size="sm" on:click={loadReportes} disabled={loading}>
+        🔄 Actualizar
+      </Button>
+    {/if}
   </header>
 
-  <main class="view-body container">
-    {#if successMsg}
-      <Alert type="success" message={successMsg} />
-    {/if}
-    {#if errorMsg}
-      <Alert type="error" message={errorMsg} />
-    {/if}
+  {#if activeTab === 'dashboard'}
+    <div class="dashboard-wrapper">
+      <DashboardRequerimientos />
+    </div>
+  {:else}
+    <main class="view-body container">
+      {#if successMsg}
+        <Alert type="success" message={successMsg} />
+      {/if}
+      {#if errorMsg}
+        <Alert type="error" message={errorMsg} />
+      {/if}
 
-    {#if loading}
-      <div class="spinner"></div>
-    {:else if reportes.length === 0}
-      <Card padding="lg">
-        <div class="empty-state">
-          <span class="empty-icon">📋</span>
-          <p class="empty-text">No hay reportes disponibles</p>
-          <Button variant="secondary" size="sm" on:click={loadReportes}>
-            Reintentar
-          </Button>
-        </div>
-      </Card>
-    {:else}
-      <div class="reportes-list">
-        {#each reportes as reporte (reporte.reporte_id)}
-          <Card padding="md">
-            <div class="reporte-item">
-              <div class="reporte-info">
-                <span class="reporte-id">#{reporte.reporte_id}</span>
-                <h3 class="reporte-title">{reporte.nombre_up || 'Sin título'}</h3>
-                {#if reporte.nombre_up_detalle}
-                  <p class="reporte-detail">{reporte.nombre_up_detalle}</p>
-                {/if}
-                <div class="reporte-meta">
-                  {#if reporte.barrio_vereda}
-                    <span class="meta-tag">📍 {reporte.barrio_vereda}</span>
+      {#if loading}
+        <div class="spinner"></div>
+      {:else if reportes.length === 0}
+        <Card padding="lg">
+          <div class="empty-state">
+            <span class="empty-icon">📋</span>
+            <p class="empty-text">No hay reportes disponibles</p>
+            <Button variant="secondary" size="sm" on:click={loadReportes}>
+              Reintentar
+            </Button>
+          </div>
+        </Card>
+      {:else}
+        <div class="reportes-list">
+          {#each reportes as reporte (reporte.reporte_id)}
+            <Card padding="md">
+              <div class="reporte-item">
+                <div class="reporte-info">
+                  <span class="reporte-id">#{reporte.reporte_id}</span>
+                  <h3 class="reporte-title">{reporte.nombre_up || 'Sin título'}</h3>
+                  {#if reporte.nombre_up_detalle}
+                    <p class="reporte-detail">{reporte.nombre_up_detalle}</p>
                   {/if}
-                  {#if reporte.comuna_corregimiento}
-                    <span class="meta-tag">🏘️ {reporte.comuna_corregimiento}</span>
-                  {/if}
-                  {#if reporte.fecha_visita}
-                    <span class="meta-tag">📅 {reporte.fecha_visita}</span>
-                  {/if}
+                  <div class="reporte-meta">
+                    {#if reporte.barrio_vereda}
+                      <span class="meta-tag">📍 {reporte.barrio_vereda}</span>
+                    {/if}
+                    {#if reporte.comuna_corregimiento}
+                      <span class="meta-tag">🏘️ {reporte.comuna_corregimiento}</span>
+                    {/if}
+                    {#if reporte.fecha_visita}
+                      <span class="meta-tag">📅 {reporte.fecha_visita}</span>
+                    {/if}
+                  </div>
                 </div>
+                <Button variant="danger" size="sm" on:click={() => confirmDelete(reporte)}>
+                  🗑️
+                </Button>
               </div>
-              <Button variant="danger" size="sm" on:click={() => confirmDelete(reporte)}>
-                🗑️
-              </Button>
-            </div>
-          </Card>
-        {/each}
-      </div>
+            </Card>
+          {/each}
+        </div>
 
-      <p class="reportes-count">{reportes.length} reporte{reportes.length === 1 ? '' : 's'}</p>
-    {/if}
-  </main>
+        <p class="reportes-count">{reportes.length} reporte{reportes.length === 1 ? '' : 's'}</p>
+      {/if}
+    </main>
+  {/if}
 
   <!-- Delete Confirmation Modal -->
   <Modal bind:show={showDeleteModal} title="Confirmar Eliminación">
@@ -151,6 +170,7 @@
     position: sticky;
     top: 0;
     z-index: 100;
+    flex-wrap: wrap;
   }
   .view-header .view-title {
     flex: 1;
@@ -174,6 +194,38 @@
   .view-body {
     padding-top: var(--space-lg);
     padding-bottom: var(--space-2xl);
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    background: #f1f5f9;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    gap: 0;
+  }
+  .tab {
+    background: none;
+    border: none;
+    padding: 0.35rem 0.85rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .tab.active {
+    background: #2563eb;
+    color: white;
+  }
+  .tab:hover:not(.active) {
+    background: #e2e8f0;
+    color: #334155;
+  }
+  .dashboard-wrapper {
+    overflow-y: auto;
   }
 
   /* Empty state */

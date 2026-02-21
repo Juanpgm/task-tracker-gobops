@@ -207,6 +207,80 @@ function createSeguimientoStore() {
       }));
     },
 
+    /** Asigna fecha propuesta de solución */
+    asignarFechaPropuestaSolucion: (reqId: string, fecha: string) => {
+      update((state) => ({
+        ...state,
+        requerimientos: state.requerimientos.map((r) =>
+          r.id === reqId
+            ? { ...r, fecha_propuesta_solucion: fecha, updated_at: new Date().toISOString() }
+            : r
+        ),
+      }));
+    },
+
+    /** Guarda número de orfeo y datos de petición */
+    actualizarOrfeo: (
+      reqId: string,
+      numeroOrfeo: string,
+      fechaRadicado: string,
+      docUrl?: string,
+      docNombre?: string
+    ) => {
+      update((state) => ({
+        ...state,
+        requerimientos: state.requerimientos.map((r) =>
+          r.id === reqId
+            ? {
+                ...r,
+                numero_orfeo: numeroOrfeo,
+                fecha_radicado_orfeo: fechaRadicado,
+                documento_peticion_url: docUrl,
+                documento_peticion_nombre: docNombre,
+                updated_at: new Date().toISOString(),
+              }
+            : r
+        ),
+      }));
+    },
+
+    /** Cancela un requerimiento con documento oficial */
+    cancelarRequerimiento: (
+      reqId: string,
+      motivo: string,
+      autor: string,
+      docUrl?: string,
+      docNombre?: string
+    ) => {
+      update((state) => ({
+        ...state,
+        requerimientos: state.requerimientos.map((r) => {
+          if (r.id !== reqId) return r;
+          const registro = {
+            id: `hist-${Date.now()}`,
+            fecha: new Date().toISOString(),
+            autor,
+            descripcion: `Requerimiento cancelado: ${motivo}`,
+            estado_anterior: r.estado,
+            estado_nuevo: 'cancelado' as const,
+            evidencias: docUrl
+              ? [{ id: `ev-${Date.now()}`, tipo: 'documento' as const, url: docUrl, descripcion: docNombre || 'Doc. cancelación', fecha: new Date().toISOString() }]
+              : [],
+            porcentaje_avance: r.porcentaje_avance,
+          };
+          return {
+            ...r,
+            estado: 'cancelado' as const,
+            motivo_cancelacion: motivo,
+            documento_cancelacion_url: docUrl,
+            documento_cancelacion_nombre: docNombre,
+            historial: [...r.historial, registro],
+            updated_at: new Date().toISOString(),
+          };
+        }),
+      }));
+    },
+
     /** Resetea error */
     clearError: () => {
       update((state) => ({ ...state, error: null }));
@@ -235,9 +309,23 @@ export const requerimientosPorEstado = derived(seguimientoStore, ($s) => {
     'en-proceso': [],
     'resuelto': [],
     'cerrado': [],
+    'cancelado': [],
   };
   for (const req of $s.requerimientos) {
     grouped[req.estado].push(req);
+  }
+  return grouped;
+});
+
+/** Requerimientos agrupados por centro gestor */
+export const requerimientosPorCentroGestor = derived(seguimientoStore, ($s) => {
+  const grouped: Record<string, Requerimiento[]> = {};
+  for (const req of $s.requerimientos) {
+    const cgs = req.centros_gestores.length > 0 ? req.centros_gestores : ['Sin asignar'];
+    for (const cg of cgs) {
+      if (!grouped[cg]) grouped[cg] = [];
+      grouped[cg].push(req);
+    }
   }
   return grouped;
 });
