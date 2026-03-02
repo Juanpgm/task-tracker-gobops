@@ -12,12 +12,12 @@
     }
   ],
   "env": {
-    "VITE_FIREBASE_API_KEY": "@firebase_api_key",
-    "VITE_FIREBASE_AUTH_DOMAIN": "@firebase_auth_domain",
-    "VITE_FIREBASE_PROJECT_ID": "@firebase_project_id",
-    "VITE_FIREBASE_STORAGE_BUCKET": "@firebase_storage_bucket",
-    "VITE_FIREBASE_MESSAGING_SENDER_ID": "@firebase_messaging_sender_id",
-    "VITE_FIREBASE_APP_ID": "@firebase_app_id",
+    "VITE_FIREBASE_API_KEY": "AIzaSyAET3L93mkCiGtXLW7XVL-wIck4k4rvzdM",
+    "VITE_FIREBASE_AUTH_DOMAIN": "catatrack.firebaseapp.com",
+    "VITE_FIREBASE_PROJECT_ID": "catatrack",
+    "VITE_FIREBASE_STORAGE_BUCKET": "catatrack.appspot.com",
+    "VITE_FIREBASE_MESSAGING_SENDER_ID": "1016487986131",
+    "VITE_FIREBASE_APP_ID": "1:1016487986131:web:ed5f7da7de4f488827a526",
     "VITE_AUTH_API_URL": "/api/auth",
     "VITE_API_URL": "/api/project",
     "VITE_USE_FIREBASE": "true"
