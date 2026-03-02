@@ -1,28 +1,48 @@
 <script lang="ts">
-  import { login } from '../api/auth';
-  import Button from './ui/Button.svelte';
-  import Input from './ui/Input.svelte';
-  import Alert from './ui/Alert.svelte';
-  import { createEventDispatcher } from 'svelte';
+  import { login } from "../api/auth";
+  import Button from "./ui/Button.svelte";
+  import Input from "./ui/Input.svelte";
+  import Alert from "./ui/Alert.svelte";
+  import { createEventDispatcher } from "svelte";
 
   const dispatch = createEventDispatcher();
 
-  let email = '';
-  let password = '';
+  let email = "";
+  let password = "";
   let loading = false;
-  let errorMsg = '';
+  let errorMsg = "";
 
   async function handleSubmit() {
     if (!email || !password) {
-      errorMsg = 'Por favor, complete todos los campos.';
+      errorMsg = "Por favor, complete todos los campos.";
       return;
     }
+
+    // Validaciones básicas antes de enviar
+    if (!email.includes("@")) {
+      errorMsg = "Formato de correo electrónico inválido.";
+      return;
+    }
+
+    if (password.length < 6) {
+      errorMsg = "La contraseña debe tener al menos 6 caracteres.";
+      return;
+    }
+
     loading = true;
-    errorMsg = '';
+    errorMsg = "";
+
     try {
       await login(email, password);
-    } catch {
-      errorMsg = 'Correo electrónico o contraseña incorrectos.';
+      // El login exitoso redirigirá automáticamente a través del authStore
+    } catch (error: unknown) {
+      // El error ya fue procesado en la función login y guardado en authStore
+      // Usar el mensaje específico de error
+      if (error instanceof Error) {
+        errorMsg = error.message;
+      } else {
+        errorMsg = "Error al iniciar sesión. Por favor, intente de nuevo.";
+      }
     } finally {
       loading = false;
     }
@@ -33,9 +53,21 @@
   <div class="login-card">
     <div class="login-header">
       <div class="logo">
-        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect width="48" height="48" rx="12" fill="#2563eb"/>
-          <path d="M14 24l6 6 14-14" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <svg
+          width="48"
+          height="48"
+          viewBox="0 0 48 48"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <rect width="48" height="48" rx="12" fill="#2563eb" />
+          <path
+            d="M14 24l6 6 14-14"
+            stroke="white"
+            stroke-width="3"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
         </svg>
       </div>
       <h1 class="login-title">Task Tracker GobOps</h1>
@@ -66,13 +98,17 @@
         disabled={loading}
       />
       <Button type="submit" fullWidth {loading} disabled={loading}>
-        {loading ? 'Ingresando...' : 'Iniciar Sesión'}
+        {loading ? "Ingresando..." : "Iniciar Sesión"}
       </Button>
     </form>
 
     <div class="register-link">
       <span class="register-text">¿No tiene cuenta?</span>
-      <button type="button" class="register-btn" on:click={() => dispatch('register')}>
+      <button
+        type="button"
+        class="register-btn"
+        on:click={() => dispatch("register")}
+      >
         Crear cuenta
       </button>
     </div>

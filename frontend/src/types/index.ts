@@ -99,12 +99,36 @@ export interface Coordenadas {
   accuracy?: number;
 }
 
-/** Usuario autenticado */
+/** Rol disponible en el sistema */
+export interface Role {
+  id: string;
+  name: string;
+  description?: string;
+  permissions: string[];
+}
+
+/** Permiso temporal del usuario */
+export interface TemporaryPermission {
+  permission: string;
+  expires_at: string; // ISO timestamp
+  granted_at: string;
+  granted_by?: string;
+}
+
+/** Usuario autenticado con información de control de accesos */
 export interface UserProfile {
   uid: string;
   email: string;
   displayName?: string;
+  full_name?: string;
   role?: string;
+  roles?: string[]; // Roles asignados al usuario
+  permissions?: string[]; // Permisos heredados de roles
+  temporary_permissions?: TemporaryPermission[]; // Permisos temporales
+  cellphone?: string;
+  nombre_centro_gestor?: string;
+  is_super_admin?: boolean;
+  is_admin?: boolean;
   token: string;
   [key: string]: unknown;
 }
@@ -118,13 +142,32 @@ export interface AuthState {
   error: string | null;
 }
 
-/** Respuesta de validación de sesión */
+/** Respuesta de validación de sesión desde backend */
 export interface ValidateSessionResponse {
   uid: string;
   email: string;
-  role?: string;
+  full_name?: string;
   displayName?: string;
+  role?: string;
+  roles?: string[];
+  permissions?: string[];
+  temporary_permissions?: TemporaryPermission[];
+  cellphone?: string;
+  nombre_centro_gestor?: string;
+  is_super_admin?: boolean;
+  is_admin?: boolean;
   [key: string]: unknown;
+}
+
+/** Respuesta de login desde backend */
+export interface LoginResponse extends ValidateSessionResponse {
+  token?: string;
+  id_token?: string;
+}
+
+/** Payload para POST /auth/login */
+export interface UserLoginRequest {
+  id_token: string;
 }
 
 /** Payload para POST /auth/register */
@@ -145,4 +188,15 @@ export interface ChangePasswordPayload {
 /** Payload para POST /auth/google */
 export interface GoogleAuthPayload {
   google_token: string;
+}
+
+/** Payload para asignar roles a un usuario */
+export interface AssignRolesRequest {
+  roles: string[];
+}
+
+/** Payload para otorgar permisos temporales */
+export interface GrantTemporaryPermissionRequest {
+  permission: string;
+  expires_at: string; // ISO timestamp
 }
