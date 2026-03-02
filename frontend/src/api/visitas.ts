@@ -9,13 +9,39 @@ import type {
   RequerimientoPayload,
 } from '../types';
 
+type ApiListResponse<T> = { success?: boolean; data?: T[] } | T[];
+
+function extractList<T>(response: ApiListResponse<T>): T[] {
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response?.data)) return response.data;
+  return [];
+}
+
 /* ============================================================
- *  GET /unidades-proyecto/init-360
- *  Obtiene las unidades de proyecto disponibles (Artefacto de Captura #360)
+ *  GET /unidades-proyecto
+ *  Obtiene las unidades de proyecto disponibles
+ *  (fallback: /unidades-proyecto/init-360)
  * ============================================================ */
 export async function getUnidadesProyecto(): Promise<UnidadProyecto[]> {
-  const response = await projectApiClient.get<{ success: boolean; data: UnidadProyecto[] }>('/unidades-proyecto/init-360');
-  return response.data || [];
+  try {
+    const response = await projectApiClient.get<ApiListResponse<UnidadProyecto>>('/unidades-proyecto');
+    const data = extractList(response);
+    if (data.length > 0) return data;
+  } catch {
+    // fallback endpoint
+  }
+
+  const fallbackResponse = await projectApiClient.get<ApiListResponse<UnidadProyecto>>('/unidades-proyecto/init-360');
+  return extractList(fallbackResponse);
+}
+
+/* ============================================================
+ *  GET /intervenciones
+ *  Lista intervenciones para filtros y seguimiento
+ * ============================================================ */
+export async function getIntervenciones<T = Record<string, unknown>>(): Promise<T[]> {
+  const response = await projectApiClient.get<ApiListResponse<T>>('/intervenciones');
+  return extractList(response);
 }
 
 /* ============================================================

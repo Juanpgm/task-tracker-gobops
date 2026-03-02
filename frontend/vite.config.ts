@@ -56,10 +56,16 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': {
+      '/api/auth': {
         target: 'https://web-production-79739.up.railway.app',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
+        rewrite: (path) => path.replace(/^\/api\/auth/, ''),
+        secure: false
+      },
+      '/api/project': {
+        target: 'https://gestorproyectoapi-production.up.railway.app',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/project/, ''),
         secure: false
       }
     }

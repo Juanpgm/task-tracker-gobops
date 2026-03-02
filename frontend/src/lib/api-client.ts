@@ -1,5 +1,5 @@
-const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL || 'https://web-production-79739.up.railway.app';
-const PROJECT_API_URL = import.meta.env.VITE_API_URL || 'https://gestorproyectoapi-production.up.railway.app';
+const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL || '/api/auth';
+const PROJECT_API_URL = import.meta.env.VITE_API_URL || '/api/project';
 
 class ApiClient {
   private baseUrl: string;
