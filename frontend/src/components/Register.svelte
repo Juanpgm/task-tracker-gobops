@@ -1,41 +1,67 @@
 <script lang="ts">
-  import { registerUser } from '../api/auth';
-  import type { RegisterUserPayload } from '../types';
-  import Button from './ui/Button.svelte';
-  import Input from './ui/Input.svelte';
-  import Alert from './ui/Alert.svelte';
-  import { createEventDispatcher } from 'svelte';
+  import { registerUser } from "../api/auth";
+  import type { RegisterUserPayload } from "../types";
+  import Button from "./ui/Button.svelte";
+  import Input from "./ui/Input.svelte";
+  import Alert from "./ui/Alert.svelte";
+  import { createEventDispatcher } from "svelte";
 
   const dispatch = createEventDispatcher();
 
   let loading = false;
-  let errorMsg = '';
-  let successMsg = '';
+  let errorMsg = "";
+  let successMsg = "";
 
   let form: RegisterUserPayload = {
-    email: '',
-    password: '',
-    full_name: '',
-    cellphone: '',
-    nombre_centro_gestor: '',
+    email: "",
+    password: "",
+    full_name: "",
+    cellphone: "",
+    nombre_centro_gestor: "",
   };
 
   async function handleSubmit() {
-    if (!form.email || !form.password || !form.full_name || !form.cellphone || !form.nombre_centro_gestor) {
-      errorMsg = 'Por favor, complete todos los campos.';
+    const normalizedForm: RegisterUserPayload = {
+      email: form.email.trim(),
+      password: form.password,
+      full_name: form.full_name.trim(),
+      cellphone: form.cellphone.trim(),
+      nombre_centro_gestor: form.nombre_centro_gestor.trim(),
+    };
+
+    if (
+      !normalizedForm.email ||
+      !normalizedForm.password ||
+      !normalizedForm.full_name ||
+      !normalizedForm.cellphone ||
+      !normalizedForm.nombre_centro_gestor
+    ) {
+      errorMsg = "Por favor, complete todos los campos.";
       return;
     }
+
+    if (!normalizedForm.email.includes("@")) {
+      errorMsg = "Formato de correo electrónico inválido.";
+      return;
+    }
+
+    if (normalizedForm.password.length < 8) {
+      errorMsg = "La contraseña debe tener al menos 8 caracteres.";
+      return;
+    }
+
     loading = true;
-    errorMsg = '';
-    successMsg = '';
+    errorMsg = "";
+    successMsg = "";
     try {
-      await registerUser(form);
-      successMsg = 'Usuario registrado exitosamente. Ya puede iniciar sesión.';
+      await registerUser(normalizedForm);
+      successMsg = "Usuario registrado exitosamente. Ya puede iniciar sesión.";
       setTimeout(() => {
-        dispatch('success');
+        dispatch("success");
       }, 2000);
     } catch (err) {
-      errorMsg = err instanceof Error ? err.message : 'Error al registrar usuario.';
+      errorMsg =
+        err instanceof Error ? err.message : "Error al registrar usuario.";
     } finally {
       loading = false;
     }
@@ -46,9 +72,21 @@
   <div class="register-card">
     <div class="register-header">
       <div class="logo">
-        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect width="48" height="48" rx="12" fill="#2563eb"/>
-          <path d="M14 24l6 6 14-14" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <svg
+          width="48"
+          height="48"
+          viewBox="0 0 48 48"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <rect width="48" height="48" rx="12" fill="#2563eb" />
+          <path
+            d="M14 24l6 6 14-14"
+            stroke="white"
+            stroke-width="3"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
         </svg>
       </div>
       <h1 class="register-title">Crear Cuenta</h1>
@@ -72,7 +110,7 @@
         required
         disabled={loading}
       />
-      
+
       <Input
         id="email"
         type="email"
@@ -87,7 +125,7 @@
         id="password"
         type="password"
         label="Contraseña"
-        placeholder="Mínimo 6 caracteres"
+        placeholder="Mínimo 8 caracteres"
         bind:value={form.password}
         required
         disabled={loading}
@@ -114,10 +152,15 @@
       />
 
       <Button type="submit" fullWidth {loading} disabled={loading}>
-        {loading ? 'Registrando...' : 'Crear Cuenta'}
+        {loading ? "Registrando..." : "Crear Cuenta"}
       </Button>
 
-      <button type="button" class="back-link" on:click={() => dispatch('back')} disabled={loading}>
+      <button
+        type="button"
+        class="back-link"
+        on:click={() => dispatch("back")}
+        disabled={loading}
+      >
         ← Volver al inicio de sesión
       </button>
     </form>

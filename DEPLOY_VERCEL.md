@@ -40,9 +40,10 @@ vercel secrets add firebase_app_id "1:123456789:web:abc123def456"
 
 ### Paso 4: Verificar Configuración
 
-Los valores de las APIs ya están configurados en `vercel.json`:
-- ✅ `VITE_AUTH_API_URL`: https://web-production-79739.up.railway.app
-- ✅ `VITE_API_URL`: https://gestorproyectoapi-production.up.railway.app
+Los valores de las APIs ya están configurados en `vercel.json` usando rutas relativas + rewrites (evita errores CORS/"Failed to fetch" en navegador):
+
+- ✅ `VITE_AUTH_API_URL`: `/api/auth`
+- ✅ `VITE_API_URL`: `/api/project`
 
 ### Paso 5: Desplegar
 
@@ -65,16 +66,18 @@ También puedes configurar las variables desde la interfaz web de Vercel:
 3. Click en **Environment Variables**
 4. Agrega las siguientes variables:
 
-| Nombre | Valor | Entorno |
-|--------|-------|---------|
-| `VITE_FIREBASE_API_KEY` | Tu Firebase API Key | Production, Preview, Development |
-| `VITE_FIREBASE_AUTH_DOMAIN` | tu-proyecto.firebaseapp.com | Production, Preview, Development |
-| `VITE_FIREBASE_PROJECT_ID` | tu-proyecto-id | Production, Preview, Development |
-| `VITE_FIREBASE_STORAGE_BUCKET` | tu-proyecto.appspot.com | Production, Preview, Development |
-| `VITE_FIREBASE_MESSAGING_SENDER_ID` | 123456789 | Production, Preview, Development |
-| `VITE_FIREBASE_APP_ID` | 1:123456789:web:abc123def456 | Production, Preview, Development |
+| Nombre                              | Valor                        | Entorno                          |
+| ----------------------------------- | ---------------------------- | -------------------------------- |
+| `VITE_FIREBASE_API_KEY`             | Tu Firebase API Key          | Production, Preview, Development |
+| `VITE_FIREBASE_AUTH_DOMAIN`         | tu-proyecto.firebaseapp.com  | Production, Preview, Development |
+| `VITE_FIREBASE_PROJECT_ID`          | tu-proyecto-id               | Production, Preview, Development |
+| `VITE_FIREBASE_STORAGE_BUCKET`      | tu-proyecto.appspot.com      | Production, Preview, Development |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | 123456789                    | Production, Preview, Development |
+| `VITE_FIREBASE_APP_ID`              | 1:123456789:web:abc123def456 | Production, Preview, Development |
 
 > **Nota:** Las variables `VITE_AUTH_API_URL` y `VITE_API_URL` ya están configuradas en `vercel.json` y no necesitan ser agregadas manualmente.
+>
+> **Importante:** No sobrescribirlas en Vercel Dashboard con URLs absolutas, porque eso puede reintroducir problemas de CORS en producción.
 
 ---
 
@@ -119,6 +122,7 @@ El sistema implementa la arquitectura completa de **Administración y Control de
 ### Validación de Sesión
 
 Cada vez que la app se carga o el token se refresca:
+
 1. Firebase verifica el estado de autenticación
 2. Se llama a `/auth/validate-session` para obtener datos actualizados
 3. Se actualiza el AuthStore con roles y permisos más recientes
@@ -126,6 +130,7 @@ Cada vez que la app se carga o el token se refresca:
 ### Control de Accesos
 
 El sistema soporta:
+
 - ✅ **Roles múltiples** por usuario
 - ✅ **Permisos permanentes** heredados de roles
 - ✅ **Permisos temporales** con fecha de expiración
@@ -140,6 +145,7 @@ El sistema soporta:
 Ver documentación completa en [API_ENDPOINTS.md](./API_ENDPOINTS.md)
 
 ### Autenticación Principal
+
 - `POST /auth/login` - Login con Firebase token
 - `POST /auth/validate-session` - Validar sesión activa
 - `POST /auth/register` - Registro de nuevo usuario
@@ -147,6 +153,7 @@ Ver documentación completa en [API_ENDPOINTS.md](./API_ENDPOINTS.md)
 - `POST /auth/change-password` - Cambio de contraseña
 
 ### Administración de Usuarios
+
 - `GET /auth/admin/users` - Listar todos los usuarios
 - `GET /auth/admin/users/{uid}` - Detalles de un usuario
 - `PUT /auth/admin/users/{uid}` - Actualizar información de usuario
@@ -155,6 +162,7 @@ Ver documentación completa en [API_ENDPOINTS.md](./API_ENDPOINTS.md)
 - `DELETE /auth/admin/users/{uid}/temporary-permissions/{permission}` - Revocar permisos temporales
 
 ### Administración de Roles
+
 - `GET /auth/admin/roles` - Listar todos los roles
 - `GET /auth/admin/roles/{role_id}` - Detalles de un rol
 
@@ -175,21 +183,25 @@ Después del despliegue, verifica:
 ## Troubleshooting
 
 ### Error: "Firebase no está inicializado"
+
 - Verifica que todas las variables de Firebase estén configuradas
 - Revisa que no haya typos en los nombres de las variables
 - Asegúrate que las variables estén disponibles en el entorno correcto
 
 ### Error: "401 Unauthorized" en /auth/login
+
 - El token de Firebase no es válido
 - Verifica la configuración de Firebase en el backend
 - Asegúrate que el proyecto de Firebase coincida
 
 ### Error: "403 Forbidden"
+
 - El usuario no tiene permisos suficientes
 - Verifica los roles asignados en Firebase/Backend
 - Revisa que los permisos necesarios estén configurados
 
 ### Sesión no persiste
+
 - Verifica que localStorage esté habilitado en el navegador
 - Revisa que las cookies no estén bloqueadas
 - Asegúrate que el dominio de auth sea correcto
@@ -199,6 +211,7 @@ Después del despliegue, verifica:
 ## Seguridad
 
 🔒 **Importante:**
+
 - Nunca subas archivos `.env.local` al repositorio
 - Usa siempre secretos de Vercel para datos sensibles
 - Rota las API keys periódicamente
@@ -210,5 +223,6 @@ Después del despliegue, verifica:
 ## Soporte
 
 Para más información sobre la API:
+
 - Documentación completa: https://web-production-79739.up.railway.app/docs
 - Endpoints: [API_ENDPOINTS.md](./API_ENDPOINTS.md)

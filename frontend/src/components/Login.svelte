@@ -13,19 +13,16 @@
   let errorMsg = "";
 
   async function handleSubmit() {
+    const normalizedEmail = email.trim();
+
     if (!email || !password) {
       errorMsg = "Por favor, complete todos los campos.";
       return;
     }
 
     // Validaciones básicas antes de enviar
-    if (!email.includes("@")) {
+    if (!normalizedEmail.includes("@")) {
       errorMsg = "Formato de correo electrónico inválido.";
-      return;
-    }
-
-    if (password.length < 6) {
-      errorMsg = "La contraseña debe tener al menos 6 caracteres.";
       return;
     }
 
@@ -33,11 +30,9 @@
     errorMsg = "";
 
     try {
-      await login(email, password);
+      await login(normalizedEmail, password);
       // El login exitoso redirigirá automáticamente a través del authStore
     } catch (error: unknown) {
-      // El error ya fue procesado en la función login y guardado en authStore
-      // Usar el mensaje específico de error
       if (error instanceof Error) {
         errorMsg = error.message;
       } else {

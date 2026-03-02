@@ -8,7 +8,6 @@ import type {
   LoginResponse,
   RegisterUserPayload,
   ChangePasswordPayload,
-  UserLoginRequest,
 } from '../types';
 
 /**
@@ -29,7 +28,7 @@ export async function login(email: string, password: string): Promise<void> {
     apiClient.setToken(idToken);
     projectApiClient.setToken(idToken);
 
-    const loginPayload: UserLoginRequest = { id_token: idToken };
+    const loginPayload: Record<string, unknown> = { id_token: idToken };
     const backendUser = await apiClient.post<LoginResponse>('/auth/login', loginPayload);
 
     const user: UserProfile = {
@@ -75,6 +74,8 @@ export async function login(email: string, password: string): Promise<void> {
         message = 'Usuario no encontrado en el sistema.';
       } else if (error.message.includes('500') || error.message.includes('502') || error.message.includes('503')) {
         message = 'Error en el servidor. Intente de nuevo más tarde.';
+      } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        message = 'No se pudo conectar con el servidor de autenticación.';
       } else {
         message = error.message;
       }
@@ -82,7 +83,7 @@ export async function login(email: string, password: string): Promise<void> {
 
     authStore.setError(message);
     authStore.setLoading(false);
-    throw error;
+    throw new Error(message);
   }
 }
 
@@ -160,27 +161,20 @@ export function initAuthListener(): () => void {
  */
 export async function registerUser(payload: RegisterUserPayload): Promise<string> {
   try {
-    const response = await fetch(`${import.meta.env.VITE_AUTH_API_URL || 'https://web-production-79739.up.railway.app'}/auth/register`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      throw new Error(`Registration failed (${response.status}): ${errorBody}`);
+    const response = await apiClient.post<Record<string, unknown>>('/auth/register', payload as unknown as Record<string, unknown>);
+    if (typeof response?.message === 'string') {
+      return response.message;
     }
-
-    return response.json();
+    return 'Usuario registrado exitosamente';
   } catch (error: unknown) {
     let message = 'Error al registrar usuario';
     if (error instanceof Error) {
-      if (error.message.includes('already exists') || error.message.includes('ya existe')) {
+      if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        message = 'No se pudo conectar con el servidor de autenticación. Verifique CORS/URL del API en producción.';
+      } else if (error.message.includes('already exists') || error.message.includes('ya existe') || error.message.includes('EMAIL_EXISTS')) {
         message = 'Este correo electrónico ya está registrado.';
-      } else if (error.message.includes('weak-password')) {
-        message = 'La contraseña es muy débil. Debe tener al menos 6 caracteres.';
+      } else if (error.message.includes('weak-password') || error.message.includes('WEAK_PASSWORD')) {
+        message = 'La contraseña es muy débil. Debe tener al menos 8 caracteres.';
       } else {
         message = error.message;
       }
@@ -217,6 +211,7 @@ export async function googleAuth(googleToken: string): Promise<void> {
     const response = await apiClient.postUrlEncoded<LoginResponse>('/auth/google', data);
 
     const user: UserProfile = {
+      ...response,
       uid: response.uid,
       email: response.email || '',
       displayName: response.displayName || response.full_name || '',
@@ -230,17 +225,20 @@ export async function googleAuth(googleToken: string): Promise<void> {
       is_super_admin: response.is_super_admin || false,
       is_admin: response.is_admin || false,
       token: googleToken,
-      ...response,
     };
 
     authStore.login(user);
   } catch (error: unknown) {
     let message = 'Error al autenticar con Google';
     if (error instanceof Error) {
-      message = error.message;
+      if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        message = 'No se pudo conectar con el servidor de autenticación.';
+      } else {
+        message = error.message;
+      }
     }
     authStore.setError(message);
-    throw error;
+    throw new Error(message);
   }
 }
 
