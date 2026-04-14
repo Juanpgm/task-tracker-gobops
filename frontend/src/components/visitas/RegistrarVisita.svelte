@@ -1,66 +1,135 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { navigationStore } from '../../stores/navigationStore';
-  import { getUnidadesProyecto, registrarVisita } from '../../api/visitas';
-  import type { UnidadProyecto, RegistrarVisitaPayload } from '../../types';
-  import Button from '../ui/Button.svelte';
-  import Input from '../ui/Input.svelte';
-  import Select from '../ui/Select.svelte';
-  import Alert from '../ui/Alert.svelte';
-  import Card from '../ui/Card.svelte';
+  import { onMount } from "svelte";
+  import { navigationStore } from "../../stores/navigationStore";
+  import { registrarVisita, getDirectorioContactos } from "../../api/visitas";
+  import type {
+    RegistrarVisitaPayload,
+    ContactoDirectorio,
+    AcompananteModel,
+  } from "../../types";
+  import { CALI_GEOPOLITICA } from "../../data/cali-geopolitica";
+  import Button from "../ui/Button.svelte";
+  import Input from "../ui/Input.svelte";
+  import Textarea from "../ui/Textarea.svelte";
+  import Alert from "../ui/Alert.svelte";
+  import Card from "../ui/Card.svelte";
+  import SearchableSelect from "../ui/SearchableSelect.svelte";
+  import GroupedMultiSelect from "../ui/GroupedMultiSelect.svelte";
 
-  let loading = false;
   let submitting = false;
-  let successMsg = '';
-  let errorMsg = '';
-  let unidades: UnidadProyecto[] = [];
-  let unidadOptions: { value: string; label: string }[] = [];
+  let successMsg = "";
+  let errorMsg = "";
 
-  let form: RegistrarVisitaPayload = {
-    nombre_up: '',
-    nombre_up_detalle: '',
-    barrio_vereda: '',
-    comuna_corregimiento: '',
-    fecha_visita: new Date().toISOString().split('T')[0],
-  };
+  let barrio_vereda = "";
+  let comuna_corregimiento = "";
+
+  $: comunaOptions = CALI_GEOPOLITICA.map((c) => ({
+    value: c.nombre,
+    label: c.nombre,
+  }));
+
+  $: barrioOptions = comuna_corregimiento
+    ? (
+        CALI_GEOPOLITICA.find((c) => c.nombre === comuna_corregimiento)
+          ?.barrios_veredas ?? []
+      ).map((b) => ({ value: b.nombre, label: b.nombre }))
+    : [];
+  let descripcion_visita = "";
+  let observaciones_visita = "";
+  let fecha_visita = new Date().toISOString().split("T")[0];
+  let hora_visita = "";
+
+  // Directorio de contactos
+  let contactos: ContactoDirectorio[] = [];
+  let selectedContactIds: string[] = [];
+  let loadingContactos = false;
+
+  $: contactGroups = (() => {
+    const map = new Map<
+      string,
+      { id: string; label: string; sublabel?: string }[]
+    >();
+    for (const c of contactos) {
+      const key = c.centro_gestor || "Sin centro gestor";
+      if (!map.has(key)) map.set(key, []);
+      const nombre = `${c.nombres} ${c.apellidos}`.trim();
+      map.get(key)!.push({
+        id: c.id,
+        label: nombre,
+        sublabel: c.funcion || undefined,
+      });
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([category, items]) => ({ category, items }));
+  })();
+
+  $: acompanantes = selectedContactIds
+    .map((id) => contactos.find((c) => c.id === id))
+    .filter((c): c is ContactoDirectorio => !!c)
+    .map<AcompananteModel>((c) => ({
+      nombre_completo: `${c.nombres} ${c.apellidos}`.trim(),
+      telefono: c.telefono,
+      email: c.email,
+      centro_gestor: c.centro_gestor,
+    }));
 
   onMount(async () => {
-    loading = true;
+    loadingContactos = true;
     try {
-      unidades = await getUnidadesProyecto();
-      unidadOptions = unidades.map((u) => ({
-        value: u.upid,
-        label: `${u.nombre_up} - ${u.nombre_up_detalle} (${u.direccion})`,
-      }));
+      const res = await getDirectorioContactos();
+      if (res.success) contactos = res.contactos;
     } catch (err) {
-      errorMsg = 'Error al cargar unidades de proyecto.';
-      console.error(err);
+      console.error("Error cargando directorio de contactos:", err);
     } finally {
-      loading = false;
+      loadingContactos = false;
     }
   });
 
+  /** Convert YYYY-MM-DD to dd/mm/aaaa */
+  function formatDateForAPI(isoDate: string): string {
+    const [y, m, d] = isoDate.split("-");
+    return `${d}/${m}/${y}`;
+  }
+
   async function handleSubmit() {
-    if (!form.nombre_up || !form.fecha_visita) {
-      errorMsg = 'Por favor, complete todos los campos obligatorios.';
+    if (
+      !barrio_vereda ||
+      !comuna_corregimiento ||
+      !descripcion_visita ||
+      !fecha_visita ||
+      !hora_visita
+    ) {
+      errorMsg = "Por favor, complete todos los campos obligatorios.";
       return;
     }
     submitting = true;
-    errorMsg = '';
-    successMsg = '';
+    errorMsg = "";
+    successMsg = "";
     try {
-      const result = await registrarVisita(form);
-      successMsg = `Visita registrada exitosamente. ${result.vid ? `ID: ${result.vid}` : ''}`;
-      // Reset form
-      form = {
-        nombre_up: '',
-        nombre_up_detalle: '',
-        barrio_vereda: '',
-        comuna_corregimiento: '',
-        fecha_visita: new Date().toISOString().split('T')[0],
+      const payload: RegistrarVisitaPayload = {
+        barrio_vereda,
+        comuna_corregimiento,
+        descripcion_visita,
+        observaciones_visita,
+        acompanantes: acompanantes.length > 0 ? acompanantes : undefined,
+        fecha_visita: formatDateForAPI(fecha_visita),
+        hora_visita,
       };
+      const result = await registrarVisita(payload);
+      successMsg = `Visita registrada exitosamente. ${result.vid ? `ID: ${result.vid}` : ""}`;
+      // Reset
+      barrio_vereda = "";
+      comuna_corregimiento = "";
+      descripcion_visita = "";
+      observaciones_visita = "";
+      fecha_visita = new Date().toISOString().split("T")[0];
+      hora_visita = "";
+      selectedContactIds = [];
+      // Navegar a Visitas Programadas
+      navigationStore.navigate("visitas-programadas");
     } catch (err) {
-      errorMsg = 'Error al registrar la visita. Intente de nuevo.';
+      errorMsg = "Error al registrar la visita. Intente de nuevo.";
       console.error(err);
     } finally {
       submitting = false;
@@ -70,72 +139,101 @@
 
 <div class="view">
   <header class="view-header">
-    <button class="back-btn" on:click={() => navigationStore.goHome()}>← Volver</button>
-    <h2 class="view-title">� Programar Visita</h2>
+    <button class="back-btn" on:click={() => navigationStore.goHome()}
+      >← Volver</button
+    >
+    <h2 class="view-title">Programar Visita</h2>
   </header>
 
   <main class="view-body container">
-    {#if loading}
-      <div class="spinner"></div>
-    {:else}
-      {#if successMsg}
-        <Alert type="success" message={successMsg} />
-      {/if}
-      {#if errorMsg}
-        <Alert type="error" message={errorMsg} />
-      {/if}
+    {#if successMsg}
+      <Alert type="success" message={successMsg} />
+    {/if}
+    {#if errorMsg}
+      <Alert type="error" message={errorMsg} />
+    {/if}
 
-      <Card padding="lg">
-        <form on:submit|preventDefault={handleSubmit} class="form">
-          <Select
-            id="nombre_up"
-            label="Unidad de Proyecto"
-            bind:value={form.nombre_up}
-            options={unidadOptions}
-            required
-            placeholder="-- Seleccione una unidad --"
-          />
+    <Card padding="lg">
+      <form on:submit|preventDefault={handleSubmit} class="form">
+        <SearchableSelect
+          id="comuna_corregimiento"
+          label="Comuna / Corregimiento"
+          placeholder="Buscar comuna o corregimiento..."
+          options={comunaOptions}
+          bind:value={comuna_corregimiento}
+          required
+          on:change={() => {
+            barrio_vereda = "";
+          }}
+        />
 
-          <Input
-            id="nombre_up_detalle"
-            label="Detalle de Unidad de Proyecto"
-            placeholder="Ej: Sector norte, zona residencial"
-            bind:value={form.nombre_up_detalle}
-          />
+        <SearchableSelect
+          id="barrio_vereda"
+          label="Barrio / Vereda"
+          placeholder={comuna_corregimiento
+            ? "Buscar barrio o vereda..."
+            : "Seleccione primero una comuna"}
+          options={barrioOptions}
+          bind:value={barrio_vereda}
+          disabled={!comuna_corregimiento}
+          required
+        />
 
-          <Input
-            id="barrio_vereda"
-            label="Barrio / Vereda"
-            placeholder="Se obtiene de la unidad de proyecto"
-            bind:value={form.barrio_vereda}
-          />
+        <Textarea
+          id="descripcion_visita"
+          label="Descripción de la Visita"
+          placeholder="Describa el propósito de la visita..."
+          bind:value={descripcion_visita}
+          required
+          rows={3}
+        />
 
-          <Input
-            id="comuna_corregimiento"
-            label="Comuna / Corregimiento"
-            placeholder="Se obtiene de la unidad de proyecto"
-            bind:value={form.comuna_corregimiento}
-          />
+        <Textarea
+          id="observaciones_visita"
+          label="Observaciones"
+          placeholder="Observaciones adicionales..."
+          bind:value={observaciones_visita}
+          rows={2}
+        />
 
+        <div class="row-2">
           <Input
             id="fecha_visita"
             type="date"
             label="Fecha de la Visita"
-            bind:value={form.fecha_visita}
+            bind:value={fecha_visita}
             required
           />
+          <Input
+            id="hora_visita"
+            type="time"
+            label="Hora de la Visita"
+            bind:value={hora_visita}
+            required
+          />
+        </div>
 
-          <div class="form-actions">
-            <Button variant="secondary" on:click={() => navigationStore.goHome()}>
-              Cancelar
-            </Button>
-            <Button type="submit" loading={submitting} disabled={submitting}>
-              {submitting ? 'Registrando...' : 'Registrar Visita'}
-            </Button>
-          </div>
-        </form>
-      </Card>
-    {/if}
+        <GroupedMultiSelect
+          id="acompanantes"
+          label="Delegados Acompañantes"
+          placeholder={loadingContactos
+            ? "Cargando contactos..."
+            : "Buscar delegado por nombre o centro gestor..."}
+          groups={contactGroups}
+          bind:selected={selectedContactIds}
+          disabled={loadingContactos}
+        />
+
+        <div class="form-actions">
+          <Button variant="secondary" on:click={() => navigationStore.goHome()}>
+            Cancelar
+          </Button>
+          <Button type="submit" loading={submitting} disabled={submitting}>
+            {submitting ? "Registrando..." : "Registrar Visita"}
+          </Button>
+        </div>
+      </form>
+    </Card>
   </main>
 </div>
 
@@ -166,7 +264,9 @@
     padding: 0;
     font-family: inherit;
   }
-  .back-btn:hover { text-decoration: underline; }
+  .back-btn:hover {
+    text-decoration: underline;
+  }
   .view-title {
     font-size: 1.125rem;
     font-weight: 700;
@@ -186,5 +286,10 @@
     justify-content: flex-end;
     gap: var(--space-sm);
     margin-top: var(--space-sm);
+  }
+  .row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-sm);
   }
 </style>

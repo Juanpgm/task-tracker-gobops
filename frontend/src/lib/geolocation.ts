@@ -48,3 +48,75 @@ export function getCurrentPosition(): Promise<Coordenadas> {
 export function formatCoordinates(coords: Coordenadas): string {
   return `${coords.latitud.toFixed(6)}, ${coords.longitud.toFixed(6)}`;
 }
+
+export interface GeocodingResult {
+  latitud: number;
+  longitud: number;
+  direccion_formateada: string;
+  barrio?: string;
+  comuna?: string;
+}
+
+/**
+ * Geocodifica una dirección textual usando Nominatim (OSM).
+ * Acotado a Santiago de Cali, Colombia.
+ */
+export async function geocodeAddress(query: string): Promise<GeocodingResult | null> {
+  const searchQuery = `${query}, Cali, Valle del Cauca, Colombia`;
+  const url = `https://nominatim.openstreetmap.org/search?` +
+    new URLSearchParams({
+      q: searchQuery,
+      format: 'json',
+      addressdetails: '1',
+      limit: '1',
+      countrycodes: 'co',
+    }).toString();
+
+  const response = await fetch(url, {
+    headers: { 'User-Agent': 'TaskTrackerGobOps/1.0' },
+  });
+
+  if (!response.ok) return null;
+
+  const results = await response.json();
+  if (!results || results.length === 0) return null;
+
+  const r = results[0];
+  return {
+    latitud: parseFloat(r.lat),
+    longitud: parseFloat(r.lon),
+    direccion_formateada: r.display_name || query,
+    barrio: r.address?.suburb || r.address?.neighbourhood || '',
+    comuna: r.address?.city_district || '',
+  };
+}
+
+/**
+ * Geocodificación inversa: coordenadas → dirección.
+ */
+export async function reverseGeocode(lat: number, lon: number): Promise<GeocodingResult | null> {
+  const url = `https://nominatim.openstreetmap.org/reverse?` +
+    new URLSearchParams({
+      lat: lat.toString(),
+      lon: lon.toString(),
+      format: 'json',
+      addressdetails: '1',
+    }).toString();
+
+  const response = await fetch(url, {
+    headers: { 'User-Agent': 'TaskTrackerGobOps/1.0' },
+  });
+
+  if (!response.ok) return null;
+
+  const r = await response.json();
+  if (!r || r.error) return null;
+
+  return {
+    latitud: parseFloat(r.lat),
+    longitud: parseFloat(r.lon),
+    direccion_formateada: r.display_name || '',
+    barrio: r.address?.suburb || r.address?.neighbourhood || '',
+    comuna: r.address?.city_district || '',
+  };
+}

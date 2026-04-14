@@ -112,6 +112,19 @@ class ApiClient {
     }
     return response.json();
   }
+
+  async patch<T>(path: string, body: Record<string, unknown>): Promise<T> {
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method: 'PATCH',
+      headers: this.getHeaders(),
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`PATCH ${path} failed (${response.status}): ${errorBody}`);
+    }
+    return response.json();
+  }
 }
 
 /** Auth & visitas — original API (web-production-79739) */

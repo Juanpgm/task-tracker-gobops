@@ -1,14 +1,21 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount } from "svelte";
 
-  export let label = '';
-  export let id = '';
-  export let type: 'text' | 'email' | 'password' | 'tel' | 'number' | 'date' = 'text';
-  export let placeholder = '';
-  export let value = '';
+  export let label = "";
+  export let id = "";
+  export let type:
+    | "text"
+    | "email"
+    | "password"
+    | "tel"
+    | "number"
+    | "date"
+    | "time" = "text";
+  export let placeholder = "";
+  export let value = "";
   export let required = false;
   export let disabled = false;
-  export let error = '';
+  export let error = "";
 
   let inputEl: HTMLInputElement;
 
@@ -58,7 +65,9 @@
     font-weight: 600;
     color: var(--text);
   }
-  .required { color: var(--error); }
+  .required {
+    color: var(--error);
+  }
   .input {
     width: 100%;
     padding: 0.625rem 0.75rem;
@@ -68,7 +77,9 @@
     font-family: inherit;
     color: var(--text);
     background: var(--surface);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
   }
   .input:focus {
     outline: none;

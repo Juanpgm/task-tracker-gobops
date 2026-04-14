@@ -17,20 +17,58 @@ export interface UnidadProyecto {
   direccion: string;
 }
 
-/** Payload para POST /registrar-visita/ */
+/** Modelo de acompañante para POST /registrar-visita/ */
+export interface AcompananteModel {
+  nombre_completo: string;
+  telefono: string;
+  email: string;
+  centro_gestor: string;
+}
+
+/** Contacto del directorio (GET /obtener_directorio_contactos) */
+export interface ContactoDirectorio {
+  id: string;
+  funcion: string;
+  nombres: string;
+  apellidos: string;
+  cedula: string;
+  email: string;
+  telefono: string;
+  centro_gestor: string;
+}
+
+/** Respuesta de GET /obtener_directorio_contactos */
+export interface DirectorioContactosResponse {
+  success: boolean;
+  total: number;
+  contactos: ContactoDirectorio[];
+  timestamp: string;
+}
+
+/** Payload para POST /registrar-visita/ (JSON body) */
 export interface RegistrarVisitaPayload {
-  nombre_up: string;
-  nombre_up_detalle: string;
   barrio_vereda: string;
   comuna_corregimiento: string;
-  fecha_visita: string; // YYYY-MM-DD
+  descripcion_visita: string;
+  observaciones_visita: string;
+  acompanantes?: AcompananteModel[];
+  fecha_visita: string;  // dd/mm/aaaa
+  hora_visita: string;   // HH:mm
 }
 
 /** Respuesta genérica de registro de visita */
 export interface VisitaResponse {
-  id?: number;
-  vid?: string;
-  message?: string;
+  success: boolean;
+  vid: string;
+  message: string;
+  barrio_vereda: string;
+  comuna_corregimiento: string;
+  descripcion_visita: string;
+  observaciones_visita: string;
+  acompanantes: AcompananteModel;
+  fecha_visita: string;
+  hora_visita: string;
+  timestamp: string;
   [key: string]: unknown;
 }
 
@@ -74,22 +112,119 @@ export interface AsistenciaComunidadPayload {
   longitud: string;
 }
 
-/** Payload para POST /registrar-requerimiento */
+/** Payload para POST /registrar-requerimiento (multipart/form-data) */
 export interface RequerimientoPayload {
   vid: string;
-  centro_gestor_solicitante: string;
-  solicitante_contacto: string;
+  datos_solicitante: string;       // JSON string: { personas: [...] }
+  tipo_requerimiento: string;
   requerimiento: string;
   observaciones: string;
+  coords: string;                  // GeoJSON Point: {"type":"Point","coordinates":[lng,lat]}
+  organismos_encargados: string;   // JSON array: ["DAGMA", "Secretaría de Obras"]
+  nota_voz?: File | null;
+}
+
+/** Respuesta de POST /registrar-requerimiento */
+export interface RequerimientoResponse {
+  success: boolean;
+  vid: string;
+  rid: string;
+  message: string;
+  datos_solicitante: Record<string, unknown>;
+  tipo_requerimiento: string;
+  requerimiento: string;
+  observaciones: string;
+  barrio_vereda: string | null;
+  comuna_corregimiento: string | null;
+  coords: { type: string; coordinates: number[] };
+  estado: string;
+  nota_voz_url: string | null;
+  fecha_registro: string;
+  organismos_encargados: string[];
+  timestamp: string;
+}
+
+/** Payload para POST /seguimiento/visitas (JSON body, Bearer token) */
+export interface ProgramarVisitaBody {
+  upid: string;
+  unidad_proyecto: Record<string, unknown>;
+  fecha_visita: string;
+  hora_inicio?: string | null;
+  hora_fin?: string | null;
+  colaboradores?: string[];
+  observaciones?: string | null;
+}
+
+/** Respuesta de POST/GET /seguimiento/visitas */
+export interface VisitaProgramadaOut {
+  id: string;
+  upid: string;
+  unidad_proyecto: Record<string, unknown>;
+  fecha_visita: string;
+  hora_inicio: string | null;
+  hora_fin: string | null;
+  estado: string;
+  colaboradores: Record<string, unknown>[];
+  observaciones: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Modelo de solicitante para POST /seguimiento/requerimientos */
+export interface SolicitanteModel {
+  id?: string | null;
+  nombre_completo: string;
+  cedula: string;
+  telefono: string;
+  email: string;
   direccion: string;
   barrio_vereda: string;
   comuna_corregimiento: string;
+}
+
+/** Payload para POST /seguimiento/requerimientos (JSON body, Bearer token) */
+export interface CrearRequerimientoBody {
+  visita_id: string;
+  solicitante: SolicitanteModel;
+  centros_gestores: string[];
+  descripcion: string;
+  observaciones: string;
+  direccion: string;
   latitud: string;
   longitud: string;
-  telefono: string;
-  email_solicitante: string;
-  organismos_encargados: string;
-  nota_voz?: File | null;
+  evidencia_fotos?: string[];
+  prioridad?: string;
+}
+
+/** Respuesta de POST/GET /seguimiento/requerimientos */
+export interface RequerimientoOut {
+  id: string;
+  visita_id: string;
+  solicitante: SolicitanteModel;
+  centros_gestores: string[];
+  descripcion: string;
+  observaciones: string;
+  direccion: string;
+  latitud: string;
+  longitud: string;
+  evidencia_fotos: string[];
+  estado: string;
+  encargado: string | null;
+  enlace_id: string | null;
+  enlace_nombre: string | null;
+  fecha_propuesta_solucion: string | null;
+  porcentaje_avance: number;
+  prioridad: string;
+  historial: Record<string, unknown>[];
+  numero_orfeo: string | null;
+  fecha_radicado_orfeo: string | null;
+  documento_peticion_url: string | null;
+  documento_peticion_nombre: string | null;
+  motivo_cancelacion: string | null;
+  documento_cancelacion_url: string | null;
+  documento_cancelacion_nombre: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 /** Coordenadas GPS */

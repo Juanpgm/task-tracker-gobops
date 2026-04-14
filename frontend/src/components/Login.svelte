@@ -15,7 +15,7 @@
   async function handleSubmit() {
     const normalizedEmail = email.trim();
 
-    if (!email || !password) {
+    if (!normalizedEmail || !password) {
       errorMsg = "Por favor, complete todos los campos.";
       return;
     }

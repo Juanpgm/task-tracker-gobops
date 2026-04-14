@@ -1,12 +1,17 @@
 import { apiClient, projectApiClient } from '../lib/api-client';
 import type {
-  UnidadProyecto,
   RegistrarVisitaPayload,
   VisitaResponse,
   Reporte,
   AsistenciaDelegadoPayload,
   AsistenciaComunidadPayload,
   RequerimientoPayload,
+  RequerimientoResponse,
+  ProgramarVisitaBody,
+  VisitaProgramadaOut,
+  CrearRequerimientoBody,
+  RequerimientoOut,
+  DirectorioContactosResponse,
 } from '../types';
 
 type ApiListResponse<T> = { success?: boolean; data?: T[] } | T[];
@@ -18,21 +23,11 @@ function extractList<T>(response: ApiListResponse<T>): T[] {
 }
 
 /* ============================================================
- *  GET /unidades-proyecto
- *  Obtiene las unidades de proyecto disponibles
- *  (fallback: /unidades-proyecto/init-360)
+ *  GET /obtener_directorio_contactos
+ *  Obtiene el directorio de contactos (delegados por centro gestor)
  * ============================================================ */
-export async function getUnidadesProyecto(): Promise<UnidadProyecto[]> {
-  try {
-    const response = await projectApiClient.get<ApiListResponse<UnidadProyecto>>('/unidades-proyecto');
-    const data = extractList(response);
-    if (data.length > 0) return data;
-  } catch {
-    // fallback endpoint
-  }
-
-  const fallbackResponse = await projectApiClient.get<ApiListResponse<UnidadProyecto>>('/unidades-proyecto/init-360');
-  return extractList(fallbackResponse);
+export async function getDirectorioContactos(): Promise<DirectorioContactosResponse> {
+  return apiClient.get<DirectorioContactosResponse>('/obtener_directorio_contactos');
 }
 
 /* ============================================================
@@ -46,17 +41,42 @@ export async function getIntervenciones<T = Record<string, unknown>>(): Promise<
 
 /* ============================================================
  *  POST /registrar-visita/
- *  Registra una nueva visita (application/x-www-form-urlencoded)
+ *  Registra una nueva visita (application/json)
+ *  Campos: barrio_vereda, comuna_corregimiento, descripcion_visita,
+ *          observaciones_visita, acompanantes, fecha_visita (dd/mm/aaaa),
+ *          hora_visita (HH:mm)
  * ============================================================ */
 export async function registrarVisita(payload: RegistrarVisitaPayload): Promise<VisitaResponse> {
-  const data: Record<string, string> = {
-    nombre_up: payload.nombre_up,
-    nombre_up_detalle: payload.nombre_up_detalle,
-    barrio_vereda: payload.barrio_vereda,
-    comuna_corregimiento: payload.comuna_corregimiento,
-    fecha_visita: payload.fecha_visita,
-  };
-  return apiClient.postUrlEncoded<VisitaResponse>('/registrar-visita/', data);
+  return apiClient.post<VisitaResponse>('/registrar-visita/', payload as unknown as Record<string, unknown>);
+}
+
+/* ============================================================
+ *  GET /obtener-visitas-programadas/
+ *  Obtiene las visitas programadas registradas (Artefacto de Captura)
+ * ============================================================ */
+export interface ObtenerVisitasProgramadasItem {
+  vid: string;
+  vid_number: number;
+  barrio_vereda: string;
+  comuna_corregimiento: string;
+  acompanantes: Record<string, string> | Record<string, string>[];
+  descripcion_visita: string;
+  observaciones_visita: string;
+  hora_visita: string;
+  fecha_visita: string; // dd/mm/yyyy
+  created_at: string;
+  timestamp: string;
+}
+
+interface ObtenerVisitasProgramadasResponse {
+  success: boolean;
+  total: number;
+  visitas: ObtenerVisitasProgramadasItem[];
+}
+
+export async function obtenerVisitasProgramadas(): Promise<ObtenerVisitasProgramadasItem[]> {
+  const res = await apiClient.get<ObtenerVisitasProgramadasResponse>('/obtener-visitas-programadas/');
+  return res.visitas || [];
 }
 
 /* ============================================================
@@ -124,28 +144,150 @@ export async function registrarAsistenciaComunidad(
 /* ============================================================
  *  POST /registrar-requerimiento
  *  Registra un requerimiento con posible nota de voz (multipart/form-data)
+ *  Campos: vid, datos_solicitante (JSON), tipo_requerimiento, requerimiento,
+ *          observaciones, coords (GeoJSON), organismos_encargados (JSON array),
+ *          nota_voz (file, optional)
  * ============================================================ */
 export async function registrarRequerimiento(
   payload: RequerimientoPayload
-): Promise<unknown> {
+): Promise<RequerimientoResponse> {
   const formData = new FormData();
   formData.append('vid', payload.vid);
-  formData.append('centro_gestor_solicitante', payload.centro_gestor_solicitante);
-  formData.append('solicitante_contacto', payload.solicitante_contacto);
+  formData.append('datos_solicitante', payload.datos_solicitante);
+  formData.append('tipo_requerimiento', payload.tipo_requerimiento);
   formData.append('requerimiento', payload.requerimiento);
   formData.append('observaciones', payload.observaciones);
-  formData.append('direccion', payload.direccion);
-  formData.append('barrio_vereda', payload.barrio_vereda);
-  formData.append('comuna_corregimiento', payload.comuna_corregimiento);
-  formData.append('latitud', payload.latitud);
-  formData.append('longitud', payload.longitud);
-  formData.append('telefono', payload.telefono);
-  formData.append('email_solicitante', payload.email_solicitante);
+  formData.append('coords', payload.coords);
   formData.append('organismos_encargados', payload.organismos_encargados);
 
   if (payload.nota_voz) {
     formData.append('nota_voz', payload.nota_voz);
   }
 
-  return apiClient.postForm('/registrar-requerimiento', formData);
+  return apiClient.postForm<RequerimientoResponse>('/registrar-requerimiento', formData);
+}
+
+/* ============================================================
+ *  SEGUIMIENTO DE REQUERIMIENTOS — Endpoints nuevos
+ *  Requieren Bearer token (apiClient ya lo maneja)
+ * ============================================================ */
+
+/** GET /seguimiento/visitas — Listar visitas programadas */
+export async function getVisitasProgramadas(
+  params?: { estado?: string; upid?: string }
+): Promise<VisitaProgramadaOut[]> {
+  return apiClient.get<VisitaProgramadaOut[]>('/seguimiento/visitas', params as Record<string, string>);
+}
+
+/** POST /seguimiento/visitas — Programar nueva visita en Firestore */
+export async function programarVisitaAPI(
+  body: ProgramarVisitaBody
+): Promise<VisitaProgramadaOut> {
+  return apiClient.post<VisitaProgramadaOut>('/seguimiento/visitas', body as unknown as Record<string, unknown>);
+}
+
+/** PATCH /seguimiento/visitas/:id/estado — Actualizar estado de visita */
+export async function actualizarEstadoVisitaAPI(
+  visitaId: string,
+  estado: string
+): Promise<VisitaProgramadaOut> {
+  return apiClient.patch<VisitaProgramadaOut>(`/seguimiento/visitas/${encodeURIComponent(visitaId)}/estado`, { estado });
+}
+
+/** GET /seguimiento/requerimientos — Listar requerimientos */
+export async function getRequerimientosSeguimiento(
+  params?: { visita_id?: string; estado?: string }
+): Promise<RequerimientoOut[]> {
+  return apiClient.get<RequerimientoOut[]>('/seguimiento/requerimientos', params as Record<string, string>);
+}
+
+/** POST /seguimiento/requerimientos — Crear requerimiento de seguimiento */
+export async function crearRequerimientoSeguimiento(
+  body: CrearRequerimientoBody
+): Promise<RequerimientoOut> {
+  return apiClient.post<RequerimientoOut>('/seguimiento/requerimientos', body as unknown as Record<string, unknown>);
+}
+
+/** PATCH /seguimiento/requerimientos/:id/estado — Cambiar estado de requerimiento */
+export async function cambiarEstadoRequerimientoAPI(
+  reqId: string,
+  body: { estado: string; descripcion: string; autor: string; porcentaje_avance?: number; evidencias?: unknown[] }
+): Promise<RequerimientoOut> {
+  return apiClient.patch<RequerimientoOut>(`/seguimiento/requerimientos/${encodeURIComponent(reqId)}/estado`, body as Record<string, unknown>);
+}
+
+/** PATCH /seguimiento/requerimientos/:id/encargado — Asignar encargado */
+export async function asignarEncargadoAPI(
+  reqId: string,
+  encargado: string
+): Promise<RequerimientoOut> {
+  return apiClient.patch<RequerimientoOut>(`/seguimiento/requerimientos/${encodeURIComponent(reqId)}/encargado`, { encargado });
+}
+
+/** PATCH /seguimiento/requerimientos/:id/enlace — Asignar enlace */
+export async function asignarEnlaceAPI(
+  reqId: string,
+  enlace_id: string,
+  enlace_nombre: string
+): Promise<RequerimientoOut> {
+  return apiClient.patch<RequerimientoOut>(`/seguimiento/requerimientos/${encodeURIComponent(reqId)}/enlace`, { enlace_id, enlace_nombre });
+}
+
+/** GET /seguimiento/colaboradores — Obtener colaboradores */
+export async function getColaboradores(): Promise<unknown[]> {
+  return apiClient.get<unknown[]>('/seguimiento/colaboradores');
+}
+
+/** GET /seguimiento/centros-gestores — Obtener catálogo de centros gestores */
+export async function getCentrosGestores(): Promise<unknown[]> {
+  return apiClient.get<unknown[]>('/seguimiento/centros-gestores');
+}
+
+/** GET /seguimiento/enlaces — Obtener directorio de enlaces */
+export async function getEnlaces(
+  params?: { centro_gestor_id?: string; activo?: string }
+): Promise<unknown[]> {
+  return apiClient.get<unknown[]>('/seguimiento/enlaces', params as Record<string, string>);
+}
+
+/* ============================================================
+ *  GET /obtener-requerimientos
+ *  Obtiene todos los requerimientos registrados (Artefacto de Captura)
+ * ============================================================ */
+export interface ObtenerRequerimientosItem {
+  id: string;
+  vid: string;
+  rid: string;
+  rid_number: number;
+  tipo_requerimiento: string;
+  requerimiento: string;
+  observaciones: string;
+  estado: string;
+  barrio_vereda: string;
+  comuna_corregimiento: string;
+  coords: { type: string; coordinates: [number, number] };
+  datos_solicitante: {
+    personas: Array<{
+      nombre: string;
+      email?: string;
+      telefono?: string;
+      centro_gestor?: string;
+    }>;
+  };
+  organismos_encargados: string[];
+  nota_voz_url: string | null;
+  fecha_registro: string;
+  created_at: string;
+  timestamp: string;
+}
+
+interface ObtenerRequerimientosResponse {
+  success: boolean;
+  total: number;
+  requerimientos: ObtenerRequerimientosItem[];
+}
+
+export async function obtenerRequerimientos(): Promise<ObtenerRequerimientosItem[]> {
+  const res = await apiClient.get<ObtenerRequerimientosResponse>('/obtener-requerimientos');
+  return res.requerimientos || [];
 }

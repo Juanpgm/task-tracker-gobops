@@ -10,6 +10,9 @@ import type {
   ChangePasswordPayload,
 } from '../types';
 
+// Flag to prevent onAuthStateChanged from conflicting with an active login() call
+let loginInProgress = false;
+
 /**
  * Inicia sesión con email y contraseña usando Firebase,
  * luego valida la sesión contra el backend enviando el ID token al endpoint /auth/login.
@@ -17,6 +20,7 @@ import type {
  */
 export async function login(email: string, password: string): Promise<void> {
   authStore.setLoading(true);
+  loginInProgress = true;
   try {
     if (!auth) {
       throw new Error('Firebase no está inicializado. Verifique la configuración.');
@@ -49,7 +53,9 @@ export async function login(email: string, password: string): Promise<void> {
 
     authStore.login(user);
     authStore.setLoading(false);
+    loginInProgress = false;
   } catch (error: unknown) {
+    loginInProgress = false;
     let message = 'Error al iniciar sesión';
     if (error instanceof Error) {
       if (error.message.includes('auth/user-not-found')) {
@@ -117,6 +123,11 @@ export function initAuthListener(): () => void {
   }
 
   return onAuthStateChanged(auth, async (firebaseUser) => {
+    // Skip if login() is already handling authentication
+    if (loginInProgress) {
+      return;
+    }
+
     if (firebaseUser) {
       try {
         const idToken = await getIdToken(firebaseUser, true);
@@ -150,7 +161,7 @@ export function initAuthListener(): () => void {
       }
     } else {
       if (!authStore.restoreSession()) {
-        authStore.setLoading(false);
+        authStore.logout();
       }
     }
   });

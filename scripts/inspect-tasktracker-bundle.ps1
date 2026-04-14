@@ -1,0 +1,11 @@
+$ErrorActionPreference = 'Stop'
+$site = 'https://task-tracker-beta-pied.vercel.app'
+$index = Invoke-WebRequest -Method GET -Uri $site
+$match = [regex]::Match($index.Content, '/assets/index-[^\s"'']+\.js')
+$jsPath = $match.Value
+Write-Output "jsPath=$jsPath"
+$js = Invoke-WebRequest -Method GET -Uri ($site + $jsPath)
+$content = $js.Content
+Write-Output ("contains_api_project=" + ($content -match '/api/project'))
+Write-Output ("contains_old_project_url=" + ($content -match 'gestorproyectoapi-production\.up\.railway\.app'))
+Write-Output ("contains_old_auth_url=" + ($content -match 'web-production-79739\.up\.railway\.app'))

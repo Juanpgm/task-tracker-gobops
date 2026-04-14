@@ -1,7 +1,7 @@
 /**
  * Store de Seguimiento de Requerimientos
  * Gestiona visitas programadas, requerimientos y estado del Kanban
- * Usa datos mock en local, preparado para migrar a endpoints reales
+ * Conectado a endpoints reales /seguimiento/* con fallback a datos mock
  */
 
 import { writable, derived } from 'svelte/store';
@@ -14,15 +14,26 @@ import type {
   RegistroAvance,
   Enlace,
 } from '../types/seguimiento';
-import type { UnidadProyecto } from '../types';
 import {
-  MOCK_VISITAS,
-  MOCK_REQUERIMIENTOS,
   MOCK_COLABORADORES,
   MOCK_ENLACES,
   generateVisitaId,
   generateRequerimientoId,
 } from '../data/mock-seguimiento';
+import {
+  actualizarEstadoVisitaAPI,
+  crearRequerimientoSeguimiento,
+  cambiarEstadoRequerimientoAPI,
+  obtenerVisitasProgramadas,
+  getRequerimientosSeguimiento,
+  getColaboradores,
+  getEnlaces,
+  registrarVisita,
+  registrarRequerimiento,
+  obtenerRequerimientos,
+} from '../api/visitas';
+import type { ObtenerVisitasProgramadasItem, ObtenerRequerimientosItem } from '../api/visitas';
+import type { RegistrarVisitaPayload, RequerimientoPayload } from '../types';
 
 /* ============================================================
  *  STATE
@@ -37,8 +48,8 @@ interface SeguimientoState {
 }
 
 const initialState: SeguimientoState = {
-  visitas: [...MOCK_VISITAS],
-  requerimientos: [...MOCK_REQUERIMIENTOS],
+  visitas: [],
+  requerimientos: [],
   colaboradores: [...MOCK_COLABORADORES],
   enlaces: [...MOCK_ENLACES],
   loading: false,
@@ -53,23 +64,184 @@ function createSeguimientoStore() {
 
     /* ---- VISITAS ---- */
 
-    /** Programa una nueva visita */
-    programarVisita: (
-      up: UnidadProyecto,
+    /** Carga visitas programadas desde GET /obtener-visitas-programadas/ */
+    loadVisitas: async () => {
+      update((s) => ({ ...s, loading: true, error: null }));
+      try {
+        const data = await obtenerVisitasProgramadas();
+        const mapped: VisitaProgramada[] = data.map((v: ObtenerVisitasProgramadasItem) => {
+          // fecha viene dd/mm/yyyy → convertir a yyyy-mm-dd
+          const [dd, mm, yyyy] = v.fecha_visita.split('/');
+          const fechaISO = `${yyyy}-${mm}-${dd}`;
+
+          // acompanantes puede ser un objeto o un array
+          const acompList: Record<string, string>[] = Array.isArray(v.acompanantes)
+            ? v.acompanantes
+            : [v.acompanantes];
+
+          const colaboradores: Colaborador[] = acompList.map((a, i) => ({
+            id: `${v.vid}-acomp-${i}`,
+            nombre: a.nombre_completo || '',
+            email: a.email || '',
+            telefono: a.telefono || '',
+            cargo: '',
+            centro_gestor: a.centro_gestor || '',
+          }));
+
+          return {
+            id: v.vid,
+            upid: '',
+            barrio_vereda: v.barrio_vereda,
+            comuna_corregimiento: v.comuna_corregimiento,
+            fecha_visita: fechaISO,
+            hora_inicio: v.hora_visita || undefined,
+            hora_fin: undefined,
+            estado: 'programada' as const,
+            colaboradores,
+            observaciones: v.observaciones_visita || undefined,
+            descripcion_visita: v.descripcion_visita,
+            created_at: v.created_at,
+            updated_at: v.timestamp || v.created_at,
+          };
+        });
+        update((s) => ({ ...s, visitas: mapped, loading: false }));
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Error al cargar visitas';
+        console.error('loadVisitas failed:', err);
+        update((s) => ({ ...s, loading: false, error: msg }));
+      }
+    },
+
+    /** Carga requerimientos desde GET /obtener-requerimientos */
+    loadRequerimientos: async () => {
+      update((s) => ({ ...s, loading: true, error: null }));
+      try {
+        const data = await obtenerRequerimientos();
+        const mapped: Requerimiento[] = data.map((item: ObtenerRequerimientosItem) => {
+          const persona = item.datos_solicitante?.personas?.[0];
+          const solicitante: Solicitante = {
+            id: item.id,
+            nombre_completo: persona?.nombre || 'Sin nombre',
+            cedula: '',
+            telefono: persona?.telefono || '',
+            email: persona?.email || '',
+            direccion: `${item.barrio_vereda}, ${item.comuna_corregimiento}`,
+            barrio_vereda: item.barrio_vereda || '',
+            comuna_corregimiento: item.comuna_corregimiento || '',
+          };
+
+          // Mapear estado de la API al tipo local
+          const estadoMap: Record<string, EstadoRequerimiento> = {
+            'pendiente': 'nuevo',
+            'nuevo': 'nuevo',
+            'radicado': 'radicado',
+            'en-gestion': 'en-gestion',
+            'asignado': 'asignado',
+            'en-proceso': 'en-proceso',
+            'resuelto': 'resuelto',
+            'cerrado': 'cerrado',
+            'cancelado': 'cancelado',
+          };
+          const estadoNorm = (item.estado || 'Pendiente').toLowerCase().trim();
+          const estado: EstadoRequerimiento = estadoMap[estadoNorm] || 'nuevo';
+
+          const lng = item.coords?.coordinates?.[0] ?? 0;
+          const lat = item.coords?.coordinates?.[1] ?? 0;
+
+          return {
+            id: item.id,
+            visita_id: item.vid,
+            solicitante,
+            centros_gestores: item.organismos_encargados || [],
+            descripcion: item.requerimiento || '',
+            observaciones: item.observaciones || '',
+            direccion: `${item.barrio_vereda}, ${item.comuna_corregimiento}`,
+            latitud: String(lat),
+            longitud: String(lng),
+            evidencia_fotos: item.nota_voz_url ? [item.nota_voz_url] : [],
+            estado,
+            encargado: undefined,
+            enlace_id: undefined,
+            enlace_nombre: undefined,
+            porcentaje_avance: estado === 'resuelto' || estado === 'cerrado' ? 100 : 0,
+            prioridad: 'media' as const,
+            historial: [],
+            created_at: item.created_at || item.fecha_registro,
+            updated_at: item.timestamp || item.created_at,
+          };
+        });
+        update((s) => ({ ...s, requerimientos: mapped, loading: false }));
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Error al cargar requerimientos';
+        console.error('loadRequerimientos failed:', err);
+        update((s) => ({ ...s, loading: false, error: msg }));
+      }
+    },
+
+    /** Programa una nueva visita — calls POST /registrar-visita/ then updates local state */
+    programarVisita: async (
       fecha: string,
       horaInicio: string,
       horaFin: string,
       colaboradoresIds: string[],
-      observaciones: string
+      observaciones: string,
+      ubicacionManual?: {
+        direccion: string;
+        barrio_vereda: string;
+        comuna_corregimiento: string;
+        referencia: string;
+        latitud: string;
+        longitud: string;
+        geocoding_source: 'gps' | 'manual' | 'geocoded';
+      }
     ) => {
+      // Build payload for POST /registrar-visita/
+      let currentState: SeguimientoState | undefined;
+      const unsub = seguimientoStore.subscribe((s) => { currentState = s; });
+      unsub();
+
+      const primerColab = currentState?.colaboradores.find((c) =>
+        colaboradoresIds.includes(c.id)
+      );
+      const [y, m, d] = fecha.split('-');
+      const payload: RegistrarVisitaPayload = {
+        barrio_vereda: ubicacionManual?.barrio_vereda || 'Sin barrio',
+        comuna_corregimiento: ubicacionManual?.comuna_corregimiento || 'Sin comuna',
+        descripcion_visita: observaciones || 'Visita programada',
+        observaciones_visita: observaciones || '',
+        acompanantes: {
+          nombre_completo: primerColab?.nombre || 'Sin acompañante',
+          telefono: primerColab?.telefono || '',
+          email: primerColab?.email || '',
+          centro_gestor: primerColab?.centro_gestor || '',
+        },
+        fecha_visita: `${d}/${m}/${y}`,
+        hora_visita: horaInicio || '09:00',
+      };
+
+      let vid: string | undefined;
+      try {
+        const result = await registrarVisita(payload);
+        vid = result.vid;
+      } catch (err) {
+        console.warn('POST /registrar-visita/ failed, using local fallback:', err);
+      }
+
+      // Update local state
       update((state) => {
         const colaboradoresSeleccionados = state.colaboradores.filter((c) =>
           colaboradoresIds.includes(c.id)
         );
         const nuevaVisita: VisitaProgramada = {
-          id: generateVisitaId(),
-          upid: up.upid,
-          unidad_proyecto: up,
+          id: vid || generateVisitaId(),
+          upid: 'SIN-UP',
+          direccion_manual: ubicacionManual?.direccion,
+          barrio_vereda: ubicacionManual?.barrio_vereda,
+          comuna_corregimiento: ubicacionManual?.comuna_corregimiento,
+          referencia_ubicacion: ubicacionManual?.referencia,
+          latitud: ubicacionManual?.latitud,
+          longitud: ubicacionManual?.longitud,
+          geocoding_source: ubicacionManual?.geocoding_source,
           fecha_visita: fecha,
           hora_inicio: horaInicio,
           hora_fin: horaFin,
@@ -86,8 +258,51 @@ function createSeguimientoStore() {
       });
     },
 
-    /** Actualiza el estado de una visita */
-    actualizarEstadoVisita: (visitaId: string, estado: VisitaProgramada['estado']) => {
+    /** Actualiza el estado de una visita — calls PATCH /seguimiento/visitas/:id/estado
+     *  Cuando se inicia (en-curso), también registra la visita vía POST /registrar-visita/
+     */
+    actualizarEstadoVisita: async (visitaId: string, estado: VisitaProgramada['estado']) => {
+      // Try real API first
+      try {
+        await actualizarEstadoVisitaAPI(visitaId, estado);
+      } catch (err) {
+        console.warn('API PATCH estado failed, updating locally:', err);
+      }
+
+      // Si la visita se inicia, registrarla también en POST /registrar-visita/
+      if (estado === 'en-curso') {
+        let currentState: SeguimientoState | undefined;
+        const unsub = seguimientoStore.subscribe((s) => { currentState = s; });
+        unsub();
+        const visita = currentState?.visitas.find((v) => v.id === visitaId);
+        if (visita) {
+          try {
+            const [y, m, d] = visita.fecha_visita.split('-');
+            const fechaFormatted = `${d}/${m}/${y}`;
+            const primerColaborador = visita.colaboradores[0];
+            const payload: RegistrarVisitaPayload = {
+              barrio_vereda: visita.barrio_vereda || 'Sin barrio',
+              comuna_corregimiento: visita.comuna_corregimiento || 'Sin comuna',
+              descripcion_visita: visita.observaciones || 'Visita iniciada desde seguimiento',
+              observaciones_visita: visita.observaciones || 'Visita iniciada desde seguimiento',
+              acompanantes: {
+                nombre_completo: primerColaborador?.nombre || 'Sin acompañante',
+                telefono: primerColaborador?.telefono || '',
+                email: primerColaborador?.email || '',
+                centro_gestor: primerColaborador?.centro_gestor || '',
+              },
+              fecha_visita: fechaFormatted,
+              hora_visita: visita.hora_inicio || new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false }),
+            };
+            const result = await registrarVisita(payload);
+            console.log('Visita registrada en artefacto de captura:', result.vid);
+          } catch (err) {
+            console.warn('POST /registrar-visita/ failed (no-blocking):', err);
+          }
+        }
+      }
+
+      // Always update local state
       update((state) => ({
         ...state,
         visitas: state.visitas.map((v) =>
@@ -100,8 +315,10 @@ function createSeguimientoStore() {
 
     /* ---- REQUERIMIENTOS ---- */
 
-    /** Agrega un nuevo requerimiento a una visita */
-    agregarRequerimiento: (
+    /** Agrega un nuevo requerimiento — calls POST /seguimiento/requerimientos
+     *  También registra en POST /registrar-requerimiento (artefacto de captura)
+     */
+    agregarRequerimiento: async (
       visitaId: string,
       solicitante: Solicitante,
       centrosGestores: string[],
@@ -113,6 +330,86 @@ function createSeguimientoStore() {
       fotos: string[],
       prioridad: Requerimiento['prioridad']
     ) => {
+      // También registrar en el artefacto de captura POST /registrar-requerimiento (no bloqueante)
+      try {
+        const datosSolicitante = JSON.stringify({
+          personas: [{
+            nombre: solicitante.nombre_completo,
+            email: solicitante.email || undefined,
+            telefono: solicitante.telefono || undefined,
+            centro_gestor: centrosGestores[0] || undefined,
+          }],
+        });
+        const coordsJson = (latitud && longitud)
+          ? JSON.stringify({ type: 'Point', coordinates: [parseFloat(longitud), parseFloat(latitud)] })
+          : JSON.stringify({ type: 'Point', coordinates: [0, 0] });
+        const organismosJson = JSON.stringify(centrosGestores);
+
+        const capturaPayload: RequerimientoPayload = {
+          vid: visitaId,
+          datos_solicitante: datosSolicitante,
+          tipo_requerimiento: prioridad || 'media',
+          requerimiento: descripcion,
+          observaciones: observaciones || 'Sin observaciones',
+          coords: coordsJson,
+          organismos_encargados: organismosJson,
+        };
+        const capturaResult = await registrarRequerimiento(capturaPayload);
+        console.log('Requerimiento registrado en artefacto de captura:', capturaResult.rid);
+      } catch (err) {
+        console.warn('POST /registrar-requerimiento failed (no-blocking):', err);
+      }
+
+      // Try real API first (seguimiento)
+      try {
+        const apiBody = {
+          visita_id: visitaId,
+          solicitante: {
+            nombre_completo: solicitante.nombre_completo,
+            cedula: solicitante.cedula,
+            telefono: solicitante.telefono,
+            email: solicitante.email,
+            direccion: solicitante.direccion,
+            barrio_vereda: solicitante.barrio_vereda,
+            comuna_corregimiento: solicitante.comuna_corregimiento,
+          },
+          centros_gestores: centrosGestores,
+          descripcion,
+          observaciones,
+          direccion,
+          latitud,
+          longitud,
+          evidencia_fotos: fotos,
+          prioridad,
+        };
+        const result = await crearRequerimientoSeguimiento(apiBody);
+        update((state) => {
+          const nuevoReq: Requerimiento = {
+            id: result.id,
+            visita_id: result.visita_id,
+            solicitante,
+            centros_gestores: result.centros_gestores,
+            descripcion: result.descripcion,
+            observaciones: result.observaciones,
+            direccion: result.direccion,
+            latitud: result.latitud,
+            longitud: result.longitud,
+            evidencia_fotos: result.evidencia_fotos,
+            estado: (result.estado as Requerimiento['estado']) || 'nuevo',
+            porcentaje_avance: result.porcentaje_avance || 0,
+            prioridad: (result.prioridad as Requerimiento['prioridad']) || prioridad,
+            historial: [],
+            created_at: result.created_at,
+            updated_at: result.updated_at,
+          };
+          return { ...state, requerimientos: [nuevoReq, ...state.requerimientos] };
+        });
+        return;
+      } catch (err) {
+        console.warn('API /seguimiento/requerimientos failed, using local fallback:', err);
+      }
+
+      // Fallback: local-only
       update((state) => {
         const nuevoReq: Requerimiento = {
           id: generateRequerimientoId(),
@@ -150,14 +447,26 @@ function createSeguimientoStore() {
       });
     },
 
-    /** Cambia el estado de un requerimiento y agrega al historial */
-    cambiarEstadoRequerimiento: (
+    /** Cambia el estado de un requerimiento — calls PATCH /seguimiento/requerimientos/:id/estado */
+    cambiarEstadoRequerimiento: async (
       reqId: string,
       nuevoEstado: EstadoRequerimiento,
       descripcion: string,
       autor: string,
       porcentajeAvance: number
     ) => {
+      // Try real API
+      try {
+        await cambiarEstadoRequerimientoAPI(reqId, {
+          estado: nuevoEstado,
+          descripcion,
+          autor,
+          porcentaje_avance: porcentajeAvance,
+        });
+      } catch (err) {
+        console.warn('API PATCH estado requerimiento failed, updating locally:', err);
+      }
+      // Always update local state
       update((state) => ({
         ...state,
         requerimientos: state.requerimientos.map((r) => {

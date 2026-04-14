@@ -1,69 +1,81 @@
 <script lang="ts">
-  import { navigationStore } from '../../stores/navigationStore';
-  import { seguimientoStore } from '../../stores/seguimientoStore';
-  import { KANBAN_COLUMNS } from '../../types/seguimiento';
-  import type { Requerimiento, EstadoRequerimiento } from '../../types/seguimiento';
-  import { CENTROS_GESTORES } from '../../data/mock-seguimiento';
-  import Button from '../ui/Button.svelte';
+  import { onMount } from "svelte";
+  import { navigationStore } from "../../stores/navigationStore";
+  import { seguimientoStore } from "../../stores/seguimientoStore";
+  import { KANBAN_COLUMNS } from "../../types/seguimiento";
+  import type {
+    Requerimiento,
+    EstadoRequerimiento,
+  } from "../../types/seguimiento";
+  import { CENTROS_GESTORES } from "../../data/mock-seguimiento";
+  import Button from "../ui/Button.svelte";
 
-  let filterVisitaId = '';
+  onMount(() => {
+    seguimientoStore.loadRequerimientos();
+  });
+
+  let filterVisitaId = "";
   let selectedReq: Requerimiento | null = null;
   let showDetailPanel = false;
-  let viewMode: 'kanban' | 'tabla' = 'kanban';
-  let groupBy: 'estado' | 'centro_gestor' = 'estado';
-  let enlaceSeleccionado = '';
+  let viewMode: "kanban" | "tabla" = "kanban";
+  let groupBy: "estado" | "centro_gestor" = "estado";
+  let enlaceSeleccionado = "";
   let showFilters = false;
 
   // Filters
-  let filterCentroGestor = '';
-  let filterComuna = '';
-  let filterBarrio = '';
-  let filterFechaInicio = '';
-  let filterFechaFin = '';
-  let filterEstado = '';
-  let filterPrioridad = '';
-  let filterConEnlace = ''; // 'con' | 'sin' | ''
-  let filterConOrfeo = '';  // 'con' | 'sin' | ''
-  let filterTexto = '';
+  let filterCentroGestor = "";
+  let filterComuna = "";
+  let filterBarrio = "";
+  let filterFechaInicio = "";
+  let filterFechaFin = "";
+  let filterEstado = "";
+  let filterPrioridad = "";
+  let filterConEnlace = ""; // 'con' | 'sin' | ''
+  let filterConOrfeo = ""; // 'con' | 'sin' | ''
+  let filterTexto = "";
 
   // Avance form
   let showAvanceForm = false;
-  let avanceNuevoEstado: EstadoRequerimiento = 'radicado';
-  let avanceDescripcion = '';
+  let avanceNuevoEstado: EstadoRequerimiento = "radicado";
+  let avanceDescripcion = "";
   let avancePorcentaje = 0;
-  let avanceEncargado = '';
+  let avanceEncargado = "";
 
   // Orfeo form
   let showOrfeoForm = false;
-  let orfeoNumero = '';
-  let orfeoFechaRadicado = '';
+  let orfeoNumero = "";
+  let orfeoFechaRadicado = "";
   let orfeoPeticionFile: FileList | null = null;
 
   // Propuesta solucion
-  let fechaPropuestaSolucion = '';
+  let fechaPropuestaSolucion = "";
 
   // Cancelar form
   let showCancelForm = false;
-  let cancelMotivo = '';
+  let cancelMotivo = "";
   let cancelDocFile: FileList | null = null;
 
   $: params = $navigationStore.params;
-  $: filterVisitaId = params.visitaId || '';
+  $: filterVisitaId = params.visitaId || "";
 
   $: allReqs = $seguimientoStore.requerimientos;
   $: displayReqs = allReqs.filter((r) => {
     if (filterVisitaId && r.visita_id !== filterVisitaId) return false;
-    if (filterCentroGestor && !r.centros_gestores.includes(filterCentroGestor)) return false;
-    if (filterComuna && r.solicitante.comuna_corregimiento !== filterComuna) return false;
-    if (filterBarrio && r.solicitante.barrio_vereda !== filterBarrio) return false;
+    if (filterCentroGestor && !r.centros_gestores.includes(filterCentroGestor))
+      return false;
+    if (filterComuna && r.solicitante.comuna_corregimiento !== filterComuna)
+      return false;
+    if (filterBarrio && r.solicitante.barrio_vereda !== filterBarrio)
+      return false;
     if (filterFechaInicio && r.created_at < filterFechaInicio) return false;
-    if (filterFechaFin && r.created_at > filterFechaFin + 'T23:59:59Z') return false;
+    if (filterFechaFin && r.created_at > filterFechaFin + "T23:59:59Z")
+      return false;
     if (filterEstado && r.estado !== filterEstado) return false;
     if (filterPrioridad && r.prioridad !== filterPrioridad) return false;
-    if (filterConEnlace === 'con' && !r.enlace_id) return false;
-    if (filterConEnlace === 'sin' && r.enlace_id) return false;
-    if (filterConOrfeo === 'con' && !r.numero_orfeo) return false;
-    if (filterConOrfeo === 'sin' && r.numero_orfeo) return false;
+    if (filterConEnlace === "con" && !r.enlace_id) return false;
+    if (filterConEnlace === "sin" && r.enlace_id) return false;
+    if (filterConOrfeo === "con" && !r.numero_orfeo) return false;
+    if (filterConOrfeo === "sin" && r.numero_orfeo) return false;
     if (filterTexto) {
       const q = filterTexto.toLowerCase();
       const match =
@@ -71,8 +83,8 @@
         r.solicitante.nombre_completo.toLowerCase().includes(q) ||
         r.solicitante.cedula.includes(q) ||
         r.id.toLowerCase().includes(q) ||
-        (r.numero_orfeo || '').toLowerCase().includes(q) ||
-        r.centros_gestores.some(cg => cg.toLowerCase().includes(q));
+        (r.numero_orfeo || "").toLowerCase().includes(q) ||
+        r.centros_gestores.some((cg) => cg.toLowerCase().includes(q));
       if (!match) return false;
     }
     return true;
@@ -80,8 +92,14 @@
 
   $: groupedByEstado = (() => {
     const grouped: Record<EstadoRequerimiento, Requerimiento[]> = {
-      'nuevo': [], 'radicado': [], 'en-gestion': [], 'asignado': [],
-      'en-proceso': [], 'resuelto': [], 'cerrado': [], 'cancelado': [],
+      nuevo: [],
+      radicado: [],
+      "en-gestion": [],
+      asignado: [],
+      "en-proceso": [],
+      resuelto: [],
+      cerrado: [],
+      cancelado: [],
     };
     for (const req of displayReqs) grouped[req.estado].push(req);
     return grouped;
@@ -90,36 +108,61 @@
   $: groupedByCentroGestor = (() => {
     const grouped: Record<string, Requerimiento[]> = {};
     for (const req of displayReqs) {
-      const cgs = req.centros_gestores.length > 0 ? req.centros_gestores : ['Sin centro gestor'];
+      const cgs =
+        req.centros_gestores.length > 0
+          ? req.centros_gestores
+          : ["Sin centro gestor"];
       for (const cg of cgs) {
         if (!grouped[cg]) grouped[cg] = [];
-        if (!grouped[cg].find(r => r.id === req.id)) grouped[cg].push(req);
+        if (!grouped[cg].find((r) => r.id === req.id)) grouped[cg].push(req);
       }
     }
     return grouped;
   })();
 
-  $: uniqueComunas = [...new Set(allReqs.map(r => r.solicitante.comuna_corregimiento).filter(Boolean))].sort();
-  $: uniqueBarrios = [...new Set(
-    allReqs
-      .filter(r => !filterComuna || r.solicitante.comuna_corregimiento === filterComuna)
-      .map(r => r.solicitante.barrio_vereda).filter(Boolean)
-  )].sort();
-  $: uniqueCentros = CENTROS_GESTORES.map(c => c.nombre);
+  $: uniqueComunas = [
+    ...new Set(
+      allReqs.map((r) => r.solicitante.comuna_corregimiento).filter(Boolean),
+    ),
+  ].sort();
+  $: uniqueBarrios = [
+    ...new Set(
+      allReqs
+        .filter(
+          (r) =>
+            !filterComuna ||
+            r.solicitante.comuna_corregimiento === filterComuna,
+        )
+        .map((r) => r.solicitante.barrio_vereda)
+        .filter(Boolean),
+    ),
+  ].sort();
+  $: uniqueCentros = CENTROS_GESTORES.map((c) => c.nombre);
 
-  $: activeFiltersCount = [filterCentroGestor, filterComuna, filterBarrio, filterFechaInicio, filterFechaFin, filterEstado, filterPrioridad, filterConEnlace, filterConOrfeo, filterTexto].filter(Boolean).length;
+  $: activeFiltersCount = [
+    filterCentroGestor,
+    filterComuna,
+    filterBarrio,
+    filterFechaInicio,
+    filterFechaFin,
+    filterEstado,
+    filterPrioridad,
+    filterConEnlace,
+    filterConOrfeo,
+    filterTexto,
+  ].filter(Boolean).length;
 
   function clearFilters() {
-    filterCentroGestor = '';
-    filterComuna = '';
-    filterBarrio = '';
-    filterFechaInicio = '';
-    filterFechaFin = '';
-    filterEstado = '';
-    filterPrioridad = '';
-    filterConEnlace = '';
-    filterConOrfeo = '';
-    filterTexto = '';
+    filterCentroGestor = "";
+    filterComuna = "";
+    filterBarrio = "";
+    filterFechaInicio = "";
+    filterFechaFin = "";
+    filterEstado = "";
+    filterPrioridad = "";
+    filterConEnlace = "";
+    filterConOrfeo = "";
+    filterTexto = "";
   }
 
   function selectReq(req: Requerimiento) {
@@ -128,8 +171,8 @@
     showAvanceForm = false;
     showOrfeoForm = false;
     showCancelForm = false;
-    enlaceSeleccionado = '';
-    fechaPropuestaSolucion = req.fecha_propuesta_solucion || '';
+    enlaceSeleccionado = "";
+    fechaPropuestaSolucion = req.fecha_propuesta_solucion || "";
   }
 
   function closeDetail() {
@@ -140,16 +183,24 @@
   function openAvanceForm() {
     if (!selectedReq) return;
     avanceNuevoEstado = getNextEstado(selectedReq.estado);
-    avanceDescripcion = '';
+    avanceDescripcion = "";
     avancePorcentaje = selectedReq.porcentaje_avance;
-    avanceEncargado = selectedReq.encargado || '';
+    avanceEncargado = selectedReq.encargado || "";
     showAvanceForm = true;
     showOrfeoForm = false;
     showCancelForm = false;
   }
 
   function getNextEstado(current: EstadoRequerimiento): EstadoRequerimiento {
-    const order: EstadoRequerimiento[] = ['nuevo', 'radicado', 'en-gestion', 'asignado', 'en-proceso', 'resuelto', 'cerrado'];
+    const order: EstadoRequerimiento[] = [
+      "nuevo",
+      "radicado",
+      "en-gestion",
+      "asignado",
+      "en-proceso",
+      "resuelto",
+      "cerrado",
+    ];
     const idx = order.indexOf(current);
     return idx < order.length - 1 ? order[idx + 1] : current;
   }
@@ -161,15 +212,17 @@
       selectedReq.id,
       avanceNuevoEstado,
       avanceDescripcion,
-      'Usuario actual',
-      avancePorcentaje
+      "Usuario actual",
+      avancePorcentaje,
     );
 
     if (avanceEncargado && avanceEncargado !== selectedReq.encargado) {
       seguimientoStore.asignarEncargado(selectedReq.id, avanceEncargado);
     }
 
-    const updated = $seguimientoStore.requerimientos.find((r) => r.id === selectedReq!.id);
+    const updated = $seguimientoStore.requerimientos.find(
+      (r) => r.id === selectedReq!.id,
+    );
     if (updated) selectedReq = updated;
     showAvanceForm = false;
   }
@@ -178,16 +231,29 @@
     if (!selectedReq || !orfeoNumero.trim()) return;
     const docNombre = orfeoPeticionFile?.[0]?.name;
     const docUrl = docNombre ? `#local:${docNombre}` : undefined;
-    seguimientoStore.actualizarOrfeo(selectedReq.id, orfeoNumero, orfeoFechaRadicado, docUrl, docNombre);
-    const updated = $seguimientoStore.requerimientos.find((r) => r.id === selectedReq!.id);
+    seguimientoStore.actualizarOrfeo(
+      selectedReq.id,
+      orfeoNumero,
+      orfeoFechaRadicado,
+      docUrl,
+      docNombre,
+    );
+    const updated = $seguimientoStore.requerimientos.find(
+      (r) => r.id === selectedReq!.id,
+    );
     if (updated) selectedReq = updated;
     showOrfeoForm = false;
   }
 
   function guardarFechaPropuestaSolucion() {
     if (!selectedReq || !fechaPropuestaSolucion) return;
-    seguimientoStore.asignarFechaPropuestaSolucion(selectedReq.id, fechaPropuestaSolucion);
-    const updated = $seguimientoStore.requerimientos.find((r) => r.id === selectedReq!.id);
+    seguimientoStore.asignarFechaPropuestaSolucion(
+      selectedReq.id,
+      fechaPropuestaSolucion,
+    );
+    const updated = $seguimientoStore.requerimientos.find(
+      (r) => r.id === selectedReq!.id,
+    );
     if (updated) selectedReq = updated;
   }
 
@@ -195,41 +261,116 @@
     if (!selectedReq || !cancelMotivo.trim()) return;
     const docNombre = cancelDocFile?.[0]?.name;
     const docUrl = docNombre ? `#local:${docNombre}` : undefined;
-    seguimientoStore.cancelarRequerimiento(selectedReq.id, cancelMotivo, 'Usuario actual', docUrl, docNombre);
-    const updated = $seguimientoStore.requerimientos.find((r) => r.id === selectedReq!.id);
+    seguimientoStore.cancelarRequerimiento(
+      selectedReq.id,
+      cancelMotivo,
+      "Usuario actual",
+      docUrl,
+      docNombre,
+    );
+    const updated = $seguimientoStore.requerimientos.find(
+      (r) => r.id === selectedReq!.id,
+    );
     if (updated) selectedReq = updated;
     showCancelForm = false;
   }
 
   // Keep selectedReq in sync
   $: if (selectedReq && $seguimientoStore.requerimientos) {
-    const found = $seguimientoStore.requerimientos.find((r) => r.id === selectedReq!.id);
+    const found = $seguimientoStore.requerimientos.find(
+      (r) => r.id === selectedReq!.id,
+    );
     if (found) selectedReq = found;
   }
 
   function getPrioridadStyle(p: string): string {
     switch (p) {
-      case 'urgente': return 'background: #fee2e2; color: #991b1b;';
-      case 'alta': return 'background: #fef3c7; color: #92400e;';
-      case 'media': return 'background: #dbeafe; color: #1e40af;';
-      case 'baja': return 'background: #f1f5f9; color: #475569;';
-      default: return '';
+      case "urgente":
+        return "background: #fee2e2; color: #991b1b;";
+      case "alta":
+        return "background: #fef3c7; color: #92400e;";
+      case "media":
+        return "background: #dbeafe; color: #1e40af;";
+      case "baja":
+        return "background: #f1f5f9; color: #475569;";
+      default:
+        return "";
+    }
+  }
+
+  /** Subtle pastel backgrounds per estado — visually distinct, tenue */
+  function getEstadoBg(estado: string): string {
+    switch (estado) {
+      case "nuevo":
+        return "#f0f1f3"; // gray‑cool
+      case "en-proceso":
+        return "#fff3e0"; // warm peach
+      case "resuelto":
+        return "#e8f5e9"; // soft mint
+      case "cerrado":
+        return "#eceff1"; // blue‑gray
+      case "cancelado":
+        return "#fce4ec"; // pale rose
+      default:
+        return "transparent";
+    }
+  }
+
+  function getEstadoBorder(estado: string): string {
+    switch (estado) {
+      case "nuevo":
+        return "#d5d7db";
+      case "en-proceso":
+        return "#ffe0b2";
+      case "resuelto":
+        return "#c8e6c9";
+      case "cerrado":
+        return "#cfd8dc";
+      case "cancelado":
+        return "#f8bbd0";
+      default:
+        return "#e2e8f0";
+    }
+  }
+
+  function getEstadoChipStyle(estado: string): string {
+    switch (estado) {
+      case "nuevo":
+        return "background: #e0e2e6; color: #4b5563;";
+      case "en-proceso":
+        return "background: #ffe0b2; color: #e65100;";
+      case "resuelto":
+        return "background: #c8e6c9; color: #2e7d32;";
+      case "cerrado":
+        return "background: #cfd8dc; color: #37474f;";
+      case "cancelado":
+        return "background: #f8bbd0; color: #c62828;";
+      default:
+        return "background: #f1f5f9; color: #475569;";
     }
   }
 
   function formatDate(d: string): string {
-    return new Date(d).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return new Date(d).toLocaleDateString("es-CO", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   }
 
   function getVisitaLabel(visitaId: string): string {
     const v = $seguimientoStore.visitas.find((v) => v.id === visitaId);
-    return v ? `${v.unidad_proyecto.nombre_up} — ${v.fecha_visita}` : visitaId;
+    return v ? `${v.barrio_vereda || "Visita"} — ${v.fecha_visita}` : visitaId;
   }
 
   // Enlaces
   $: allEnlaces = $seguimientoStore.enlaces.filter((e) => e.activo);
   $: enlacesForSelectedReq = selectedReq
-    ? allEnlaces.filter((e) => selectedReq!.centros_gestores.includes(e.centro_gestor_nombre))
+    ? allEnlaces.filter((e) =>
+        selectedReq!.centros_gestores.includes(e.centro_gestor_nombre),
+      )
     : [];
 
   function handleAsignarEnlace() {
@@ -238,48 +379,88 @@
     if (enlace) {
       seguimientoStore.asignarEnlace(selectedReq.id, enlace.id, enlace.nombre);
     }
-    enlaceSeleccionado = '';
+    enlaceSeleccionado = "";
   }
 
   // Stats
   $: totalReqs = displayReqs.length;
-  $: avgAvance = totalReqs > 0 ? Math.round(displayReqs.reduce((sum, r) => sum + r.porcentaje_avance, 0) / totalReqs) : 0;
+  $: avgAvance =
+    totalReqs > 0
+      ? Math.round(
+          displayReqs.reduce((sum, r) => sum + r.porcentaje_avance, 0) /
+            totalReqs,
+        )
+      : 0;
 </script>
 
 <div class="view" class:has-panel={showDetailPanel}>
   <header class="view-header">
-    <button class="back-btn" on:click={() => navigationStore.navigate(filterVisitaId ? 'visitas-programadas' : 'home')}>← Volver</button>
-    <h2 class="view-title">📊 Tablero de Requerimientos</h2>
+    <button
+      class="back-btn"
+      on:click={() =>
+        navigationStore.navigate(
+          filterVisitaId ? "visitas-programadas" : "home",
+        )}>← Volver</button
+    >
+    <h2 class="view-title">Tablero de Requerimientos</h2>
     <div class="header-controls">
       <!-- View toggle -->
       <div class="view-toggle">
-        <button class="toggle-btn" class:active={viewMode === 'kanban'} on:click={() => (viewMode = 'kanban')}>▦ Kanban</button>
-        <button class="toggle-btn" class:active={viewMode === 'tabla'} on:click={() => (viewMode = 'tabla')}>☰ Tabla</button>
+        <button
+          class="toggle-btn"
+          class:active={viewMode === "kanban"}
+          on:click={() => (viewMode = "kanban")}>Kanban</button
+        >
+        <button
+          class="toggle-btn"
+          class:active={viewMode === "tabla"}
+          on:click={() => (viewMode = "tabla")}>Tabla</button
+        >
       </div>
       <!-- GroupBy toggle (kanban only) -->
-      {#if viewMode === 'kanban'}
+      {#if viewMode === "kanban"}
         <div class="view-toggle">
-          <button class="toggle-btn" class:active={groupBy === 'estado'} on:click={() => (groupBy = 'estado')} title="Agrupar por estado">Estado</button>
-          <button class="toggle-btn" class:active={groupBy === 'centro_gestor'} on:click={() => (groupBy = 'centro_gestor')} title="Agrupar por centro gestor">C.Gestor</button>
+          <button
+            class="toggle-btn"
+            class:active={groupBy === "estado"}
+            on:click={() => (groupBy = "estado")}
+            title="Agrupar por estado">Estado</button
+          >
+          <button
+            class="toggle-btn"
+            class:active={groupBy === "centro_gestor"}
+            on:click={() => (groupBy = "centro_gestor")}
+            title="Agrupar por centro gestor">C.Gestor</button
+          >
         </div>
       {/if}
       <!-- Filter toggle -->
-      <button class="filter-toggle-btn" class:has-active={activeFiltersCount > 0} on:click={() => (showFilters = !showFilters)}>
-        🔽 Filtros{activeFiltersCount > 0 ? ` (${activeFiltersCount})` : ''}
+      <button
+        class="filter-toggle-btn"
+        class:has-active={activeFiltersCount > 0}
+        on:click={() => (showFilters = !showFilters)}
+      >
+        Filtros{activeFiltersCount > 0 ? ` (${activeFiltersCount})` : ""}
       </button>
       <span class="stat">{totalReqs} req.</span>
-      <span class="stat">⌀ {avgAvance}%</span>
+      <span class="stat">Prom. {avgAvance}%</span>
     </div>
   </header>
 
   <!-- Filter bar -->
   {#if showFilters}
     <div class="filter-bar">
-      <!-- Row 1: text search -->  
+      <!-- Row 1: text search -->
       <div class="filter-row">
         <div class="filter-group filter-group-wide">
-          <label for="f-texto">🔍 Buscar</label>
-          <input id="f-texto" type="text" bind:value={filterTexto} placeholder="Descripción, solicitante, ID, orfeo, centro gestor…" class="filter-search" />
+          <label for="f-texto">Buscar</label>
+          <input
+            id="f-texto"
+            type="text"
+            bind:value={filterTexto}
+            placeholder="Descripción, solicitante, ID, orfeo, centro gestor…"
+            class="filter-search"
+          />
         </div>
       </div>
       <!-- Row 2: dropdowns -->
@@ -288,24 +469,21 @@
           <label for="f-estado">Estado</label>
           <select id="f-estado" bind:value={filterEstado}>
             <option value="">Todos</option>
-            <option value="nuevo">🆕 Nuevo</option>
-            <option value="radicado">📋 Radicado</option>
-            <option value="en-gestion">📞 En Gestión</option>
-            <option value="asignado">👤 Asignado</option>
-            <option value="en-proceso">🔧 En Proceso</option>
-            <option value="resuelto">✅ Resuelto</option>
-            <option value="cerrado">🔒 Cerrado</option>
-            <option value="cancelado">🚫 Cancelado</option>
+            <option value="nuevo">Nuevo</option>
+            <option value="en-proceso">En Proceso</option>
+            <option value="resuelto">Resuelto</option>
+            <option value="cerrado">Cerrado</option>
+            <option value="cancelado">Cancelado</option>
           </select>
         </div>
         <div class="filter-group">
           <label for="f-prio">Prioridad</label>
           <select id="f-prio" bind:value={filterPrioridad}>
             <option value="">Todas</option>
-            <option value="urgente">🔴 Urgente</option>
-            <option value="alta">🟠 Alta</option>
-            <option value="media">🔵 Media</option>
-            <option value="baja">⚪ Baja</option>
+            <option value="urgente">Urgente</option>
+            <option value="alta">Alta</option>
+            <option value="media">Media</option>
+            <option value="baja">Baja</option>
           </select>
         </div>
         <div class="filter-group">
@@ -317,7 +495,11 @@
         </div>
         <div class="filter-group">
           <label for="f-com">Comuna</label>
-          <select id="f-com" bind:value={filterComuna} on:change={() => (filterBarrio = '')}>
+          <select
+            id="f-com"
+            bind:value={filterComuna}
+            on:change={() => (filterBarrio = "")}
+          >
             <option value="">Todas</option>
             {#each uniqueComunas as c}<option value={c}>{c}</option>{/each}
           </select>
@@ -333,16 +515,16 @@
           <label for="f-enlace">Enlace</label>
           <select id="f-enlace" bind:value={filterConEnlace}>
             <option value="">Todos</option>
-            <option value="con">✅ Con enlace</option>
-            <option value="sin">❌ Sin enlace</option>
+            <option value="con">Con enlace</option>
+            <option value="sin">Sin enlace</option>
           </select>
         </div>
         <div class="filter-group">
           <label for="f-orfeo">Orfeo</label>
           <select id="f-orfeo" bind:value={filterConOrfeo}>
             <option value="">Todos</option>
-            <option value="con">📄 Con orfeo</option>
-            <option value="sin">📭 Sin orfeo</option>
+            <option value="con">Con orfeo</option>
+            <option value="sin">Sin orfeo</option>
           </select>
         </div>
         <div class="filter-group">
@@ -354,7 +536,9 @@
           <input id="f-hasta" type="date" bind:value={filterFechaFin} />
         </div>
         {#if activeFiltersCount > 0}
-          <button class="clear-filter-btn" on:click={clearFilters}>✕ Limpiar ({activeFiltersCount})</button>
+          <button class="clear-filter-btn" on:click={clearFilters}
+            >Limpiar ({activeFiltersCount})</button
+          >
         {/if}
       </div>
     </div>
@@ -362,159 +546,268 @@
 
   {#if filterVisitaId}
     <div class="filter-banner">
-      Mostrando requerimientos de: <strong>{getVisitaLabel(filterVisitaId)}</strong>
-      <button class="clear-filter" on:click={() => { filterVisitaId = ''; navigationStore.navigate('kanban'); }}>✕ Ver todos</button>
+      Mostrando requerimientos de: <strong
+        >{getVisitaLabel(filterVisitaId)}</strong
+      >
+      <button
+        class="clear-filter"
+        on:click={() => {
+          filterVisitaId = "";
+          navigationStore.navigate("kanban");
+        }}>Ver todos</button
+      >
     </div>
   {/if}
 
-  {#if viewMode === 'kanban'}
-  <div class="kanban-container">
-    <div class="kanban-board">
-      {#if groupBy === 'estado'}
-        {#each KANBAN_COLUMNS as col (col.id)}
-          {@const colReqs = groupedByEstado[col.id] || []}
-          <div class="kanban-column">
-            <div class="column-header" style="border-color: {col.color}">
-              <span class="column-icon">{col.icon}</span>
-              <span class="column-title">{col.title}</span>
-              <span class="column-count" style="background: {col.color}">{colReqs.length}</span>
-            </div>
-            <div class="column-body">
-              {#each colReqs as req (req.id)}
-                <button class="kanban-card" class:selected={selectedReq?.id === req.id} on:click={() => selectReq(req)}>
-                  <div class="kcard-top">
-                    <span class="kcard-prioridad" style={getPrioridadStyle(req.prioridad)}>{req.prioridad}</span>
-                    <span class="kcard-id">{req.id}</span>
-                  </div>
-                  <p class="kcard-desc">{req.descripcion.slice(0, 80)}{req.descripcion.length > 80 ? '...' : ''}</p>
-                  <div class="kcard-footer">
-                    <span class="kcard-solicitante">👤 {req.solicitante.nombre_completo.split(' ')[0]}</span>
-                    <div class="kcard-avance">
-                      <div class="mini-bar"><div class="mini-fill" style="width: {req.porcentaje_avance}%"></div></div>
-                      <span>{req.porcentaje_avance}%</span>
+  {#if viewMode === "kanban"}
+    <div class="kanban-container">
+      <div class="kanban-board">
+        {#if groupBy === "estado"}
+          {#each KANBAN_COLUMNS as col (col.id)}
+            {@const colReqs = groupedByEstado[col.id] || []}
+            <div class="kanban-column">
+              <div class="column-header" style="border-color: {col.color}">
+                <span class="column-title">{col.title}</span>
+                <span class="column-count" style="background: {col.color}"
+                  >{colReqs.length}</span
+                >
+              </div>
+              <div class="column-body">
+                {#each colReqs as req (req.id)}
+                  <button
+                    class="kanban-card"
+                    class:selected={selectedReq?.id === req.id}
+                    on:click={() => selectReq(req)}
+                  >
+                    <div class="kcard-top">
+                      <span
+                        class="kcard-prioridad"
+                        style={getPrioridadStyle(req.prioridad)}
+                        >{req.prioridad}</span
+                      >
+                      <span class="kcard-id">{req.id}</span>
                     </div>
-                  </div>
-                  <div class="kcard-tags">
-                    {#each req.centros_gestores.slice(0, 2) as cg}
-                      <span class="kcard-tag">{cg.length > 15 ? cg.slice(0, 12) + '...' : cg}</span>
-                    {/each}
-                    {#if req.centros_gestores.length > 2}
-                      <span class="kcard-tag">+{req.centros_gestores.length - 2}</span>
-                    {/if}
-                  </div>
-                  {#if req.enlace_nombre}<div class="kcard-enlace">🤝 {req.enlace_nombre}</div>{/if}
-                  {#if req.numero_orfeo}<div class="kcard-orfeo">📄 Orfeo: {req.numero_orfeo}</div>{/if}
-                </button>
-              {:else}
-                <div class="empty-column">Sin requerimientos</div>
-              {/each}
-            </div>
-          </div>
-        {/each}
-      {:else}
-        {#each Object.entries(groupedByCentroGestor) as [cg, cgReqs] (cg)}
-          <div class="kanban-column">
-            <div class="column-header cg-header" style="border-color: #6366f1">
-              <span class="column-icon">🏢</span>
-              <span class="column-title" title={cg}>{cg.length > 22 ? cg.slice(0,20)+'…' : cg}</span>
-              <span class="column-count" style="background: #6366f1">{cgReqs.length}</span>
-            </div>
-            <div class="column-body">
-              {#each cgReqs as req (req.id + cg)}
-                <button class="kanban-card" class:selected={selectedReq?.id === req.id} on:click={() => selectReq(req)}>
-                  <div class="kcard-top">
-                    <span class="kcard-prioridad" style={getPrioridadStyle(req.prioridad)}>{req.prioridad}</span>
-                    <span class="kcard-id">{req.id}</span>
-                  </div>
-                  <p class="kcard-desc">{req.descripcion.slice(0, 80)}{req.descripcion.length > 80 ? '...' : ''}</p>
-                  <div class="kcard-footer">
-                    <span class="kcard-solicitante">👤 {req.solicitante.nombre_completo.split(' ')[0]}</span>
-                    <div class="kcard-avance">
-                      <div class="mini-bar"><div class="mini-fill" style="width: {req.porcentaje_avance}%"></div></div>
-                      <span>{req.porcentaje_avance}%</span>
+                    <p class="kcard-desc">
+                      {req.descripcion.slice(0, 80)}{req.descripcion.length > 80
+                        ? "..."
+                        : ""}
+                    </p>
+                    <div class="kcard-footer">
+                      <span class="kcard-solicitante"
+                        >{req.solicitante.nombre_completo.split(" ")[0]}</span
+                      >
+                      <div class="kcard-avance">
+                        <div class="mini-bar">
+                          <div
+                            class="mini-fill"
+                            style="width: {req.porcentaje_avance}%"
+                          ></div>
+                        </div>
+                        <span>{req.porcentaje_avance}%</span>
+                      </div>
                     </div>
-                  </div>
-                  <div class="kcard-meta-row">
-                    <span class="kcard-estado-chip">{req.estado}</span>
-                  </div>
-                  {#if req.enlace_nombre}<div class="kcard-enlace">🤝 {req.enlace_nombre}</div>{/if}
-                  {#if req.numero_orfeo}<div class="kcard-orfeo">📄 Orfeo: {req.numero_orfeo}</div>{/if}
-                </button>
-              {:else}
-                <div class="empty-column">Sin requerimientos</div>
-              {/each}
-            </div>
-          </div>
-        {:else}
-          <div class="empty-board">No hay requerimientos con los filtros actuales</div>
-        {/each}
-      {/if}
-    </div>
-  </div>
-  {:else}
-  <!-- TABLA VIEW -->
-  <div class="tabla-container">
-    <div class="tabla-wrapper">
-      <table class="req-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Estado</th>
-            <th>Prioridad</th>
-            <th>Solicitante</th>
-            <th>Centro(s) Gestor(es)</th>
-            <th>Descripción</th>
-            <th>Avance</th>
-            <th>Enlace</th>
-            <th>Encargado</th>
-            <th>Fecha</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each displayReqs as req (req.id)}
-            <tr class="tabla-row" class:selected-row={selectedReq?.id === req.id}>
-              <td class="td-id">{req.id}</td>
-              <td>
-                <span class="tabla-estado" style="background: {KANBAN_COLUMNS.find(c => c.id === req.estado)?.color || '#94a3b8'}">
-                  {req.estado}
-                </span>
-              </td>
-              <td><span class="tabla-prioridad" style={getPrioridadStyle(req.prioridad)}>{req.prioridad}</span></td>
-              <td class="td-solicitante">{req.solicitante.nombre_completo}</td>
-              <td class="td-centros">
-                {#each req.centros_gestores as cg}
-                  <span class="tabla-cg-chip">{cg.length > 12 ? cg.slice(0, 10) + '..' : cg}</span>
+                    <div class="kcard-tags">
+                      {#each req.centros_gestores as cg}
+                        <span class="kcard-tag">{cg}</span>
+                      {/each}
+                    </div>
+                    {#if req.enlace_nombre}<div class="kcard-enlace">
+                        {req.enlace_nombre}
+                      </div>{/if}
+                    {#if req.numero_orfeo}<div class="kcard-orfeo">
+                        Orfeo: {req.numero_orfeo}
+                      </div>{/if}
+                  </button>
+                {:else}
+                  <div class="empty-column">Sin requerimientos</div>
                 {/each}
-              </td>
-              <td class="td-desc">{req.descripcion.slice(0, 60)}{req.descripcion.length > 60 ? '...' : ''}</td>
-              <td>
-                <div class="tabla-avance">
-                  <div class="mini-bar" style="width: 50px;"><div class="mini-fill" style="width: {req.porcentaje_avance}%"></div></div>
-                  <span class="tabla-pct">{req.porcentaje_avance}%</span>
-                </div>
-              </td>
-              <td class="td-enlace">{req.enlace_nombre || '—'}</td>
-              <td class="td-encargado">{req.encargado || '—'}</td>
-              <td class="td-fecha">{new Date(req.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })}</td>
-              <td><button class="tabla-detail-btn" on:click={() => selectReq(req)}>Ver →</button></td>
-            </tr>
-          {:else}
-            <tr><td colspan="11" class="empty-table">No hay requerimientos</td></tr>
+              </div>
+            </div>
           {/each}
-        </tbody>
-      </table>
+        {:else}
+          {#each Object.entries(groupedByCentroGestor) as [cg, cgReqs] (cg)}
+            <div class="kanban-column">
+              <div
+                class="column-header cg-header"
+                style="border-color: #6366f1"
+              >
+                <span class="column-title" title={cg}>{cg}</span>
+                <span class="column-count" style="background: #6366f1"
+                  >{cgReqs.length}</span
+                >
+              </div>
+              <div class="column-body">
+                {#each cgReqs as req (req.id + cg)}
+                  <button
+                    class="kanban-card"
+                    class:selected={selectedReq?.id === req.id}
+                    on:click={() => selectReq(req)}
+                    style="background: {getEstadoBg(
+                      req.estado,
+                    )}; border-color: {getEstadoBorder(req.estado)};"
+                  >
+                    <div class="kcard-top">
+                      <span
+                        class="kcard-prioridad"
+                        style={getPrioridadStyle(req.prioridad)}
+                        >{req.prioridad}</span
+                      >
+                      <span class="kcard-id">{req.id}</span>
+                    </div>
+                    <p class="kcard-desc">
+                      {req.descripcion}
+                    </p>
+                    <div class="kcard-footer">
+                      <span class="kcard-solicitante"
+                        >{req.solicitante.nombre_completo}</span
+                      >
+                      <div class="kcard-avance">
+                        <div class="mini-bar">
+                          <div
+                            class="mini-fill"
+                            style="width: {req.porcentaje_avance}%"
+                          ></div>
+                        </div>
+                        <span>{req.porcentaje_avance}%</span>
+                      </div>
+                    </div>
+                    <div class="kcard-meta-row">
+                      <span
+                        class="kcard-estado-chip"
+                        style={getEstadoChipStyle(req.estado)}
+                        >{req.estado}</span
+                      >
+                    </div>
+                    {#if req.enlace_nombre}<div class="kcard-enlace">
+                        {req.enlace_nombre}
+                      </div>{/if}
+                    {#if req.numero_orfeo}<div class="kcard-orfeo">
+                        Orfeo: {req.numero_orfeo}
+                      </div>{/if}
+                  </button>
+                {:else}
+                  <div class="empty-column">Sin requerimientos</div>
+                {/each}
+              </div>
+            </div>
+          {:else}
+            <div class="empty-board">
+              No hay requerimientos con los filtros actuales
+            </div>
+          {/each}
+        {/if}
+      </div>
     </div>
-  </div>
+  {:else}
+    <!-- TABLA VIEW -->
+    <div class="tabla-container">
+      <div class="tabla-wrapper">
+        <table class="req-table">
+          <colgroup>
+            <col style="width: 7%" />
+            <col style="width: 7%" />
+            <col style="width: 6%" />
+            <col style="width: 12%" />
+            <col style="width: 13%" />
+            <col style="width: 28%" />
+            <col style="width: 6%" />
+            <col style="width: 8%" />
+            <col style="width: 8%" />
+            <col style="width: 5%" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Estado</th>
+              <th>Prior.</th>
+              <th>Solicitante</th>
+              <th>Centro(s) Gestor</th>
+              <th>Descripción</th>
+              <th>Avance</th>
+              <th>Enlace</th>
+              <th>Encargado</th>
+              <th>Fecha</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each displayReqs as req (req.id)}
+              <tr
+                class="tabla-row"
+                class:selected-row={selectedReq?.id === req.id}
+                on:click={() => selectReq(req)}
+                style="background: {getEstadoBg(req.estado)};"
+              >
+                <td class="td-id">{req.id}</td>
+                <td>
+                  <span
+                    class="tabla-estado"
+                    style="background: {KANBAN_COLUMNS.find(
+                      (c) => c.id === req.estado,
+                    )?.color || '#94a3b8'}"
+                  >
+                    {req.estado}
+                  </span>
+                </td>
+                <td
+                  ><span
+                    class="tabla-prioridad"
+                    style={getPrioridadStyle(req.prioridad)}
+                    >{req.prioridad}</span
+                  ></td
+                >
+                <td class="td-solicitante">{req.solicitante.nombre_completo}</td
+                >
+                <td class="td-centros">
+                  {#each req.centros_gestores as cg}
+                    <span class="tabla-cg-chip">{cg}</span>
+                  {/each}
+                </td>
+                <td class="td-desc">{req.descripcion}</td>
+                <td>
+                  <div class="tabla-avance">
+                    <div class="mini-bar" style="width: 50px;">
+                      <div
+                        class="mini-fill"
+                        style="width: {req.porcentaje_avance}%"
+                      ></div>
+                    </div>
+                    <span class="tabla-pct">{req.porcentaje_avance}%</span>
+                  </div>
+                </td>
+                <td class="td-enlace">{req.enlace_nombre || "—"}</td>
+                <td class="td-encargado">{req.encargado || "—"}</td>
+                <td class="td-fecha"
+                  >{new Date(req.created_at).toLocaleDateString("es-CO", {
+                    day: "2-digit",
+                    month: "short",
+                  })}</td
+                >
+              </tr>
+            {:else}
+              <tr
+                ><td colspan="10" class="empty-table">No hay requerimientos</td
+                ></tr
+              >
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    </div>
   {/if}
 
   <!-- Detail Panel (slide-in) -->
   {#if showDetailPanel && selectedReq}
-    <div class="detail-overlay" on:click={closeDetail} on:keydown={(e) => e.key === 'Escape' && closeDetail()} role="button" tabindex="0"></div>
+    <div
+      class="detail-overlay"
+      on:click={closeDetail}
+      on:keydown={(e) => e.key === "Escape" && closeDetail()}
+      role="button"
+      tabindex="0"
+    ></div>
     <aside class="detail-panel">
       <div class="panel-header">
         <h3>Detalle del Requerimiento</h3>
-        <button class="close-panel" on:click={closeDetail}>✕</button>
+        <button class="close-panel" on:click={closeDetail}>&times;</button>
       </div>
 
       <div class="panel-body">
@@ -525,12 +818,21 @@
         </div>
         <div class="panel-row">
           <span class="panel-label">Prioridad</span>
-          <span class="panel-prioridad" style={getPrioridadStyle(selectedReq.prioridad)}>{selectedReq.prioridad}</span>
+          <span
+            class="panel-prioridad"
+            style={getPrioridadStyle(selectedReq.prioridad)}
+            >{selectedReq.prioridad}</span
+          >
         </div>
         <div class="panel-row">
           <span class="panel-label">Avance</span>
           <div class="panel-avance">
-            <div class="panel-avance-bar"><div class="panel-avance-fill" style="width: {selectedReq.porcentaje_avance}%"></div></div>
+            <div class="panel-avance-bar">
+              <div
+                class="panel-avance-fill"
+                style="width: {selectedReq.porcentaje_avance}%"
+              ></div>
+            </div>
             <strong>{selectedReq.porcentaje_avance}%</strong>
           </div>
         </div>
@@ -544,88 +846,163 @@
         <hr />
 
         <!-- Enlace del Organismo -->
-        <h4>🤝 Enlace del Organismo</h4>
+        <h4>Enlace del Organismo</h4>
         {#if selectedReq.enlace_nombre}
-          {@const enlaceObj = $seguimientoStore.enlaces.find(e => e.id === selectedReq?.enlace_id)}
+          {@const enlaceObj = $seguimientoStore.enlaces.find(
+            (e) => e.id === selectedReq?.enlace_id,
+          )}
           <div class="enlace-assigned">
             <div class="enlace-info">
               <span class="enlace-name">{selectedReq.enlace_nombre}</span>
               {#if enlaceObj}
-                <span class="enlace-meta">{enlaceObj.cargo} — {enlaceObj.centro_gestor_nombre}</span>
-                {#if enlaceObj.email}<span class="enlace-contact">📧 {enlaceObj.email}</span>{/if}
-                {#if enlaceObj.telefono}<span class="enlace-contact">📱 {enlaceObj.telefono}</span>{/if}
+                <span class="enlace-meta"
+                  >{enlaceObj.cargo} — {enlaceObj.centro_gestor_nombre}</span
+                >
+                {#if enlaceObj.email}<span class="enlace-contact"
+                    >{enlaceObj.email}</span
+                  >{/if}
+                {#if enlaceObj.telefono}<span class="enlace-contact"
+                    >{enlaceObj.telefono}</span
+                  >{/if}
               {/if}
             </div>
           </div>
           <!-- Fecha propuesta de solución habilitada al tener enlace -->
           <div class="fecha-solucion-box">
-            <label class="fecha-solucion-label">📅 Fecha propuesta de solución</label>
-            <div class="fecha-solucion-row">
-              <input type="date" bind:value={fechaPropuestaSolucion} class="fecha-solucion-input" />
-              <button
-                class="fecha-solucion-btn"
-                on:click={guardarFechaPropuestaSolucion}
-                disabled={!fechaPropuestaSolucion || fechaPropuestaSolucion === (selectedReq.fecha_propuesta_solucion || '')}
-              >Guardar</button>
-            </div>
-            {#if selectedReq.fecha_propuesta_solucion}
-              <span class="fecha-solucion-saved">✅ Propuesta: {new Date(selectedReq.fecha_propuesta_solucion).toLocaleDateString('es-CO')}</span>
-            {/if}
+            <label class="fecha-solucion-label"
+              >Fecha propuesta de solución
+              <div class="fecha-solucion-row">
+                <input
+                  type="date"
+                  bind:value={fechaPropuestaSolucion}
+                  class="fecha-solucion-input"
+                />
+                <button
+                  class="fecha-solucion-btn"
+                  on:click={guardarFechaPropuestaSolucion}
+                  disabled={!fechaPropuestaSolucion ||
+                    fechaPropuestaSolucion ===
+                      (selectedReq.fecha_propuesta_solucion || "")}
+                  >Guardar</button
+                >
+              </div>
+              {#if selectedReq.fecha_propuesta_solucion}
+                <span class="fecha-solucion-saved"
+                  >Propuesta: {new Date(
+                    selectedReq.fecha_propuesta_solucion,
+                  ).toLocaleDateString("es-CO")}</span
+                >
+              {/if}
+            </label>
           </div>
         {:else}
-          <p class="panel-info-sm" style="margin-bottom: 0.4rem;">Sin enlace asignado</p>
+          <p class="panel-info-sm" style="margin-bottom: 0.4rem;">
+            Sin enlace asignado
+          </p>
         {/if}
         {#if enlacesForSelectedReq.length > 0}
           <div class="enlace-assign-form">
             <select class="enlace-select" bind:value={enlaceSeleccionado}>
               <option value="">— Asignar enlace —</option>
               {#each enlacesForSelectedReq as enl}
-                <option value={enl.id}>{enl.nombre} ({enl.cargo} - {enl.centro_gestor_nombre})</option>
+                <option value={enl.id}
+                  >{enl.nombre} ({enl.cargo} - {enl.centro_gestor_nombre})</option
+                >
               {/each}
             </select>
-            <button class="enlace-assign-btn" on:click={handleAsignarEnlace} disabled={!enlaceSeleccionado}>Asignar</button>
+            <button
+              class="enlace-assign-btn"
+              on:click={handleAsignarEnlace}
+              disabled={!enlaceSeleccionado}>Asignar</button
+            >
           </div>
         {:else}
-          <p class="panel-info-sm" style="color: #94a3b8;">No hay enlaces registrados para los centros gestores de este requerimiento</p>
+          <p class="panel-info-sm" style="color: #94a3b8;">
+            No hay enlaces registrados para los centros gestores de este
+            requerimiento
+          </p>
         {/if}
 
         <hr />
 
         <!-- Orfeo / Petición Oficial -->
-        <h4>📄 No. Orfeo / Petición Oficial</h4>
+        <h4>No. Orfeo / Petición Oficial</h4>
         {#if selectedReq.numero_orfeo}
           <div class="orfeo-box">
-            <div class="orfeo-row"><span class="orfeo-label">Orfeo:</span> <strong>{selectedReq.numero_orfeo}</strong></div>
+            <div class="orfeo-row">
+              <span class="orfeo-label">Orfeo:</span>
+              <strong>{selectedReq.numero_orfeo}</strong>
+            </div>
             {#if selectedReq.fecha_radicado_orfeo}
-              <div class="orfeo-row"><span class="orfeo-label">Radicado:</span> {new Date(selectedReq.fecha_radicado_orfeo).toLocaleDateString('es-CO')}</div>
+              <div class="orfeo-row">
+                <span class="orfeo-label">Radicado:</span>
+                {new Date(selectedReq.fecha_radicado_orfeo).toLocaleDateString(
+                  "es-CO",
+                )}
+              </div>
             {/if}
             {#if selectedReq.documento_peticion_nombre}
-              <div class="orfeo-row">📎 <span class="orfeo-doc">{selectedReq.documento_peticion_nombre}</span></div>
+              <div class="orfeo-row">
+                <span class="orfeo-doc"
+                  >{selectedReq.documento_peticion_nombre}</span
+                >
+              </div>
             {/if}
           </div>
         {/if}
         {#if !showOrfeoForm}
-          <button class="action-link" on:click={() => { showOrfeoForm = true; showAvanceForm = false; showCancelForm = false; orfeoNumero = selectedReq?.numero_orfeo || ''; orfeoFechaRadicado = selectedReq?.fecha_radicado_orfeo || ''; }}>
-            {selectedReq.numero_orfeo ? '✏️ Editar Orfeo' : '➕ Registrar Orfeo'}
+          <button
+            class="action-link"
+            on:click={() => {
+              showOrfeoForm = true;
+              showAvanceForm = false;
+              showCancelForm = false;
+              orfeoNumero = selectedReq?.numero_orfeo || "";
+              orfeoFechaRadicado = selectedReq?.fecha_radicado_orfeo || "";
+            }}
+          >
+            {selectedReq.numero_orfeo ? "Editar Orfeo" : "Registrar Orfeo"}
           </button>
         {:else}
           <div class="avance-form">
-            <h4>📄 Registro Orfeo</h4>
+            <h4>Registro Orfeo</h4>
             <div class="field">
-              <label>Número Orfeo *</label>
-              <input type="text" bind:value={orfeoNumero} placeholder="Ej: 202600123456" />
+              <label
+                >Número Orfeo *
+                <input
+                  type="text"
+                  bind:value={orfeoNumero}
+                  placeholder="Ej: 202600123456"
+                />
+              </label>
             </div>
             <div class="field">
-              <label>Fecha de Radicado</label>
-              <input type="date" bind:value={orfeoFechaRadicado} />
+              <label
+                >Fecha de Radicado
+                <input type="date" bind:value={orfeoFechaRadicado} />
+              </label>
             </div>
             <div class="field">
-              <label>Documento Petición (PDF/imagen)</label>
-              <input type="file" accept=".pdf,.jpg,.jpeg,.png" bind:files={orfeoPeticionFile} />
+              <label
+                >Documento Petición (PDF/imagen)
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  bind:files={orfeoPeticionFile}
+                />
+              </label>
             </div>
             <div class="avance-actions">
-              <Button variant="secondary" size="sm" on:click={() => (showOrfeoForm = false)}>Cancelar</Button>
-              <Button size="sm" on:click={guardarOrfeo} disabled={!orfeoNumero.trim()}>💾 Guardar</Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                on:click={() => (showOrfeoForm = false)}>Cancelar</Button
+              >
+              <Button
+                size="sm"
+                on:click={guardarOrfeo}
+                disabled={!orfeoNumero.trim()}>Guardar</Button
+              >
             </div>
           </div>
         {/if}
@@ -633,15 +1010,21 @@
         <hr />
 
         <!-- Solicitante -->
-        <h4>👤 Solicitante</h4>
+        <h4>Solicitante</h4>
         <div class="panel-info">{selectedReq.solicitante.nombre_completo}</div>
-        <div class="panel-info-sm">CC: {selectedReq.solicitante.cedula} | ☎ {selectedReq.solicitante.telefono}</div>
-        <div class="panel-info-sm">📍 {selectedReq.solicitante.direccion}, {selectedReq.solicitante.barrio_vereda}</div>
+        <div class="panel-info-sm">
+          CC: {selectedReq.solicitante.cedula} | Tel. {selectedReq.solicitante
+            .telefono}
+        </div>
+        <div class="panel-info-sm">
+          {selectedReq.solicitante.direccion}, {selectedReq.solicitante
+            .barrio_vereda}
+        </div>
 
         <hr />
 
         <!-- Centros Gestores -->
-        <h4>🏢 Centros Gestores</h4>
+        <h4>Centros Gestores</h4>
         <div class="panel-tags">
           {#each selectedReq.centros_gestores as cg}
             <span class="panel-tag">{cg}</span>
@@ -651,10 +1034,10 @@
         <hr />
 
         <!-- Description -->
-        <h4>📝 Descripción</h4>
+        <h4>Descripción</h4>
         <p class="panel-desc">{selectedReq.descripcion}</p>
         {#if selectedReq.observaciones}
-          <p class="panel-obs">💬 {selectedReq.observaciones}</p>
+          <p class="panel-obs">{selectedReq.observaciones}</p>
         {/if}
 
         <hr />
@@ -663,14 +1046,16 @@
         {#if selectedReq.latitud && selectedReq.longitud}
           <div class="panel-row">
             <span class="panel-label">Coordenadas</span>
-            <span class="panel-coords">{selectedReq.latitud}, {selectedReq.longitud}</span>
+            <span class="panel-coords"
+              >{selectedReq.latitud}, {selectedReq.longitud}</span
+            >
           </div>
         {/if}
 
         <hr />
 
         <!-- Historial -->
-        <h4>📋 Historial de Gestión ({selectedReq.historial.length})</h4>
+        <h4>Historial de Gestión ({selectedReq.historial.length})</h4>
         <div class="timeline">
           {#each [...selectedReq.historial].reverse() as entry (entry.id)}
             <div class="timeline-item">
@@ -689,7 +1074,10 @@
                 {#if entry.evidencias.length > 0}
                   <div class="timeline-evidencias">
                     {#each entry.evidencias as ev}
-                      <span class="evidence-chip">{ev.tipo === 'foto' ? '📷' : '📄'} {ev.descripcion}</span>
+                      <span class="evidence-chip"
+                        >{ev.tipo === "foto" ? "Foto" : "Doc"}:
+                        {ev.descripcion}</span
+                      >
                     {/each}
                   </div>
                 {/if}
@@ -703,65 +1091,123 @@
         <!-- Avance Form -->
         {#if !showAvanceForm && !showCancelForm}
           <div class="panel-actions-row">
-            <Button on:click={openAvanceForm}>➕ Registrar Avance / Estado</Button>
-            {#if selectedReq.estado !== 'cancelado' && selectedReq.estado !== 'cerrado'}
-              <button class="cancel-req-btn" on:click={() => { showCancelForm = true; showAvanceForm = false; showOrfeoForm = false; cancelMotivo = ''; }}>
-                🚫 Cancelar Requerimiento
+            <Button on:click={openAvanceForm}>Registrar Avance / Estado</Button>
+            {#if selectedReq.estado !== "cancelado" && selectedReq.estado !== "cerrado"}
+              <button
+                class="cancel-req-btn"
+                on:click={() => {
+                  showCancelForm = true;
+                  showAvanceForm = false;
+                  showOrfeoForm = false;
+                  cancelMotivo = "";
+                }}
+              >
+                Cancelar Requerimiento
               </button>
             {/if}
           </div>
         {:else if showCancelForm}
           <div class="avance-form cancel-form">
-            <h4>🚫 Cancelar Requerimiento</h4>
-            <p class="cancel-warning">Esta acción cancela el requerimiento. Se requiere argumento y documento oficial del organismo responsable.</p>
+            <h4>Cancelar Requerimiento</h4>
+            <p class="cancel-warning">
+              Esta acción cancela el requerimiento. Se requiere argumento y
+              documento oficial del organismo responsable.
+            </p>
             <div class="field">
-              <label>Motivo de Cancelación *</label>
-              <textarea bind:value={cancelMotivo} rows="3" placeholder="Argumente el motivo oficial de la cancelación..."></textarea>
+              <label
+                >Motivo de Cancelación *
+                <textarea
+                  bind:value={cancelMotivo}
+                  rows="3"
+                  placeholder="Argumente el motivo oficial de la cancelación..."
+                ></textarea>
+              </label>
             </div>
             <div class="field">
-              <label>Documento Oficial (PDF/imagen) *</label>
-              <input type="file" accept=".pdf,.jpg,.jpeg,.png" bind:files={cancelDocFile} />
-              <span class="field-hint">Adjunte el documento oficial del organismo que sustenta la cancelación</span>
+              <label
+                >Documento Oficial (PDF/imagen) *
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  bind:files={cancelDocFile}
+                />
+                <span class="field-hint"
+                  >Adjunte el documento oficial del organismo que sustenta la
+                  cancelación</span
+                >
+              </label>
             </div>
             <div class="avance-actions">
-              <Button variant="secondary" size="sm" on:click={() => (showCancelForm = false)}>Cancelar</Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                on:click={() => (showCancelForm = false)}>Cancelar</Button
+              >
               <button
                 class="confirm-cancel-btn"
                 on:click={confirmarCancelacion}
                 disabled={!cancelMotivo.trim() || !cancelDocFile?.length}
-              >🚫 Confirmar Cancelación</button>
+                >Confirmar Cancelación</button
+              >
             </div>
           </div>
         {:else}
           <div class="avance-form">
-            <h4>📝 Nuevo Registro de Avance</h4>
+            <h4>Nuevo Registro de Avance</h4>
             <div class="field">
-              <label>Nuevo Estado</label>
-              <select bind:value={avanceNuevoEstado}>
-                <option value="nuevo">Nuevo</option>
-                <option value="radicado">Radicado</option>
-                <option value="en-gestion">En Gestión</option>
-                <option value="asignado">Asignado</option>
-                <option value="en-proceso">En Proceso</option>
-                <option value="resuelto">Resuelto</option>
-                <option value="cerrado">Cerrado</option>
-              </select>
+              <label
+                >Nuevo Estado
+                <select bind:value={avanceNuevoEstado}>
+                  <option value="nuevo">Nuevo</option>
+                  <option value="en-proceso">En Proceso</option>
+                  <option value="resuelto">Resuelto</option>
+                  <option value="cerrado">Cerrado</option>
+                </select>
+              </label>
             </div>
             <div class="field">
-              <label>Descripción de la Gestión *</label>
-              <textarea bind:value={avanceDescripcion} rows="3" placeholder="¿Qué se hizo? ¿Con quién se comunicó?"></textarea>
+              <label
+                >Descripción de la Gestión *
+                <textarea
+                  bind:value={avanceDescripcion}
+                  rows="3"
+                  placeholder="¿Qué se hizo? ¿Con quién se comunicó?"
+                ></textarea>
+              </label>
             </div>
             <div class="field">
-              <label>Encargado del Centro Gestor</label>
-              <input type="text" bind:value={avanceEncargado} placeholder="Nombre del funcionario responsable" />
+              <label
+                >Encargado del Centro Gestor
+                <input
+                  type="text"
+                  bind:value={avanceEncargado}
+                  placeholder="Nombre del funcionario responsable"
+                />
+              </label>
             </div>
             <div class="field">
-              <label>% Avance: {avancePorcentaje}%</label>
-              <input type="range" min="0" max="100" step="5" bind:value={avancePorcentaje} />
+              <label
+                >% Avance: {avancePorcentaje}%
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  bind:value={avancePorcentaje}
+                />
+              </label>
             </div>
             <div class="avance-actions">
-              <Button variant="secondary" size="sm" on:click={() => (showAvanceForm = false)}>Cancelar</Button>
-              <Button size="sm" on:click={guardarAvance} disabled={!avanceDescripcion.trim()}>💾 Guardar</Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                on:click={() => (showAvanceForm = false)}>Cancelar</Button
+              >
+              <Button
+                size="sm"
+                on:click={guardarAvance}
+                disabled={!avanceDescripcion.trim()}>Guardar</Button
+              >
             </div>
           </div>
         {/if}
@@ -771,265 +1217,1010 @@
 </div>
 
 <style>
-  .view { min-height: 100vh; background: #f1f5f9; display: flex; flex-direction: column; }
+  .view {
+    min-height: 100vh;
+    background: #f8f9fb;
+    display: flex;
+    flex-direction: column;
+  }
   .view-header {
-    background: white; border-bottom: 1px solid #e2e8f0; padding: 0.75rem 1rem;
-    display: flex; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 200;
+    background: white;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 0.75rem 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    position: sticky;
+    top: 0;
+    z-index: 200;
   }
-  .back-btn { background: none; border: none; color: #2563eb; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
-  .view-title { font-size: 1.1rem; font-weight: 700; flex: 1; }
-  .header-stats { display: flex; gap: 0.5rem; }
-  .stat { background: #f1f5f9; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.72rem; font-weight: 600; color: #475569; }
-  .header-controls { display: flex; align-items: center; gap: 0.5rem; }
-  .view-toggle { display: flex; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; }
+  .back-btn {
+    background: none;
+    border: none;
+    color: #475569;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0.25rem 0;
+    transition: color 0.15s;
+  }
+  .back-btn:hover {
+    color: #1e293b;
+  }
+  .view-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #1e293b;
+    flex: 1;
+    letter-spacing: -0.01em;
+  }
+  .stat {
+    background: #f1f5f9;
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #64748b;
+  }
+  .header-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .view-toggle {
+    display: flex;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    overflow: hidden;
+  }
   .toggle-btn {
-    background: white; border: none; padding: 0.3rem 0.6rem; font-size: 0.72rem; font-weight: 600;
-    color: #64748b; cursor: pointer; transition: all 0.15s;
+    background: white;
+    border: none;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.15s;
   }
-  .toggle-btn.active { background: #2563eb; color: white; }
-  .toggle-btn:not(.active):hover { background: #f1f5f9; }
+  .toggle-btn.active {
+    background: #1e293b;
+    color: white;
+  }
+  .toggle-btn:not(.active):hover {
+    background: #f1f5f9;
+  }
 
   .filter-banner {
-    background: #eff6ff; padding: 0.5rem 1rem; font-size: 0.8rem; color: #1e40af;
-    display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+    background: #eff6ff;
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+    color: #1e40af;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
   }
-  .clear-filter { background: none; border: none; color: #ef4444; cursor: pointer; font-weight: 600; font-size: 0.8rem; }
+  .clear-filter {
+    background: none;
+    border: none;
+    color: #ef4444;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.8rem;
+  }
 
   /* Kanban */
-  .kanban-container { flex: 1; overflow-x: auto; padding: 0.75rem; }
-  .kanban-board { display: flex; gap: 0.6rem; min-width: max-content; height: calc(100vh - 120px); }
-  .kanban-column { width: 260px; min-width: 260px; display: flex; flex-direction: column; background: #f8fafc; border-radius: 10px; border: 1px solid #e2e8f0; }
-  .column-header {
-    display: flex; align-items: center; gap: 0.4rem; padding: 0.6rem 0.75rem;
-    border-bottom: 3px solid; font-size: 0.8rem; font-weight: 700; color: #1e293b;
+  .kanban-container {
+    flex: 1;
+    overflow-x: auto;
+    padding: 0.75rem;
   }
-  .column-icon { font-size: 1rem; }
-  .column-title { flex: 1; }
-  .column-count { color: white; font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 99px; font-weight: 700; }
-  .column-body { flex: 1; overflow-y: auto; padding: 0.4rem; display: flex; flex-direction: column; gap: 0.4rem; }
+  .kanban-board {
+    display: flex;
+    gap: 0.5rem;
+    min-width: max-content;
+    height: calc(100vh - 120px);
+  }
+  .kanban-column {
+    width: 280px;
+    min-width: 280px;
+    display: flex;
+    flex-direction: column;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+  }
+  .column-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.55rem 0.75rem;
+    border-bottom: 2px solid;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: #374151;
+  }
+  .column-title {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .column-count {
+    color: white;
+    font-size: 0.65rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 99px;
+    font-weight: 600;
+  }
+  .column-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.35rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
 
   /* Kanban Card */
   .kanban-card {
-    background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.6rem;
-    text-align: left; cursor: pointer; transition: all 0.15s; width: 100%;
+    background: #fafbfc;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 0.5rem 0.6rem;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.15s;
+    width: 100%;
     border-left: 3px solid transparent;
   }
-  .kanban-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); transform: translateY(-1px); }
-  .kanban-card.selected { border-left-color: #2563eb; box-shadow: 0 0 0 2px #93c5fd; }
-  .kcard-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem; }
-  .kcard-prioridad { padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.6rem; font-weight: 700; text-transform: uppercase; }
-  .kcard-id { font-size: 0.6rem; color: #94a3b8; font-family: monospace; }
-  .kcard-desc { font-size: 0.75rem; color: #334155; margin: 0 0 0.35rem; line-height: 1.3; }
-  .kcard-footer { display: flex; justify-content: space-between; align-items: center; }
-  .kcard-solicitante { font-size: 0.65rem; color: #64748b; }
-  .kcard-avance { display: flex; align-items: center; gap: 0.3rem; }
-  .mini-bar { width: 40px; height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden; }
-  .mini-fill { height: 100%; background: #2563eb; border-radius: 2px; }
-  .kcard-avance span { font-size: 0.6rem; font-weight: 700; color: #475569; }
-  .kcard-tags { display: flex; flex-wrap: wrap; gap: 0.2rem; margin-top: 0.3rem; }
-  .kcard-tag { font-size: 0.6rem; background: #f1f5f9; color: #475569; padding: 0.1rem 0.3rem; border-radius: 3px; }
-  .empty-column { text-align: center; padding: 2rem 0.5rem; color: #94a3b8; font-size: 0.75rem; }
-  .kcard-enlace { font-size: 0.62rem; color: #0d9488; font-weight: 600; margin-top: 0.25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .kanban-card:hover {
+    background: white;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  }
+  .kanban-card.selected {
+    border-left-color: #1e293b;
+    background: white;
+    box-shadow: 0 0 0 1px #cbd5e1;
+  }
+  .kcard-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.2rem;
+  }
+  .kcard-prioridad {
+    padding: 0.08rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.58rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .kcard-id {
+    font-size: 0.58rem;
+    color: #94a3b8;
+    font-family: monospace;
+  }
+  .kcard-desc {
+    font-size: 0.73rem;
+    color: #374151;
+    margin: 0 0 0.3rem;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .kcard-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .kcard-solicitante {
+    font-size: 0.62rem;
+    color: #64748b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 60%;
+  }
+  .kcard-avance {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .mini-bar {
+    width: 36px;
+    height: 3px;
+    background: #e2e8f0;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .mini-fill {
+    height: 100%;
+    background: #475569;
+    border-radius: 2px;
+  }
+  .kcard-avance span {
+    font-size: 0.58rem;
+    font-weight: 600;
+    color: #475569;
+  }
+  .kcard-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.15rem;
+    margin-top: 0.2rem;
+  }
+  .kcard-tag {
+    font-size: 0.56rem;
+    background: #f1f5f9;
+    color: #475569;
+    padding: 0.08rem 0.25rem;
+    border-radius: 2px;
+  }
+  .empty-column {
+    text-align: center;
+    padding: 2rem 0.5rem;
+    color: #94a3b8;
+    font-size: 0.75rem;
+  }
+  .kcard-enlace {
+    font-size: 0.58rem;
+    color: #475569;
+    font-weight: 500;
+    margin-top: 0.15rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   /* Detail Panel */
   .detail-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 300;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.25);
+    z-index: 300;
+    backdrop-filter: blur(2px);
   }
   .detail-panel {
-    position: fixed; right: 0; top: 0; bottom: 0; width: 420px; max-width: 90vw;
-    background: white; z-index: 301; box-shadow: -4px 0 20px rgba(0,0,0,0.15);
-    display: flex; flex-direction: column; overflow: hidden;
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 440px;
+    max-width: 90vw;
+    background: white;
+    z-index: 301;
+    box-shadow: -2px 0 16px rgba(0, 0, 0, 0.08);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
   .panel-header {
-    display: flex; justify-content: space-between; align-items: center; padding: 1rem;
-    border-bottom: 1px solid #e2e8f0; background: #f8fafc;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #e5e7eb;
+    background: white;
   }
-  .panel-header h3 { margin: 0; font-size: 1rem; }
-  .close-panel { background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #64748b; }
-  .panel-body { flex: 1; overflow-y: auto; padding: 1rem; }
-  .panel-body hr { border: none; border-top: 1px solid #f1f5f9; margin: 0.75rem 0; }
-  .panel-body h4 { font-size: 0.85rem; font-weight: 700; margin: 0 0 0.35rem; color: #1e293b; }
-  .panel-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; }
-  .panel-label { font-size: 0.75rem; color: #94a3b8; font-weight: 600; }
-  .panel-estado { font-size: 0.8rem; font-weight: 700; color: #2563eb; text-transform: capitalize; }
-  .panel-prioridad { padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
-  .panel-avance { display: flex; align-items: center; gap: 0.5rem; }
-  .panel-avance-bar { width: 100px; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
-  .panel-avance-fill { height: 100%; background: #2563eb; border-radius: 4px; }
-  .panel-info { font-size: 0.85rem; font-weight: 600; color: #1e293b; }
-  .panel-info-sm { font-size: 0.75rem; color: #64748b; }
-  .panel-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; }
-  .panel-tag { background: #eff6ff; color: #1e40af; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.72rem; font-weight: 600; }
-  .panel-desc { font-size: 0.85rem; color: #334155; line-height: 1.5; margin: 0; }
-  .panel-obs { font-size: 0.8rem; color: #64748b; font-style: italic; margin: 0.25rem 0 0; }
-  .panel-coords { font-size: 0.75rem; font-family: monospace; color: #475569; }
+  .panel-header h3 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #1e293b;
+  }
+  .close-panel {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    color: #64748b;
+  }
+  .panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.25rem;
+  }
+  .panel-body hr {
+    border: none;
+    border-top: 1px solid #f1f5f9;
+    margin: 1rem 0;
+  }
+  .panel-body h4 {
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin: 0 0 0.4rem;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .panel-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.4rem;
+  }
+  .panel-label {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    font-weight: 600;
+  }
+  .panel-estado {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #1e293b;
+    text-transform: capitalize;
+  }
+  .panel-prioridad {
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .panel-avance {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .panel-avance-bar {
+    width: 100px;
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .panel-avance-fill {
+    height: 100%;
+    background: #475569;
+    border-radius: 4px;
+  }
+  .panel-info {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #1e293b;
+  }
+  .panel-info-sm {
+    font-size: 0.75rem;
+    color: #64748b;
+  }
+  .panel-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+  .panel-tag {
+    background: #f1f5f9;
+    color: #374151;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 500;
+  }
+  .panel-desc {
+    font-size: 0.85rem;
+    color: #334155;
+    line-height: 1.5;
+    margin: 0;
+  }
+  .panel-obs {
+    font-size: 0.8rem;
+    color: #64748b;
+    font-style: italic;
+    margin: 0.25rem 0 0;
+  }
+  .panel-coords {
+    font-size: 0.75rem;
+    font-family: monospace;
+    color: #475569;
+  }
 
   /* Enlace section */
-  .enlace-assigned { background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px; padding: 0.6rem; margin-bottom: 0.5rem; }
-  .enlace-info { display: flex; flex-direction: column; gap: 0.15rem; }
-  .enlace-name { font-size: 0.85rem; font-weight: 700; color: #0d9488; }
-  .enlace-meta { font-size: 0.72rem; color: #475569; }
-  .enlace-contact { font-size: 0.7rem; color: #64748b; }
-  .enlace-assign-form { display: flex; gap: 0.4rem; align-items: center; margin-top: 0.4rem; }
+  .enlace-assigned {
+    background: #f8fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 0.6rem;
+    margin-bottom: 0.5rem;
+  }
+  .enlace-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .enlace-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #1e293b;
+  }
+  .enlace-meta {
+    font-size: 0.72rem;
+    color: #475569;
+  }
+  .enlace-contact {
+    font-size: 0.7rem;
+    color: #64748b;
+  }
+  .enlace-assign-form {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    margin-top: 0.4rem;
+  }
   .enlace-select {
-    flex: 1; padding: 0.4rem; border: 1px solid #e2e8f0; border-radius: 6px;
-    font-size: 0.78rem; font-family: inherit; outline: none; background: white;
+    flex: 1;
+    padding: 0.4rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-family: inherit;
+    outline: none;
+    background: white;
   }
-  .enlace-select:focus { border-color: #0d9488; box-shadow: 0 0 0 2px rgba(13,148,136,0.15); }
+  .enlace-select:focus {
+    border-color: #0d9488;
+    box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.15);
+  }
   .enlace-assign-btn {
-    background: #0d9488; color: white; border: none; padding: 0.4rem 0.75rem;
-    border-radius: 6px; font-size: 0.78rem; font-weight: 600; cursor: pointer;
-    white-space: nowrap; transition: background 0.15s;
+    background: #1e293b;
+    color: white;
+    border: none;
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
   }
-  .enlace-assign-btn:hover:not(:disabled) { background: #0f766e; }
-  .enlace-assign-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .enlace-assign-btn:hover:not(:disabled) {
+    background: #0f172a;
+  }
+  .enlace-assign-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 
   /* Timeline */
-  .timeline { display: flex; flex-direction: column; gap: 0; margin-top: 0.5rem; }
-  .timeline-item { display: flex; gap: 0.6rem; position: relative; padding-bottom: 0.75rem; }
+  .timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-top: 0.5rem;
+  }
+  .timeline-item {
+    display: flex;
+    gap: 0.6rem;
+    position: relative;
+    padding-bottom: 0.75rem;
+  }
   .timeline-item:not(:last-child)::before {
-    content: ''; position: absolute; left: 5px; top: 14px; bottom: 0;
-    width: 2px; background: #e2e8f0;
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 14px;
+    bottom: 0;
+    width: 2px;
+    background: #e2e8f0;
   }
   .timeline-dot {
-    width: 12px; height: 12px; border-radius: 50%; background: #2563eb;
-    flex-shrink: 0; margin-top: 3px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #94a3b8;
+    flex-shrink: 0;
+    margin-top: 4px;
   }
-  .timeline-content { flex: 1; min-width: 0; }
-  .timeline-head { display: flex; justify-content: space-between; align-items: center; }
-  .timeline-head strong { font-size: 0.75rem; color: #1e293b; }
-  .timeline-date { font-size: 0.65rem; color: #94a3b8; }
-  .timeline-desc { font-size: 0.78rem; color: #475569; margin: 0.15rem 0; line-height: 1.4; }
+  .timeline-content {
+    flex: 1;
+    min-width: 0;
+  }
+  .timeline-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .timeline-head strong {
+    font-size: 0.75rem;
+    color: #1e293b;
+  }
+  .timeline-date {
+    font-size: 0.65rem;
+    color: #94a3b8;
+  }
+  .timeline-desc {
+    font-size: 0.78rem;
+    color: #475569;
+    margin: 0.15rem 0;
+    line-height: 1.4;
+  }
   .timeline-transition {
-    display: inline-block; font-size: 0.65rem; background: #f0f7ff; color: #2563eb;
-    padding: 0.1rem 0.4rem; border-radius: 3px; font-weight: 600; margin-top: 0.15rem;
+    display: inline-block;
+    font-size: 0.65rem;
+    background: #f1f5f9;
+    color: #475569;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-weight: 500;
+    margin-top: 0.15rem;
   }
-  .timeline-evidencias { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.25rem; }
-  .evidence-chip { font-size: 0.65rem; background: #f1f5f9; padding: 0.15rem 0.4rem; border-radius: 3px; }
+  .timeline-evidencias {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.25rem;
+  }
+  .evidence-chip {
+    font-size: 0.65rem;
+    background: #f1f5f9;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+  }
 
   /* Avance form */
-  .avance-form { background: #f8fafc; border-radius: 8px; padding: 0.75rem; margin-top: 0.5rem; }
-  .avance-form h4 { margin-top: 0; }
-  .field { display: flex; flex-direction: column; gap: 0.2rem; margin-bottom: 0.5rem; }
-  .field label { font-size: 0.75rem; font-weight: 600; color: #475569; }
-  .field input, .field textarea, .field select {
-    padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.82rem;
-    font-family: inherit; outline: none;
+  .avance-form {
+    background: #f8f9fb;
+    border-radius: 6px;
+    padding: 0.75rem;
+    margin-top: 0.5rem;
+    border: 1px solid #e5e7eb;
   }
-  .field input[type="range"] { padding: 0; }
-  .avance-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+  .avance-form h4 {
+    margin-top: 0;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin-bottom: 0.5rem;
+  }
+  .field label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #475569;
+  }
+  .field input,
+  .field textarea,
+  .field select {
+    padding: 0.5rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-family: inherit;
+    outline: none;
+  }
+  .field input[type="range"] {
+    padding: 0;
+  }
+  .avance-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+  }
 
   /* Table view */
-  .tabla-container { flex: 1; overflow: auto; padding: 0.75rem; }
-  .tabla-wrapper { overflow-x: auto; }
-  .req-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; background: white; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; }
-  .req-table thead { background: #f8fafc; }
-  .req-table th { padding: 0.6rem 0.5rem; text-align: left; font-weight: 700; color: #475569; font-size: 0.72rem; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
-  .req-table td { padding: 0.55rem 0.5rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
-  .tabla-row { transition: background 0.1s; cursor: default; }
-  .tabla-row:hover { background: #f8fafc; }
-  .selected-row { background: #eff6ff !important; }
-  .td-id { font-family: monospace; font-size: 0.65rem; color: #94a3b8; }
-  .tabla-estado { color: white; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 700; text-transform: capitalize; white-space: nowrap; }
-  .tabla-prioridad { padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; }
-  .td-solicitante { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: #1e293b; }
-  .td-centros { max-width: 160px; }
-  .tabla-cg-chip { display: inline-block; font-size: 0.6rem; background: #f1f5f9; color: #475569; padding: 0.1rem 0.3rem; border-radius: 3px; margin: 0.1rem; }
-  .td-desc { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #334155; }
-  .tabla-avance { display: flex; align-items: center; gap: 0.3rem; }
-  .tabla-pct { font-size: 0.65rem; font-weight: 700; color: #475569; }
-  .td-enlace { font-size: 0.75rem; color: #0d9488; font-weight: 600; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .td-encargado { font-size: 0.75rem; color: #64748b; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .td-fecha { font-size: 0.7rem; color: #94a3b8; white-space: nowrap; }
-  .tabla-detail-btn { background: none; border: none; color: #2563eb; font-weight: 600; cursor: pointer; font-size: 0.75rem; white-space: nowrap; }
-  .tabla-detail-btn:hover { text-decoration: underline; }
-  .empty-table { text-align: center; padding: 2rem; color: #94a3b8; }
+  .tabla-container {
+    flex: 1;
+    overflow: auto;
+    padding: 0.75rem;
+  }
+  .tabla-wrapper {
+    overflow-x: auto;
+  }
+  .req-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.76rem;
+    background: white;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+    table-layout: fixed;
+  }
+  .req-table thead {
+    background: #f8fafc;
+  }
+  .req-table th {
+    padding: 0.5rem 0.45rem;
+    text-align: left;
+    font-weight: 600;
+    color: #64748b;
+    font-size: 0.65rem;
+    border-bottom: 1px solid #e5e7eb;
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .req-table td {
+    padding: 0.45rem;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: top;
+    font-size: 0.74rem;
+    line-height: 1.35;
+  }
+  .tabla-row {
+    transition:
+      background 0.1s,
+      filter 0.1s;
+    cursor: pointer;
+  }
+  .tabla-row:hover {
+    filter: brightness(0.97);
+  }
+  .selected-row {
+    background: #eff6ff !important;
+  }
+  .td-id {
+    font-family: monospace;
+    font-size: 0.6rem;
+    color: #94a3b8;
+    word-break: break-all;
+  }
+  .tabla-estado {
+    color: white;
+    padding: 0.12rem 0.35rem;
+    border-radius: 3px;
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-transform: capitalize;
+    white-space: nowrap;
+    display: inline-block;
+  }
+  .tabla-prioridad {
+    padding: 0.08rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    display: inline-block;
+  }
+  .td-solicitante {
+    font-weight: 500;
+    color: #1e293b;
+    word-break: break-word;
+  }
+  .td-centros {
+    line-height: 1.5;
+  }
+  .tabla-cg-chip {
+    display: inline-block;
+    font-size: 0.58rem;
+    background: #f1f5f9;
+    color: #475569;
+    padding: 0.08rem 0.25rem;
+    border-radius: 2px;
+    margin: 0.06rem 0.06rem;
+  }
+  .td-desc {
+    color: #374151;
+    word-break: break-word;
+    line-height: 1.4;
+  }
+  .tabla-avance {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .tabla-pct {
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: #475569;
+  }
+  .td-enlace {
+    font-size: 0.72rem;
+    color: #475569;
+    font-weight: 500;
+    word-break: break-word;
+  }
+  .td-encargado {
+    font-size: 0.72rem;
+    color: #64748b;
+    word-break: break-word;
+  }
+  .td-fecha {
+    font-size: 0.68rem;
+    color: #94a3b8;
+    white-space: nowrap;
+  }
+
+  .empty-table {
+    text-align: center;
+    padding: 2rem;
+    color: #94a3b8;
+  }
 
   @media (max-width: 768px) {
-    .kanban-column { width: 220px; min-width: 220px; }
-    .detail-panel { width: 100vw; max-width: 100vw; }
+    .kanban-column {
+      width: 240px;
+      min-width: 240px;
+    }
+    .detail-panel {
+      width: 100vw;
+      max-width: 100vw;
+    }
   }
 
   /* Filter bar */
   .filter-bar {
-    background: #fff; border-bottom: 1px solid #e2e8f0;
-    padding: 0.5rem 1rem; display: flex; flex-direction: column; gap: 0.5rem;
+    background: #fff;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 0.6rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
   }
-  .filter-row { display: flex; align-items: flex-end; gap: 0.75rem; flex-wrap: wrap; }
-  .filter-group { display: flex; flex-direction: column; gap: 0.15rem; }
-  .filter-group-wide { flex: 1; min-width: 260px; }
+  .filter-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .filter-group-wide {
+    flex: 1;
+    min-width: 260px;
+  }
   .filter-search {
-    padding: 0.35rem 0.6rem; border: 1px solid #e2e8f0; border-radius: 6px;
-    font-size: 0.8rem; font-family: inherit; outline: none; background: white;
-    color: #334155; width: 100%;
+    padding: 0.35rem 0.6rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-family: inherit;
+    outline: none;
+    background: white;
+    color: #334155;
+    width: 100%;
   }
-  .filter-search:focus { border-color: #2563eb; }
-  .filter-group label { font-size: 0.65rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
-  .filter-group select, .filter-group input[type="date"] {
-    padding: 0.3rem 0.5rem; border: 1px solid #e2e8f0; border-radius: 6px;
-    font-size: 0.78rem; font-family: inherit; outline: none; background: white;
+  .filter-search:focus {
+    border-color: #2563eb;
+  }
+  .filter-group label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .filter-group select,
+  .filter-group input[type="date"] {
+    padding: 0.3rem 0.5rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-family: inherit;
+    outline: none;
+    background: white;
     color: #334155;
   }
-  .filter-group select:focus, .filter-group input[type="date"]:focus { border-color: #2563eb; }
+  .filter-group select:focus,
+  .filter-group input[type="date"]:focus {
+    border-color: #2563eb;
+  }
   .clear-filter-btn {
-    background: #fee2e2; color: #ef4444; border: none; padding: 0.35rem 0.65rem;
-    border-radius: 6px; font-size: 0.75rem; font-weight: 700; cursor: pointer;
+    background: #f1f5f9;
+    color: #dc2626;
+    border: none;
+    padding: 0.35rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
     align-self: flex-end;
   }
   .filter-toggle-btn {
-    background: #f8fafc; border: 1px solid #e2e8f0; padding: 0.3rem 0.6rem;
-    border-radius: 6px; font-size: 0.72rem; font-weight: 600; color: #475569; cursor: pointer;
+    background: white;
+    border: 1px solid #e5e7eb;
+    padding: 0.3rem 0.7rem;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #475569;
+    cursor: pointer;
     transition: all 0.15s;
   }
-  .filter-toggle-btn:hover { background: #f1f5f9; }
-  .filter-toggle-btn.has-active { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
+  .filter-toggle-btn:hover {
+    background: #f8f9fb;
+  }
+  .filter-toggle-btn.has-active {
+    background: #f1f5f9;
+    color: #1e293b;
+    border-color: #cbd5e1;
+  }
 
   /* Empty board */
-  .empty-board { padding: 3rem 2rem; color: #94a3b8; text-align: center; font-size: 0.85rem; width: 100%; }
+  .empty-board {
+    padding: 3rem 2rem;
+    color: #94a3b8;
+    text-align: center;
+    font-size: 0.85rem;
+    width: 100%;
+  }
 
   /* CG group header */
-  .cg-header { background: #f5f3ff; }
+  .cg-header {
+    background: #f8f9fb;
+  }
 
   /* Kanban card extras */
-  .kcard-meta-row { display: flex; gap: 0.25rem; margin-top: 0.25rem; }
-  .kcard-estado-chip { font-size: 0.58rem; background: #e2e8f0; color: #475569; padding: 0.1rem 0.35rem; border-radius: 3px; font-weight: 700; text-transform: capitalize; }
-  .kcard-orfeo { font-size: 0.6rem; color: #7c3aed; font-weight: 600; margin-top: 0.2rem; }
+  .kcard-meta-row {
+    display: flex;
+    gap: 0.25rem;
+    margin-top: 0.25rem;
+  }
+  .kcard-estado-chip {
+    font-size: 0.58rem;
+    background: #f1f5f9;
+    color: #475569;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    font-weight: 600;
+    text-transform: capitalize;
+  }
+  .kcard-orfeo {
+    font-size: 0.6rem;
+    color: #64748b;
+    font-weight: 500;
+    margin-top: 0.2rem;
+  }
 
   /* Fecha propuesta solucion */
-  .fecha-solucion-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 0.6rem; margin: 0.5rem 0; }
-  .fecha-solucion-label { font-size: 0.72rem; font-weight: 700; color: #15803d; display: block; margin-bottom: 0.35rem; }
-  .fecha-solucion-row { display: flex; gap: 0.4rem; align-items: center; }
-  .fecha-solucion-input { flex: 1; padding: 0.35rem 0.5rem; border: 1px solid #bbf7d0; border-radius: 6px; font-size: 0.78rem; font-family: inherit; outline: none; }
-  .fecha-solucion-input:focus { border-color: #16a34a; }
-  .fecha-solucion-btn { background: #16a34a; color: white; border: none; padding: 0.35rem 0.65rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
-  .fecha-solucion-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-  .fecha-solucion-saved { font-size: 0.7rem; color: #16a34a; font-weight: 600; display: block; margin-top: 0.3rem; }
+  .fecha-solucion-box {
+    background: #f8f9fb;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 0.6rem;
+    margin: 0.5rem 0;
+  }
+  .fecha-solucion-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #374151;
+    display: block;
+    margin-bottom: 0.35rem;
+  }
+  .fecha-solucion-row {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+  }
+  .fecha-solucion-input {
+    flex: 1;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid #bbf7d0;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-family: inherit;
+    outline: none;
+  }
+  .fecha-solucion-input:focus {
+    border-color: #94a3b8;
+  }
+  .fecha-solucion-btn {
+    background: #1e293b;
+    color: white;
+    border: none;
+    padding: 0.35rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .fecha-solucion-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .fecha-solucion-saved {
+    font-size: 0.7rem;
+    color: #475569;
+    font-weight: 500;
+    display: block;
+    margin-top: 0.3rem;
+  }
 
   /* Orfeo section */
-  .orfeo-box { background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 8px; padding: 0.6rem; margin-bottom: 0.4rem; }
-  .orfeo-row { font-size: 0.78rem; color: #4c1d95; margin-bottom: 0.15rem; display: flex; gap: 0.4rem; align-items: center; }
-  .orfeo-label { font-weight: 700; color: #7c3aed; font-size: 0.7rem; }
-  .orfeo-doc { font-size: 0.72rem; color: #6d28d9; text-decoration: underline; }
-  .action-link {
-    background: none; border: none; color: #7c3aed; font-size: 0.78rem; font-weight: 600;
-    cursor: pointer; padding: 0.25rem 0; display: inline-block; margin-bottom: 0.25rem;
+  .orfeo-box {
+    background: #f8f9fb;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 0.6rem;
+    margin-bottom: 0.4rem;
   }
-  .action-link:hover { text-decoration: underline; }
+  .orfeo-row {
+    font-size: 0.78rem;
+    color: #374151;
+    margin-bottom: 0.15rem;
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+  }
+  .orfeo-label {
+    font-weight: 600;
+    color: #475569;
+    font-size: 0.7rem;
+  }
+  .orfeo-doc {
+    font-size: 0.72rem;
+    color: #475569;
+    text-decoration: underline;
+  }
+  .action-link {
+    background: none;
+    border: none;
+    color: #475569;
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0.25rem 0;
+    display: inline-block;
+    margin-bottom: 0.25rem;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .action-link:hover {
+    color: #1e293b;
+  }
 
   /* Cancel section */
-  .panel-actions-row { display: flex; flex-direction: column; gap: 0.4rem; }
+  .panel-actions-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
   .cancel-req-btn {
-    background: none; border: 1px solid #fca5a5; color: #dc2626; border-radius: 6px;
-    padding: 0.4rem 0.75rem; font-size: 0.78rem; font-weight: 600; cursor: pointer;
-    transition: all 0.15s; text-align: center;
+    background: none;
+    border: 1px solid #e5e7eb;
+    color: #dc2626;
+    border-radius: 6px;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
   }
-  .cancel-req-btn:hover { background: #fee2e2; }
-  .cancel-form { border-color: #fca5a5; background: #fff8f8; }
-  .cancel-warning { font-size: 0.75rem; color: #dc2626; background: #fee2e2; border-radius: 6px; padding: 0.5rem; margin-bottom: 0.5rem; }
+  .cancel-req-btn:hover {
+    background: #fef2f2;
+    border-color: #fca5a5;
+  }
+  .cancel-form {
+    border-color: #e5e7eb;
+    background: #fefbfb;
+  }
+  .cancel-warning {
+    font-size: 0.75rem;
+    color: #dc2626;
+    background: #fee2e2;
+    border-radius: 6px;
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
   .confirm-cancel-btn {
-    background: #dc2626; color: white; border: none; padding: 0.45rem 0.85rem;
-    border-radius: 6px; font-size: 0.82rem; font-weight: 700; cursor: pointer;
+    background: #dc2626;
+    color: white;
+    border: none;
+    padding: 0.45rem 0.85rem;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
   }
-  .confirm-cancel-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-  .field-hint { font-size: 0.68rem; color: #94a3b8; margin-top: 0.15rem; }
+  .confirm-cancel-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .field-hint {
+    font-size: 0.68rem;
+    color: #94a3b8;
+    margin-top: 0.15rem;
+  }
 </style>

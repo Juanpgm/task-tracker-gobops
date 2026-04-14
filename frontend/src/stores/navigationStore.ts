@@ -3,14 +3,13 @@ import { writable } from 'svelte/store';
 export type AppView =
   | 'home'
   | 'programar-visita'
-  | 'programar-visita-detalle'
+  | 'programar-visita-libre'
   | 'visitas-programadas'
   | 'registrar-requerimiento-visita'
   | 'kanban'
   | 'detalle-requerimiento'
   | 'directorio-enlaces'
   // legacy views
-  | 'registrar-visita'
   | 'asistencia-delegado'
   | 'asistencia-comunidad'
   | 'registrar-requerimiento'

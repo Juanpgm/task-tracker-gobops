@@ -25,13 +25,22 @@ export type EstadoVisita = 'programada' | 'en-curso' | 'finalizada' | 'cancelada
 export interface VisitaProgramada {
   id: string;
   upid: string;
-  unidad_proyecto: UnidadProyecto;
+  unidad_proyecto?: UnidadProyecto | null;
+  // Ubicación manual (cuando no hay UP asociada)
+  direccion_manual?: string;
+  barrio_vereda?: string;
+  comuna_corregimiento?: string;
+  referencia_ubicacion?: string;     // establecimientos cercanos, puntos de referencia
+  latitud?: string;
+  longitud?: string;
+  geocoding_source?: 'gps' | 'manual' | 'geocoded';
   fecha_visita: string;           // YYYY-MM-DD
   hora_inicio?: string;           // HH:mm
   hora_fin?: string;              // HH:mm
   estado: EstadoVisita;
   colaboradores: Colaborador[];
   observaciones?: string;
+  descripcion_visita?: string;
   created_at: string;
   updated_at: string;
 }
@@ -150,12 +159,9 @@ export interface KanbanColumn {
 }
 
 export const KANBAN_COLUMNS: KanbanColumn[] = [
-  { id: 'nuevo',      title: 'Nuevos',       color: '#6b7280', icon: '🆕' },
-  { id: 'radicado',   title: 'Radicados',    color: '#3b82f6', icon: '📋' },
-  { id: 'en-gestion', title: 'En Gestión',   color: '#f59e0b', icon: '📞' },
-  { id: 'asignado',   title: 'Asignados',    color: '#8b5cf6', icon: '👤' },
-  { id: 'en-proceso', title: 'En Proceso',   color: '#f97316', icon: '🔧' },
-  { id: 'resuelto',   title: 'Resueltos',    color: '#22c55e', icon: '✅' },
-  { id: 'cerrado',    title: 'Cerrados',     color: '#64748b', icon: '🔒' },
-  { id: 'cancelado',  title: 'Cancelados',   color: '#ef4444', icon: '🚫' },
+  { id: 'nuevo',      title: 'Nuevos',       color: '#6b7280', icon: '' },
+  { id: 'en-proceso', title: 'En Proceso',   color: '#f97316', icon: '' },
+  { id: 'resuelto',   title: 'Resueltos',    color: '#22c55e', icon: '' },
+  { id: 'cerrado',    title: 'Cerrados',     color: '#64748b', icon: '' },
+  { id: 'cancelado',  title: 'Cancelados',   color: '#ef4444', icon: '' },
 ];
