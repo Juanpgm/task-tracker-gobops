@@ -74,10 +74,11 @@ function createSeguimientoStore() {
           const [dd, mm, yyyy] = v.fecha_visita.split('/');
           const fechaISO = `${yyyy}-${mm}-${dd}`;
 
-          // acompanantes puede ser un objeto o un array
-          const acompList: Record<string, string>[] = Array.isArray(v.acompanantes)
+          // acompanantes puede ser un objeto, un array, o null
+          const acompRaw = Array.isArray(v.acompanantes)
             ? v.acompanantes
-            : [v.acompanantes];
+            : v.acompanantes ? [v.acompanantes] : [];
+          const acompList: Record<string, string>[] = acompRaw.filter(Boolean);
 
           const colaboradores: Colaborador[] = acompList.map((a, i) => ({
             id: `${v.vid}-acomp-${i}`,

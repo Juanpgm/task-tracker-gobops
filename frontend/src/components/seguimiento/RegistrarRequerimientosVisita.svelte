@@ -2,13 +2,14 @@
   import { onMount } from "svelte";
   import { navigationStore } from "../../stores/navigationStore";
   import { seguimientoStore } from "../../stores/seguimientoStore";
+  import { registrarRequerimiento } from "../../api/visitas";
   import { CENTROS_GESTORES } from "../../data/mock-seguimiento";
   import { getCurrentPosition } from "../../lib/geolocation";
   import type {
     VisitaProgramada,
-    Solicitante,
     Requerimiento,
   } from "../../types/seguimiento";
+  import type { RequerimientoPayload } from "../../types";
   import Button from "../ui/Button.svelte";
   import Alert from "../ui/Alert.svelte";
   import Card from "../ui/Card.svelte";
@@ -18,60 +19,42 @@
   let errorMsg = "";
   let successMsg = "";
   let showForm = false;
-  let capturingGPS = false;
+  let submitting = false;
 
-  // Solicitante form
+  // Solicitante form (matches datos_solicitante.personas[])
   let solNombre = "";
-  let solCedula = "";
   let solTelefono = "";
   let solEmail = "";
-  let solDireccion = "";
-  let solBarrio = "";
-  let solComuna = "";
 
   // Requerimientos array (one solicitante can have multiple)
   interface ReqDraft {
     centros_gestores: string[];
+    tipo_requerimiento: string;
     descripcion: string;
     observaciones: string;
-    latitud: string;
-    longitud: string;
-    prioridad: Requerimiento["prioridad"];
-    evidencia_fotos: string[];
+    nota_voz: File | null;
   }
   let requerimientosDraft: ReqDraft[] = [createEmptyReq()];
 
   function createEmptyReq(): ReqDraft {
     return {
       centros_gestores: [],
+      tipo_requerimiento: "",
       descripcion: "",
       observaciones: "",
-      latitud: "",
-      longitud: "",
-      prioridad: "media",
-      evidencia_fotos: [],
+      nota_voz: null,
     };
   }
 
-  function handleFotoUpload(reqIdx: number, event: Event) {
+  function handleNotaVoz(reqIdx: number, event: Event) {
     const input = event.target as HTMLInputElement;
     if (!input.files || input.files.length === 0) return;
-    const newPhotos: string[] = [];
-    for (const file of Array.from(input.files)) {
-      newPhotos.push(URL.createObjectURL(file));
-    }
-    requerimientosDraft[reqIdx].evidencia_fotos = [
-      ...requerimientosDraft[reqIdx].evidencia_fotos,
-      ...newPhotos,
-    ];
+    requerimientosDraft[reqIdx].nota_voz = input.files[0];
     requerimientosDraft = [...requerimientosDraft];
-    input.value = "";
   }
 
-  function removeFoto(reqIdx: number, fotoIdx: number) {
-    requerimientosDraft[reqIdx].evidencia_fotos = requerimientosDraft[
-      reqIdx
-    ].evidencia_fotos.filter((_, i) => i !== fotoIdx);
+  function removeNotaVoz(reqIdx: number) {
+    requerimientosDraft[reqIdx].nota_voz = null;
     requerimientosDraft = [...requerimientosDraft];
   }
 
@@ -88,9 +71,6 @@
       return;
     }
     visita = found;
-    // Pre-fill barrio/comuna from UP if available
-    solDireccion =
-      found.unidad_proyecto?.direccion || found.direccion_manual || "";
 
     updateReqList();
   });
@@ -131,26 +111,12 @@
     requerimientosDraft = requerimientosDraft.filter((_, i) => i !== idx);
   }
 
-  async function capturarGPS(idx: number) {
-    capturingGPS = true;
-    try {
-      const pos = await getCurrentPosition();
-      requerimientosDraft[idx].latitud = pos.latitud.toFixed(8);
-      requerimientosDraft[idx].longitud = pos.longitud.toFixed(8);
-      requerimientosDraft = [...requerimientosDraft];
-    } catch (err) {
-      errorMsg = "Error al capturar GPS";
-    } finally {
-      capturingGPS = false;
-    }
-  }
-
-  function guardarRequerimientos() {
+  async function guardarRequerimientos() {
     if (!visita) return;
 
     // Validate solicitante
-    if (!solNombre.trim() || !solCedula.trim()) {
-      errorMsg = "Complete al menos el nombre y cédula del solicitante";
+    if (!solNombre.trim()) {
+      errorMsg = "El nombre del solicitante es obligatorio";
       return;
     }
 
@@ -161,55 +127,98 @@
         errorMsg = `Requerimiento #${i + 1}: Seleccione al menos un centro gestor`;
         return;
       }
+      if (!req.tipo_requerimiento.trim()) {
+        errorMsg = `Requerimiento #${i + 1}: El tipo de requerimiento es obligatorio`;
+        return;
+      }
       if (!req.descripcion.trim()) {
         errorMsg = `Requerimiento #${i + 1}: La descripción es obligatoria`;
+        return;
+      }
+      if (!req.observaciones.trim()) {
+        errorMsg = `Requerimiento #${i + 1}: Las observaciones son obligatorias`;
         return;
       }
     }
 
     errorMsg = "";
+    submitting = true;
 
-    const solicitante: Solicitante = {
-      id: `sol-${Date.now()}`,
-      nombre_completo: solNombre,
-      cedula: solCedula,
-      telefono: solTelefono,
-      email: solEmail,
-      direccion: solDireccion,
-      barrio_vereda: solBarrio,
-      comuna_corregimiento: solComuna,
-    };
-
-    for (const req of requerimientosDraft) {
-      seguimientoStore.agregarRequerimiento(
-        visita.id,
-        solicitante,
-        req.centros_gestores,
-        req.descripcion,
-        req.observaciones,
-        solDireccion,
-        req.latitud,
-        req.longitud,
-        req.evidencia_fotos,
-        req.prioridad,
-      );
+    // Auto-capture GPS
+    let latitud: string;
+    let longitud: string;
+    try {
+      const pos = await getCurrentPosition();
+      latitud = pos.latitud.toFixed(8);
+      longitud = pos.longitud.toFixed(8);
+    } catch (err) {
+      errorMsg =
+        "No se pudo obtener la ubicación GPS. Verifique que el GPS esté habilitado.";
+      submitting = false;
+      return;
     }
 
-    successMsg = `✅ ${requerimientosDraft.length} requerimiento(s) registrado(s) para ${solNombre}`;
+    try {
+      let registrados = 0;
+      for (const req of requerimientosDraft) {
+        const datosSolicitante = JSON.stringify({
+          personas: [
+            {
+              nombre: solNombre,
+              email: solEmail || undefined,
+              telefono: solTelefono || undefined,
+              centro_gestor: req.centros_gestores[0] || undefined,
+            },
+          ],
+        });
 
-    // Reset form for next solicitante
-    solNombre = "";
-    solCedula = "";
-    solTelefono = "";
-    solEmail = "";
-    solBarrio = "";
-    solComuna = "";
-    requerimientosDraft = [createEmptyReq()];
-    showForm = false;
+        const coords = JSON.stringify({
+          type: "Point",
+          coordinates: [parseFloat(longitud), parseFloat(latitud)],
+        });
 
-    setTimeout(() => {
-      successMsg = "";
-    }, 4000);
+        const organismosEncargados = JSON.stringify(req.centros_gestores);
+
+        const payload: RequerimientoPayload = {
+          vid: visita!.id,
+          datos_solicitante: datosSolicitante,
+          tipo_requerimiento: req.tipo_requerimiento,
+          requerimiento: req.descripcion,
+          observaciones: req.observaciones,
+          coords,
+          organismos_encargados: organismosEncargados,
+          nota_voz: req.nota_voz,
+        };
+
+        const result = await registrarRequerimiento(payload);
+        console.log("Requerimiento registrado:", result.rid);
+        registrados++;
+      }
+
+      successMsg = `✅ ${registrados} requerimiento(s) registrado(s) para ${solNombre}`;
+
+      // Reload requerimientos from API to refresh list
+      seguimientoStore.loadRequerimientos();
+
+      // Reset form
+      solNombre = "";
+      solTelefono = "";
+      solEmail = "";
+      requerimientosDraft = [createEmptyReq()];
+      showForm = false;
+
+      setTimeout(() => {
+        successMsg = "";
+      }, 4000);
+    } catch (err) {
+      errorMsg =
+        err instanceof Error
+          ? err.message
+          : "Error al registrar requerimiento(s)";
+      console.error("guardarRequerimientos error:", err);
+    } finally {
+      submitting = false;
+    }
   }
 
   function getPrioridadStyle(p: string): string {
@@ -397,21 +406,12 @@
                 />
               </div>
               <div class="field">
-                <label for="sol-cedula">Cédula *</label>
-                <input
-                  id="sol-cedula"
-                  type="text"
-                  bind:value={solCedula}
-                  placeholder="Número de documento"
-                />
-              </div>
-              <div class="field">
                 <label for="sol-telefono">Teléfono</label>
                 <input
                   id="sol-telefono"
                   type="tel"
                   bind:value={solTelefono}
-                  placeholder="Celular"
+                  placeholder="+57 300 1234567"
                 />
               </div>
               <div class="field">
@@ -423,34 +423,14 @@
                   placeholder="correo@ejemplo.com"
                 />
               </div>
-              <div class="field">
-                <label for="sol-direccion">Dirección</label>
-                <input
-                  id="sol-direccion"
-                  type="text"
-                  bind:value={solDireccion}
-                  placeholder="Dirección del solicitante"
-                />
-              </div>
-              <div class="field">
-                <label for="sol-barrio">Barrio / Vereda</label>
-                <input
-                  id="sol-barrio"
-                  type="text"
-                  bind:value={solBarrio}
-                  placeholder="Barrio"
-                />
-              </div>
-              <div class="field">
-                <label for="sol-comuna">Comuna / Corregimiento</label>
-                <input
-                  id="sol-comuna"
-                  type="text"
-                  bind:value={solComuna}
-                  placeholder="Comuna"
-                />
-              </div>
             </div>
+            <p
+              class="form-hint"
+              style="margin-top: 0.5rem; font-size: 0.75rem;"
+            >
+              📍 El barrio y comuna se determinan automáticamente a partir de
+              las coordenadas GPS.
+            </p>
           </Card>
 
           <!-- Requerimientos del solicitante -->
@@ -494,6 +474,40 @@
               </div>
 
               <div class="field">
+                <label for="req-tipo-{idx}">Tipo de Requerimiento *</label>
+                <select id="req-tipo-{idx}" bind:value={req.tipo_requerimiento}>
+                  <option value="">-- Seleccione --</option>
+                  <option value="Poda de árboles">Poda de árboles</option>
+                  <option value="Arbustos">Arbustos</option>
+                  <option value="Emergencias arbóreas"
+                    >Emergencias arbóreas</option
+                  >
+                  <option value="Siembra indiscriminada"
+                    >Siembra indiscriminada</option
+                  >
+                  <option value="Recolección de residuos sólidos"
+                    >Recolección de residuos sólidos</option
+                  >
+                  <option value="Barrido y limpieza de vías y espacio público"
+                    >Barrido y limpieza de vías y espacio público</option
+                  >
+                  <option value="Alumbrado público">Alumbrado público</option>
+                  <option value="Acueducto y alcantarillado"
+                    >Acueducto y alcantarillado</option
+                  >
+                  <option value="Habitantes de calle"
+                    >Habitantes de calle</option
+                  >
+                  <option value="Invasión de espacio público"
+                    >Invasión de espacio público</option
+                  >
+                  <option value="Ruido">Ruido</option>
+                  <option value="Movilidad">Movilidad</option>
+                  <option value="Otros">Otros</option>
+                </select>
+              </div>
+
+              <div class="field">
                 <label for="req-desc-{idx}"
                   >Descripción del Requerimiento *</label
                 >
@@ -506,91 +520,38 @@
               </div>
 
               <div class="field">
-                <label for="req-obs-{idx}">Observaciones</label>
+                <label for="req-obs-{idx}">Observaciones *</label>
                 <textarea
                   id="req-obs-{idx}"
                   bind:value={req.observaciones}
                   rows="2"
-                  placeholder="Notas adicionales..."
+                  placeholder="Observaciones adicionales..."
                 ></textarea>
               </div>
 
-              <div class="form-grid-3">
-                <div class="field">
-                  <label for="req-prioridad-{idx}">Prioridad</label>
-                  <select id="req-prioridad-{idx}" bind:value={req.prioridad}>
-                    <option value="baja">🟢 Baja</option>
-                    <option value="media">🔵 Media</option>
-                    <option value="alta">🟡 Alta</option>
-                    <option value="urgente">🔴 Urgente</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label for="req-lat-{idx}">Latitud</label>
-                  <input
-                    id="req-lat-{idx}"
-                    type="text"
-                    bind:value={req.latitud}
-                    placeholder="Ej: 3.42564"
-                    readonly
-                  />
-                </div>
-                <div class="field">
-                  <label for="req-lng-{idx}">Longitud</label>
-                  <input
-                    id="req-lng-{idx}"
-                    type="text"
-                    bind:value={req.longitud}
-                    placeholder="Ej: -76.617"
-                    readonly
-                  />
-                </div>
-              </div>
-
-              <Button
-                variant="secondary"
-                size="sm"
-                on:click={() => capturarGPS(idx)}
-                loading={capturingGPS}
-              >
-                📍 Capturar GPS
-              </Button>
-
-              <!-- Evidencia Fotográfica -->
+              <!-- Nota de Voz (opcional) -->
               <div class="field" style="margin-top: 0.75rem;">
                 <!-- svelte-ignore a11y-label-has-associated-control -->
-                <label>📷 Evidencia Fotográfica</label>
+                <label>🎤 Nota de Voz (opcional)</label>
                 <div class="foto-upload-area">
                   <label class="foto-upload-btn">
-                    📸 Tomar / Seleccionar Foto
+                    🎙️ Grabar / Seleccionar Audio
                     <input
                       type="file"
-                      accept="image/*"
-                      capture="environment"
-                      multiple
-                      on:change={(e) => handleFotoUpload(idx, e)}
+                      accept="audio/*"
+                      on:change={(e) => handleNotaVoz(idx, e)}
                       hidden
                     />
                   </label>
                 </div>
-                {#if req.evidencia_fotos.length > 0}
-                  <div class="fotos-preview">
-                    {#each req.evidencia_fotos as foto, fotoIdx}
-                      <div class="foto-thumb">
-                        <img src={foto} alt="Evidencia {fotoIdx + 1}" />
-                        <button
-                          class="foto-remove"
-                          on:click={() => removeFoto(idx, fotoIdx)}>✕</button
-                        >
-                      </div>
-                    {/each}
+                {#if req.nota_voz}
+                  <div class="nota-voz-info">
+                    <span>🎵 {req.nota_voz.name}</span>
+                    <button
+                      class="foto-remove"
+                      on:click={() => removeNotaVoz(idx)}>✕</button
+                    >
                   </div>
-                  <p class="foto-count">
-                    {req.evidencia_fotos.length} foto{req.evidencia_fotos
-                      .length !== 1
-                      ? "s"
-                      : ""} adjunta{req.evidencia_fotos.length !== 1 ? "s" : ""}
-                  </p>
                 {/if}
               </div>
             </Card>
@@ -610,7 +571,7 @@
                 errorMsg = "";
               }}>Cancelar</Button
             >
-            <Button on:click={guardarRequerimientos}>
+            <Button on:click={guardarRequerimientos} loading={submitting}>
               💾 Guardar {requerimientosDraft.length} Requerimiento{requerimientosDraft.length >
               1
                 ? "s"
@@ -775,11 +736,6 @@
     grid-template-columns: 1fr 1fr;
     gap: 0.6rem;
   }
-  .form-grid-3 {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 0.6rem;
-  }
   .field {
     display: flex;
     flex-direction: column;
@@ -904,25 +860,6 @@
   .foto-upload-btn:hover {
     background: #dbeafe;
   }
-  .fotos-preview {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
-  }
-  .foto-thumb {
-    position: relative;
-    width: 72px;
-    height: 72px;
-    border-radius: 8px;
-    overflow: hidden;
-    border: 2px solid #e2e8f0;
-  }
-  .foto-thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
   .foto-remove {
     position: absolute;
     top: 2px;
@@ -939,15 +876,28 @@
     align-items: center;
     justify-content: center;
   }
-  .foto-count {
-    font-size: 0.72rem;
-    color: #64748b;
-    margin-top: 0.25rem;
+
+  .nota-voz-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    color: #166534;
+  }
+  .nota-voz-info .foto-remove {
+    position: static;
+    width: 22px;
+    height: 22px;
+    margin-left: auto;
   }
 
   @media (max-width: 640px) {
-    .form-grid-2,
-    .form-grid-3 {
+    .form-grid-2 {
       grid-template-columns: 1fr;
     }
     .up-banner {
