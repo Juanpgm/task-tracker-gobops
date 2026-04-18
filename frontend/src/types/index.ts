@@ -118,10 +118,12 @@ export interface RequerimientoPayload {
   datos_solicitante: string;       // JSON string: { personas: [...] }
   tipo_requerimiento: string;
   requerimiento: string;
+  direccion_requerimiento?: string;
   observaciones: string;
   coords: string;                  // GeoJSON Point: {"type":"Point","coordinates":[lng,lat]}
   organismos_encargados: string;   // JSON array: ["DAGMA", "Secretaría de Obras"]
   nota_voz?: File | null;
+  evidencias?: File[] | null;      // Fotos/videos para subir a S3
 }
 
 /** Respuesta de POST /registrar-requerimiento */

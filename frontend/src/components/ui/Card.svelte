@@ -11,7 +11,7 @@
   .card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-xl);
   }
   .shadow { box-shadow: var(--shadow-sm); }
   .card-sm { padding: var(--space-sm); }

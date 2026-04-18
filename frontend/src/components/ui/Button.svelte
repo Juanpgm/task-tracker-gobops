@@ -36,6 +36,7 @@
     font-family: inherit;
     line-height: 1;
     white-space: nowrap;
+    letter-spacing: -0.01em;
   }
   .btn:disabled {
     opacity: 0.5;

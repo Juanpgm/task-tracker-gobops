@@ -72,7 +72,7 @@
     width: 100%;
     padding: 0.625rem 0.75rem;
     border: 1px solid var(--border);
-    border-radius: var(--radius-md);
+    border-radius: 0.5rem;
     font-size: 0.9375rem;
     font-family: inherit;
     color: var(--text);
@@ -81,10 +81,13 @@
       border-color 0.15s ease,
       box-shadow 0.15s ease;
   }
+  .input::placeholder {
+    color: #cbd5e1;
+  }
   .input:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
   }
   .input:disabled {
     background: var(--bg);

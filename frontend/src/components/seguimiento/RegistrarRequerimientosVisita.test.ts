@@ -157,8 +157,8 @@ describe("Form validation", () => {
     expect(componentSource).toContain("La descripción es obligatoria");
   });
 
-  it("validates observaciones is required", () => {
-    expect(componentSource).toContain(
+  it("does NOT validate observaciones as required", () => {
+    expect(componentSource).not.toContain(
       "Las observaciones son obligatorias",
     );
   });
@@ -221,5 +221,104 @@ describe("API payload structure", () => {
 
   it("sends nota_voz from the draft", () => {
     expect(componentSource).toMatch(/nota_voz:\s*req\.nota_voz/);
+  });
+
+  it("sends evidencias from the draft", () => {
+    expect(componentSource).toMatch(/evidencias:\s*req\.evidencias/);
+  });
+
+  it("includes direccion in datos_solicitante payload", () => {
+    expect(componentSource).toMatch(/direccion:\s*solDireccion/);
+  });
+});
+
+/* ============================================================
+ *  6. EVIDENCIAS (FOTOS / VIDEOS) UPLOAD
+ * ============================================================ */
+describe("Evidencias (fotos/videos) upload", () => {
+  it("includes evidencias field in ReqDraft interface", () => {
+    const ifaceMatch = componentSource.match(
+      /interface ReqDraft\s*\{[\s\S]*?\}/,
+    );
+    expect(ifaceMatch).not.toBeNull();
+    const ifaceBody = ifaceMatch![0];
+    expect(ifaceBody).toContain("evidencias");
+  });
+
+  it("initializes evidencias as empty array in createEmptyReq", () => {
+    const fnMatch = componentSource.match(
+      /function createEmptyReq\(\)[\s\S]*?\n  \}/,
+    );
+    expect(fnMatch).not.toBeNull();
+    expect(fnMatch![0]).toContain("evidencias: []");
+  });
+
+  it("has file inputs that accept image and video types", () => {
+    expect(componentSource).toMatch(
+      /accept="image\/\*,video\/\*"/,
+    );
+  });
+
+  it("has a camera capture input with capture attribute", () => {
+    expect(componentSource).toMatch(
+      /capture="environment"/,
+    );
+  });
+
+  it("has a gallery input with multiple attribute (no capture)", () => {
+    // Find an input with accept="image/*,video/*" and multiple but without capture
+    const galleryInputs = componentSource.match(
+      /<input[^>]*accept="image\/\*,video\/\*"[^>]*multiple[^>]*>/g,
+    );
+    expect(galleryInputs).not.toBeNull();
+    expect(galleryInputs!.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("has a handleEvidencias function", () => {
+    expect(componentSource).toMatch(
+      /function handleEvidencias\(reqIdx:\s*number/,
+    );
+  });
+
+  it("has a removeEvidencia function", () => {
+    expect(componentSource).toMatch(
+      /function removeEvidencia\(reqIdx:\s*number/,
+    );
+  });
+
+  it("defines MAX_EVIDENCIA_SIZE_MB constant", () => {
+    expect(componentSource).toMatch(/MAX_EVIDENCIA_SIZE_MB\s*=\s*50/);
+  });
+
+  it("defines MAX_EVIDENCIAS_PER_REQ constant", () => {
+    expect(componentSource).toMatch(/MAX_EVIDENCIAS_PER_REQ\s*=\s*10/);
+  });
+
+  it("validates file count does not exceed maximum", () => {
+    expect(componentSource).toContain("Máximo");
+    expect(componentSource).toContain("archivos permitidos");
+  });
+
+  it("validates individual file size does not exceed maximum", () => {
+    expect(componentSource).toContain("excede");
+    expect(componentSource).toMatch(/MAX_EVIDENCIA_SIZE_MB\s*\*\s*1024\s*\*\s*1024/);
+  });
+
+  it("shows preview grid when evidencias are present", () => {
+    expect(componentSource).toContain("evidencias-grid");
+    expect(componentSource).toContain("evidencia-thumb");
+  });
+
+  it("shows image preview for image files", () => {
+    expect(componentSource).toMatch(/file\.type\.startsWith\("image\/"\)/);
+  });
+
+  it("shows video placeholder for non-image files", () => {
+    expect(componentSource).toContain("evidencia-video-placeholder");
+  });
+
+  it("displays file size for each evidencia", () => {
+    expect(componentSource).toContain("formatFileSize");
+    expect(componentSource).toContain("evidencia-size");
   });
 });

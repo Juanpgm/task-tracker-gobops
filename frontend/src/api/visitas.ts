@@ -156,12 +156,21 @@ export async function registrarRequerimiento(
   formData.append('datos_solicitante', payload.datos_solicitante);
   formData.append('tipo_requerimiento', payload.tipo_requerimiento);
   formData.append('requerimiento', payload.requerimiento);
+  if (payload.direccion_requerimiento) {
+    formData.append('direccion_requerimiento', payload.direccion_requerimiento);
+  }
   formData.append('observaciones', payload.observaciones);
   formData.append('coords', payload.coords);
   formData.append('organismos_encargados', payload.organismos_encargados);
 
   if (payload.nota_voz) {
     formData.append('nota_voz', payload.nota_voz);
+  }
+
+  if (payload.evidencias && payload.evidencias.length > 0) {
+    for (const file of payload.evidencias) {
+      formData.append('evidencias', file);
+    }
   }
 
   return apiClient.postForm<RequerimientoResponse>('/registrar-requerimiento', formData);
