@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { navigationStore } from "../../stores/navigationStore";
   import { seguimientoStore } from "../../stores/seguimientoStore";
   import { registrarRequerimiento } from "../../api/visitas";
@@ -109,6 +109,104 @@
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
     return (bytes / (1024 * 1024)).toFixed(1) + " MB";
   }
+
+  // ── Audio Recording ──
+  let recordingReqIdx: number | null = null;
+  let mediaRecorder: MediaRecorder | null = null;
+  let recordingChunks: Blob[] = [];
+  let recordingSeconds = 0;
+  let recordingTimer: ReturnType<typeof setInterval> | null = null;
+  let notaVozPreviewUrl: Record<number, string> = {};
+
+  async function startRecording(reqIdx: number) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+      const recorder = new MediaRecorder(stream, { mimeType });
+      recordingChunks = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recordingChunks.push(e.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(recordingChunks, { type: mimeType });
+        const ext = mimeType === 'audio/webm' ? 'webm' : 'm4a';
+        const file = new File([blob], `nota_voz_${Date.now()}.${ext}`, { type: mimeType });
+        requerimientosDraft[reqIdx].nota_voz = file;
+        requerimientosDraft = [...requerimientosDraft];
+        // Create preview URL
+        if (notaVozPreviewUrl[reqIdx]) URL.revokeObjectURL(notaVozPreviewUrl[reqIdx]);
+        notaVozPreviewUrl[reqIdx] = URL.createObjectURL(blob);
+        notaVozPreviewUrl = { ...notaVozPreviewUrl };
+        cleanupRecording();
+      };
+      mediaRecorder = recorder;
+      recordingReqIdx = reqIdx;
+      recordingSeconds = 0;
+      recorder.start();
+      recordingTimer = setInterval(() => { recordingSeconds++; }, 1000);
+    } catch (err) {
+      errorMsg = 'No se pudo acceder al micrófono. Verifica los permisos.';
+      console.error('Mic error:', err);
+    }
+  }
+
+  function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+    }
+  }
+
+  function cancelRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.ondataavailable = null;
+      mediaRecorder.onstop = () => {
+        mediaRecorder!.stream.getTracks().forEach((t) => t.stop());
+        cleanupRecording();
+      };
+      mediaRecorder.stop();
+    } else {
+      cleanupRecording();
+    }
+  }
+
+  function cleanupRecording() {
+    if (recordingTimer) { clearInterval(recordingTimer); recordingTimer = null; }
+    mediaRecorder = null;
+    recordingReqIdx = null;
+    recordingSeconds = 0;
+    recordingChunks = [];
+  }
+
+  function removeNotaVozWithPreview(reqIdx: number) {
+    removeNotaVoz(reqIdx);
+    if (notaVozPreviewUrl[reqIdx]) {
+      URL.revokeObjectURL(notaVozPreviewUrl[reqIdx]);
+      delete notaVozPreviewUrl[reqIdx];
+      notaVozPreviewUrl = { ...notaVozPreviewUrl };
+    }
+  }
+
+  function handleNotaVozWithPreview(reqIdx: number, event: Event) {
+    handleNotaVoz(reqIdx, event);
+    const file = requerimientosDraft[reqIdx].nota_voz;
+    if (file) {
+      if (notaVozPreviewUrl[reqIdx]) URL.revokeObjectURL(notaVozPreviewUrl[reqIdx]);
+      notaVozPreviewUrl[reqIdx] = URL.createObjectURL(file);
+      notaVozPreviewUrl = { ...notaVozPreviewUrl };
+    }
+  }
+
+  function formatRecordingTime(secs: number): string {
+    const m = Math.floor(secs / 60).toString().padStart(2, '0');
+    const s = (secs % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  }
+
+  onDestroy(() => {
+    cancelRecording();
+    Object.values(notaVozPreviewUrl).forEach((url) => URL.revokeObjectURL(url));
+  });
 
   onMount(() => {
     const params = $navigationStore.params;
@@ -719,16 +817,26 @@
                       hidden
                     />
                   </label>
-                  <label class="media-btn" title="Nota de audio">
+                  <label class="media-btn" title="Buscar audio en galería">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                     <span>Audio</span>
                     <input
                       type="file"
                       accept="audio/*"
-                      on:change={(e) => handleNotaVoz(idx, e)}
+                      on:change={(e) => handleNotaVozWithPreview(idx, e)}
                       hidden
                     />
                   </label>
+                  <button
+                    class="media-btn"
+                    type="button"
+                    title="Grabar nota de voz"
+                    disabled={recordingReqIdx !== null}
+                    on:click={() => startRecording(idx)}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>
+                    <span>Grabar</span>
+                  </button>
                 </div>
                 <small class="media-hint">Máx. {MAX_EVIDENCIAS_PER_REQ} fotos/videos ({MAX_EVIDENCIA_SIZE_MB}MB c/u)</small>
 
@@ -755,16 +863,40 @@
                   </div>
                 {/if}
 
-                {#if req.nota_voz}
-                  <div class="nota-voz-chip">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-                    <span class="nota-voz-name">{req.nota_voz.name}</span>
-                    <button
-                      class="nota-voz-remove"
-                      on:click={() => removeNotaVoz(idx)}
-                    >
+                <!-- Recording indicator -->
+                {#if recordingReqIdx === idx}
+                  <div class="recording-indicator">
+                    <span class="recording-dot"></span>
+                    <span class="recording-time">{formatRecordingTime(recordingSeconds)}</span>
+                    <span class="recording-label">Grabando…</span>
+                    <button class="recording-stop-btn" type="button" on:click={stopRecording} title="Detener y guardar">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                      Detener
+                    </button>
+                    <button class="recording-cancel-btn" type="button" on:click={cancelRecording} title="Cancelar grabación">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
+                  </div>
+                {/if}
+
+                {#if req.nota_voz}
+                  <div class="nota-voz-card">
+                    <div class="nota-voz-header">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+                      <span class="nota-voz-name">{req.nota_voz.name}</span>
+                      <span class="nota-voz-size">{formatFileSize(req.nota_voz.size)}</span>
+                      <button
+                        class="nota-voz-remove"
+                        on:click={() => removeNotaVozWithPreview(idx)}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    </div>
+                    {#if notaVozPreviewUrl[idx]}
+                      <audio src={notaVozPreviewUrl[idx]} controls preload="metadata" class="nota-voz-player">
+                        <track kind="captions" />
+                      </audio>
+                    {/if}
                   </div>
                 {/if}
               </div>
@@ -1257,21 +1389,25 @@
     backdrop-filter: blur(2px);
   }
 
-  /* Nota de Voz chip */
-  .nota-voz-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    margin-top: 0.35rem;
-    padding: 0.35rem 0.65rem;
+  /* Nota de Voz card */
+  .nota-voz-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-top: 0.4rem;
+    padding: 0.5rem 0.65rem;
     background: #f0fdf4;
     border: 1px solid #bbf7d0;
-    border-radius: 20px;
+    border-radius: 8px;
+  }
+  .nota-voz-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
     font-size: 0.78rem;
     color: #166534;
-    max-width: 100%;
   }
-  .nota-voz-chip svg {
+  .nota-voz-header svg {
     flex-shrink: 0;
     opacity: 0.7;
   }
@@ -1280,6 +1416,12 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
+    flex: 1;
+  }
+  .nota-voz-size {
+    font-size: 0.68rem;
+    color: #4ade80;
+    flex-shrink: 0;
   }
   .nota-voz-remove {
     flex-shrink: 0;
@@ -1293,11 +1435,86 @@
     cursor: pointer;
     color: #16a34a;
     border-radius: 50%;
-    margin-left: auto;
   }
   .nota-voz-remove:hover {
     background: rgba(22, 163, 74, 0.12);
     color: #dc2626;
+  }
+  .nota-voz-player {
+    width: 100%;
+    height: 32px;
+    border-radius: 6px;
+  }
+
+  /* Recording indicator */
+  .recording-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.4rem;
+    padding: 0.45rem 0.65rem;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    color: #991b1b;
+  }
+  .recording-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ef4444;
+    animation: rec-pulse 1s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+  @keyframes rec-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  .recording-time {
+    font-family: monospace;
+    font-weight: 700;
+    font-size: 0.85rem;
+    min-width: 3.5ch;
+  }
+  .recording-label {
+    color: #b91c1c;
+    font-size: 0.72rem;
+    flex: 1;
+  }
+  .recording-stop-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 0.25rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    flex-shrink: 0;
+  }
+  .recording-stop-btn:hover {
+    background: #dc2626;
+  }
+  .recording-cancel-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    background: none;
+    border: 1px solid #fca5a5;
+    border-radius: 50%;
+    cursor: pointer;
+    color: #ef4444;
+    flex-shrink: 0;
+  }
+  .recording-cancel-btn:hover {
+    background: #fee2e2;
   }
 
   @media (max-width: 640px) {

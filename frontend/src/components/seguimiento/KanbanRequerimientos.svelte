@@ -69,6 +69,10 @@
   let cancelMotivo = "";
   let cancelDocFile: FileList | null = null;
 
+  // Lightbox for photos
+  let lightboxUrl = "";
+  let lightboxName = "";
+
   $: params = $navigationStore.params;
   $: filterVisitaId = params.visitaId || "";
 
@@ -192,6 +196,8 @@
   function closeDetail() {
     showDetailPanel = false;
     selectedReq = null;
+    lightboxUrl = "";
+    lightboxName = "";
   }
 
   function openAvanceForm() {
@@ -838,6 +844,20 @@
       </div>
 
       <div class="panel-body">
+        <!-- ID & Tipo -->
+        {#if selectedReq.rid}
+          <div class="panel-row">
+            <span class="panel-label">ID</span>
+            <span class="panel-info" style="font-family:monospace">{selectedReq.rid}</span>
+          </div>
+        {/if}
+        {#if selectedReq.tipo_requerimiento}
+          <div class="panel-row">
+            <span class="panel-label">Tipo</span>
+            <span class="panel-info">{selectedReq.tipo_requerimiento}</span>
+          </div>
+        {/if}
+
         <!-- Status & Priority -->
         <div class="panel-row">
           <span class="panel-label">Estado</span>
@@ -1076,6 +1096,65 @@
         {/if}
 
         <hr />
+
+        <!-- Evidencias: Fotos/Documentos adjuntos -->
+        {#if selectedReq.documentos_adjuntos.length > 0 || selectedReq.nota_voz_url}
+          <h4>Evidencias ({selectedReq.documentos_adjuntos.length}{selectedReq.nota_voz_url ? ' + audio' : ''})</h4>
+
+          <!-- Photo gallery -->
+          {#if selectedReq.documentos_adjuntos.length > 0}
+            <div class="media-gallery">
+              {#each selectedReq.documentos_adjuntos as doc, i}
+                {#if doc.tipo.startsWith('image/') || doc.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)}
+                  <button
+                    class="media-thumb"
+                    on:click={() => { lightboxUrl = doc.url; lightboxName = doc.nombre; }}
+                    type="button"
+                  >
+                    <img src={doc.url} alt={doc.nombre} loading="lazy" />
+                  </button>
+                {:else if doc.tipo.startsWith('video/') || doc.url.match(/\.(mp4|webm|mov)$/i)}
+                  <div class="media-video-card">
+                    <video src={doc.url} controls preload="metadata" class="media-video">
+                      <track kind="captions" />
+                    </video>
+                    <span class="media-name">{doc.nombre}</span>
+                  </div>
+                {:else}
+                  <a href={doc.url} target="_blank" rel="noopener" class="media-file-card">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <span class="media-name">{doc.nombre}</span>
+                  </a>
+                {/if}
+              {/each}
+            </div>
+          {/if}
+
+          <!-- Audio player -->
+          {#if selectedReq.nota_voz_url}
+            <div class="media-audio-section">
+              <span class="media-audio-label">Nota de voz</span>
+              <audio src={selectedReq.nota_voz_url} controls preload="metadata" class="media-audio-player">
+                <track kind="captions" />
+              </audio>
+            </div>
+          {/if}
+
+          <hr />
+        {/if}
+
+        <!-- Lightbox modal -->
+        {#if lightboxUrl}
+          <div class="lightbox-overlay" on:click={() => { lightboxUrl = ''; }} on:keydown={(e) => { if (e.key === 'Escape') lightboxUrl = ''; }} role="dialog" aria-modal="true" tabindex="-1">
+            <div class="lightbox-content" on:click|stopPropagation={() => {}}>
+              <button class="lightbox-close" on:click={() => { lightboxUrl = ''; }} type="button">&times;</button>
+              <img src={lightboxUrl} alt={lightboxName} class="lightbox-img" />
+              {#if lightboxName}
+                <span class="lightbox-caption">{lightboxName}</span>
+              {/if}
+            </div>
+          </div>
+        {/if}
 
         <!-- GPS -->
         {#if selectedReq.latitud && selectedReq.longitud}
@@ -1650,6 +1729,130 @@
     font-size: 0.75rem;
     font-family: monospace;
     color: #475569;
+  }
+
+  /* Media gallery */
+  .media-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 0.5rem;
+    margin: 0.5rem 0;
+  }
+  .media-thumb {
+    aspect-ratio: 1;
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: pointer;
+    border: 1px solid #e2e8f0;
+    padding: 0;
+    background: #f8fafc;
+  }
+  .media-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .media-video-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .media-video {
+    width: 100%;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    background: #000;
+    max-height: 160px;
+  }
+  .media-file-card {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 0.5rem;
+    text-decoration: none;
+    color: #475569;
+    font-size: 0.78rem;
+  }
+  .media-file-card:hover {
+    background: #f1f5f9;
+  }
+  .media-name {
+    font-size: 0.7rem;
+    color: #64748b;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .media-audio-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin: 0.5rem 0;
+  }
+  .media-audio-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #475569;
+  }
+  .media-audio-player {
+    width: 100%;
+    height: 36px;
+    border-radius: 6px;
+  }
+
+  /* Lightbox */
+  .lightbox-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+  .lightbox-content {
+    position: relative;
+    max-width: 90vw;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .lightbox-close {
+    position: absolute;
+    top: -12px;
+    right: -12px;
+    background: white;
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    color: #1e293b;
+    z-index: 1;
+  }
+  .lightbox-img {
+    max-width: 90vw;
+    max-height: 82vh;
+    object-fit: contain;
+    border-radius: 6px;
+  }
+  .lightbox-caption {
+    font-size: 0.8rem;
+    color: #e2e8f0;
+    text-align: center;
   }
 
   /* Enlace section */

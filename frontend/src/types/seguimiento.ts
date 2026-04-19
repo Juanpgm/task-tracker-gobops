@@ -91,9 +91,17 @@ export interface RegistroAvance {
   porcentaje_avance: number;
 }
 
+export interface DocumentoAdjunto {
+  nombre: string;
+  url: string;
+  tipo: string;
+}
+
 export interface Requerimiento {
   id: string;
+  rid?: string;
   visita_id: string;
+  tipo_requerimiento?: string;
   solicitante: Solicitante;
   centros_gestores: string[];       // multiselect: EMCALI, DAGMA, etc.
   descripcion: string;
@@ -102,6 +110,8 @@ export interface Requerimiento {
   latitud: string;
   longitud: string;
   evidencia_fotos: string[];        // URLs de fotos
+  nota_voz_url?: string | null;     // URL del audio grabado
+  documentos_adjuntos: DocumentoAdjunto[]; // Fotos/docs subidos a S3
   estado: EstadoRequerimiento;
   encargado?: string;                // persona asignada del centro gestor
   enlace_id?: string;                // ID del enlace del organismo asignado
