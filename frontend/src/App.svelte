@@ -18,6 +18,7 @@
   import KanbanRequerimientos from "./components/seguimiento/KanbanRequerimientos.svelte";
   import DirectorioEnlaces from "./components/seguimiento/DirectorioEnlaces.svelte";
   import ProgramarVisitaLibre from "./components/seguimiento/ProgramarVisitaLibre.svelte";
+  import ListaRequerimientosVisita from "./components/seguimiento/ListaRequerimientosVisita.svelte";
 
   let unsubscribeAuth: (() => void) | undefined;
   let showRegister = false;
@@ -65,6 +66,8 @@
     <RegistrarRequerimientosVisita />
   {:else if currentView === "kanban"}
     <KanbanRequerimientos />
+  {:else if currentView === "lista-requerimientos-visita"}
+    <ListaRequerimientosVisita />
   {:else if currentView === "directorio-enlaces"}
     <DirectorioEnlaces />
     <!-- Legacy views -->

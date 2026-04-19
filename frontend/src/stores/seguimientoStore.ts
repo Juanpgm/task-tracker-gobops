@@ -165,11 +165,15 @@ function createSeguimientoStore() {
             longitud: String(lng),
             evidencia_fotos: [],
             nota_voz_url: item.nota_voz_url || null,
-            documentos_adjuntos: (item.documentos_con_enlaces || item.documentos_s3 || []).map((d: Record<string, string>) => ({
-              nombre: d.nombre || 'archivo',
-              url: d.url || '',
-              tipo: d.tipo || '',
-            })),
+            documentos_adjuntos: (() => {
+              const raw = item.documentos_con_enlaces || item.documentos_s3 || [];
+              const arr = Array.isArray(raw) ? raw : [raw];
+              return arr.filter((d: Record<string, unknown>) => d && typeof d === 'object' && Object.keys(d).length > 0).map((d: Record<string, string>) => ({
+                nombre: d.filename || d.nombre || 'archivo',
+                url: d.url_visualizar || d.url_presigned || d.s3_url || d.url || '',
+                tipo: d.content_type || d.tipo || '',
+              }));
+            })(),
             rid: item.rid,
             tipo_requerimiento: item.tipo_requerimiento,
             estado,

@@ -7,6 +7,7 @@ export type AppView =
   | 'visitas-programadas'
   | 'registrar-requerimiento-visita'
   | 'kanban'
+  | 'lista-requerimientos-visita'
   | 'detalle-requerimiento'
   | 'directorio-enlaces'
   // legacy views

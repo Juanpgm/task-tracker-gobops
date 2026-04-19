@@ -288,8 +288,8 @@ export interface ObtenerRequerimientosItem {
   };
   organismos_encargados: string[];
   nota_voz_url: string | null;
-  documentos_s3: Array<{ nombre?: string; url?: string; tipo?: string }> | null;
-  documentos_con_enlaces: Array<{ nombre?: string; url?: string; tipo?: string }> | null;
+  documentos_s3: Array<{ filename?: string; s3_key?: string; content_type?: string; size?: number }> | Record<string, unknown> | null;
+  documentos_con_enlaces: Array<{ filename?: string; s3_key?: string; s3_url?: string; content_type?: string; size?: number; url_visualizar?: string; url_presigned?: string; url_descarga?: string }> | Record<string, unknown> | null;
   total_documentos: number;
   fecha_registro: string;
   created_at: string;

@@ -13,6 +13,7 @@
 
   onMount(() => {
     seguimientoStore.loadVisitas();
+    seguimientoStore.loadRequerimientos();
   });
 
   function getReqCount(visitaId: string): number {
@@ -211,9 +212,9 @@
                   variant="secondary"
                   size="sm"
                   on:click={() =>
-                    navigationStore.navigate("kanban", { visitaId: visita.id })}
+                    navigationStore.navigate("lista-requerimientos-visita", { visitaId: visita.id })}
                 >
-                  <span class="action-content"><Icon name="eye" size={14} /> Ver Kanban</span>
+                  <span class="action-content"><Icon name="eye" size={14} /> Ver Requerimientos</span>
                 </Button>
               {/if}
             </div>
