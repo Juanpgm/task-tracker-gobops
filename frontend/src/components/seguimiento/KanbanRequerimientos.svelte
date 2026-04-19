@@ -75,6 +75,13 @@
 
   // Audio helper for proxy URL
   function audioSrc(url: string): string {
+    // Presigned URLs have auth baked into query params — use them directly.
+    // <audio> skips CORS by default so there is no CORS issue.
+    // Vercel's edge rewrite strips Range headers, breaking audio streaming.
+    if (url.includes('X-Amz-Signature') || url.includes('x-amz-signature')) {
+      return url;
+    }
+    // Plain (non-presigned) S3 URLs still need the CORS proxy
     const s3Host = 'https://catatrack-photos.s3.amazonaws.com';
     if (url.startsWith(s3Host)) {
       return '/s3-audio' + url.slice(s3Host.length);
