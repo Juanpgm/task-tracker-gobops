@@ -140,6 +140,7 @@ export interface RequerimientoResponse {
   coords: { type: string; coordinates: number[] };
   estado: string;
   nota_voz_url: string | null;
+  documentos_urls: Array<{ nombre: string; url: string; tipo: string }> | null;
   fecha_registro: string;
   organismos_encargados: string[];
   timestamp: string;

@@ -149,7 +149,7 @@ export async function registrarAsistenciaComunidad(
  *  Registra un requerimiento con posible nota de voz (multipart/form-data)
  *  Campos: vid, datos_solicitante (JSON), tipo_requerimiento, requerimiento,
  *          observaciones, coords (GeoJSON), organismos_encargados (JSON array),
- *          nota_voz (file, optional)
+ *          nota_voz (file, optional), fotos (files[], optional)
  * ============================================================ */
 export async function registrarRequerimiento(
   payload: RequerimientoPayload
@@ -172,7 +172,7 @@ export async function registrarRequerimiento(
 
   if (payload.evidencias && payload.evidencias.length > 0) {
     for (const file of payload.evidencias) {
-      formData.append('evidencias', file);
+      formData.append('fotos', file);
     }
   }
 
