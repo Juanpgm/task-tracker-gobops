@@ -7,33 +7,18 @@
     ContactoDirectorio,
     AcompananteModel,
   } from "../../types";
-  import { CALI_GEOPOLITICA } from "../../data/cali-geopolitica";
   import Button from "../ui/Button.svelte";
   import Input from "../ui/Input.svelte";
   import Textarea from "../ui/Textarea.svelte";
   import Alert from "../ui/Alert.svelte";
   import Card from "../ui/Card.svelte";
-  import SearchableSelect from "../ui/SearchableSelect.svelte";
   import GroupedMultiSelect from "../ui/GroupedMultiSelect.svelte";
 
   let submitting = false;
   let successMsg = "";
   let errorMsg = "";
 
-  let barrio_vereda = "";
-  let comuna_corregimiento = "";
-
-  $: comunaOptions = CALI_GEOPOLITICA.map((c) => ({
-    value: c.nombre,
-    label: c.nombre,
-  }));
-
-  $: barrioOptions = comuna_corregimiento
-    ? (
-        CALI_GEOPOLITICA.find((c) => c.nombre === comuna_corregimiento)
-          ?.barrios_veredas ?? []
-      ).map((b) => ({ value: b.nombre, label: b.nombre }))
-    : [];
+  let direccion_visita = "";
   let descripcion_visita = "";
   let observaciones_visita = "";
   let fecha_visita = new Date().toISOString().split("T")[0];
@@ -94,8 +79,7 @@
 
   async function handleSubmit() {
     if (
-      !barrio_vereda ||
-      !comuna_corregimiento ||
+      !direccion_visita ||
       !descripcion_visita ||
       !fecha_visita ||
       !hora_visita
@@ -108,10 +92,9 @@
     successMsg = "";
     try {
       const payload: RegistrarVisitaPayload = {
-        barrio_vereda,
-        comuna_corregimiento,
+        direccion_visita,
         descripcion_visita,
-        observaciones_visita,
+        observaciones_visita: observaciones_visita.trim() || "Sin observaciones",
         acompanantes: acompanantes.length > 0 ? acompanantes : undefined,
         fecha_visita: formatDateForAPI(fecha_visita),
         hora_visita,
@@ -119,8 +102,7 @@
       const result = await registrarVisita(payload);
       successMsg = `Visita registrada exitosamente. ${result.vid ? `ID: ${result.vid}` : ""}`;
       // Reset
-      barrio_vereda = "";
-      comuna_corregimiento = "";
+      direccion_visita = "";
       descripcion_visita = "";
       observaciones_visita = "";
       fecha_visita = new Date().toISOString().split("T")[0];
@@ -155,27 +137,12 @@
 
     <Card padding="lg">
       <form on:submit|preventDefault={handleSubmit} class="form">
-        <SearchableSelect
-          id="comuna_corregimiento"
-          label="Comuna / Corregimiento"
-          placeholder="Buscar comuna o corregimiento..."
-          options={comunaOptions}
-          bind:value={comuna_corregimiento}
-          required
-          on:change={() => {
-            barrio_vereda = "";
-          }}
-        />
-
-        <SearchableSelect
-          id="barrio_vereda"
-          label="Barrio / Vereda"
-          placeholder={comuna_corregimiento
-            ? "Buscar barrio o vereda..."
-            : "Seleccione primero una comuna"}
-          options={barrioOptions}
-          bind:value={barrio_vereda}
-          disabled={!comuna_corregimiento}
+        <Input
+          id="direccion_visita"
+          type="text"
+          label="Dirección de la Visita"
+          placeholder="Ej: Calle 5 # 38-20, Barrio Aguablanca"
+          bind:value={direccion_visita}
           required
         />
 

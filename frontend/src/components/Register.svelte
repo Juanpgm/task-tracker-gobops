@@ -1,9 +1,11 @@
 <script lang="ts">
   import { registerUser, login } from "../api/auth";
   import type { RegisterUserPayload } from "../types";
+  import { CENTROS_GESTORES } from "../data/mock-seguimiento";
   import Button from "./ui/Button.svelte";
   import Input from "./ui/Input.svelte";
   import Alert from "./ui/Alert.svelte";
+  import SearchableSelect from "./ui/SearchableSelect.svelte";
   import { createEventDispatcher } from "svelte";
 
   const dispatch = createEventDispatcher();
@@ -19,6 +21,11 @@
     cellphone: "",
     nombre_centro_gestor: "",
   };
+
+  $: centroGestorOptions = CENTROS_GESTORES.map((cg) => ({
+    value: cg.nombre,
+    label: cg.nombre,
+  }));
 
   async function handleSubmit() {
     const normalizedForm: RegisterUserPayload = {
@@ -145,11 +152,11 @@
         disabled={loading}
       />
 
-      <Input
+      <SearchableSelect
         id="nombre_centro_gestor"
-        type="text"
         label="Centro Gestor"
-        placeholder="Nombre del centro gestor"
+        placeholder="Buscar centro gestor..."
+        options={centroGestorOptions}
         bind:value={form.nombre_centro_gestor}
         required
         disabled={loading}

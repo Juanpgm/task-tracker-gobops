@@ -92,8 +92,12 @@ function createSeguimientoStore() {
           return {
             id: v.vid,
             upid: '',
-            barrio_vereda: v.barrio_vereda,
-            comuna_corregimiento: v.comuna_corregimiento,
+            direccion_manual: v.direccion_visita || undefined,
+            barrio_vereda: v.barrio_vereda || undefined,
+            comuna_corregimiento: v.comuna_corregimiento || undefined,
+            latitud: v.coords?.coordinates?.[1] != null ? String(v.coords.coordinates[1]) : undefined,
+            longitud: v.coords?.coordinates?.[0] != null ? String(v.coords.coordinates[0]) : undefined,
+            geocoding_source: v.geocodificacion_fuente ? 'geocoded' as const : undefined,
             fecha_visita: fechaISO,
             hora_inicio: v.hora_visita || undefined,
             hora_fin: undefined,
@@ -206,16 +210,17 @@ function createSeguimientoStore() {
       );
       const [y, m, d] = fecha.split('-');
       const payload: RegistrarVisitaPayload = {
-        barrio_vereda: ubicacionManual?.barrio_vereda || 'Sin barrio',
-        comuna_corregimiento: ubicacionManual?.comuna_corregimiento || 'Sin comuna',
+        direccion_visita: ubicacionManual?.barrio_vereda
+          ? `${ubicacionManual.barrio_vereda}, ${ubicacionManual.comuna_corregimiento || ''}`
+          : 'Sin dirección',
         descripcion_visita: observaciones || 'Visita programada',
         observaciones_visita: observaciones || '',
-        acompanantes: {
-          nombre_completo: primerColab?.nombre || 'Sin acompañante',
-          telefono: primerColab?.telefono || '',
-          email: primerColab?.email || '',
-          centro_gestor: primerColab?.centro_gestor || '',
-        },
+        acompanantes: primerColab ? [{
+          nombre_completo: primerColab.nombre || 'Sin acompañante',
+          telefono: primerColab.telefono || '',
+          email: primerColab.email || '',
+          centro_gestor: primerColab.centro_gestor || '',
+        }] : undefined,
         fecha_visita: `${d}/${m}/${y}`,
         hora_visita: horaInicio || '09:00',
       };
@@ -282,16 +287,17 @@ function createSeguimientoStore() {
             const fechaFormatted = `${d}/${m}/${y}`;
             const primerColaborador = visita.colaboradores[0];
             const payload: RegistrarVisitaPayload = {
-              barrio_vereda: visita.barrio_vereda || 'Sin barrio',
-              comuna_corregimiento: visita.comuna_corregimiento || 'Sin comuna',
+              direccion_visita: visita.direccion_manual || visita.barrio_vereda
+                ? `${visita.barrio_vereda || ''}, ${visita.comuna_corregimiento || ''}`.replace(/^, |, $/g, '')
+                : 'Sin dirección',
               descripcion_visita: visita.observaciones || 'Visita iniciada desde seguimiento',
               observaciones_visita: visita.observaciones || 'Visita iniciada desde seguimiento',
-              acompanantes: {
-                nombre_completo: primerColaborador?.nombre || 'Sin acompañante',
-                telefono: primerColaborador?.telefono || '',
-                email: primerColaborador?.email || '',
-                centro_gestor: primerColaborador?.centro_gestor || '',
-              },
+              acompanantes: primerColaborador ? [{
+                nombre_completo: primerColaborador.nombre || 'Sin acompañante',
+                telefono: primerColaborador.telefono || '',
+                email: primerColaborador.email || '',
+                centro_gestor: primerColaborador.centro_gestor || '',
+              }] : undefined,
               fecha_visita: fechaFormatted,
               hora_visita: visita.hora_inicio || new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false }),
             };

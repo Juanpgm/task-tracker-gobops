@@ -153,8 +153,7 @@
       );
       const [y, m, d] = fechaVisita.split("-");
       const payload: RegistrarVisitaPayload = {
-        barrio_vereda: barrioVereda || direccion.trim(),
-        comuna_corregimiento: comunaCorregimiento || "Sin comuna",
+        direccion_visita: direccion.trim() || barrioVereda || "Sin dirección",
         descripcion_visita:
           observaciones || `Visita en ${direccion || "ubicación GPS"}`,
         observaciones_visita: observaciones || "",

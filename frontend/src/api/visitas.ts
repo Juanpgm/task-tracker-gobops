@@ -57,8 +57,11 @@ export async function registrarVisita(payload: RegistrarVisitaPayload): Promise<
 export interface ObtenerVisitasProgramadasItem {
   vid: string;
   vid_number: number;
-  barrio_vereda: string;
-  comuna_corregimiento: string;
+  direccion_visita?: string;
+  barrio_vereda: string | null;
+  comuna_corregimiento: string | null;
+  coords?: { type: string; coordinates: [number, number] } | null;
+  geocodificacion_fuente?: string;
   acompanantes: Record<string, string> | Record<string, string>[];
   descripcion_visita: string;
   observaciones_visita: string;

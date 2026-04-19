@@ -136,7 +136,7 @@
               <h3 class="card-title">{visita.id}</h3>
               <p class="card-location">
                 <Icon name="map-pin" size={14} />
-                {visita.barrio_vereda || "Sin barrio"}{#if visita.comuna_corregimiento}, {visita.comuna_corregimiento}{/if}
+                {visita.direccion_manual || visita.barrio_vereda || "Sin dirección"}{#if visita.comuna_corregimiento}, {visita.comuna_corregimiento}{/if}
               </p>
             </div>
 

@@ -45,38 +45,38 @@
   }
 </script>
 
-{#if $authStore.loading}
-  <div class="spinner"></div>
-{:else if !$authStore.isAuthenticated}
+{#if !$authStore.isAuthenticated && !$authStore.loading}
   {#if showRegister}
     <Register on:back={handleBackToLogin} on:success={handleRegisterSuccess} />
   {:else}
     <Login on:register={handleRegister} />
   {/if}
-{:else if currentView === "home"}
-  <Home />
-  <!-- Seguimiento workflow -->
-{:else if currentView === "programar-visita"}
-  <RegistrarVisita />
-{:else if currentView === "programar-visita-libre"}
-  <ProgramarVisitaLibre />
-{:else if currentView === "visitas-programadas"}
-  <VisitasProgramadas />
-{:else if currentView === "registrar-requerimiento-visita"}
-  <RegistrarRequerimientosVisita />
-{:else if currentView === "kanban"}
-  <KanbanRequerimientos />
-{:else if currentView === "directorio-enlaces"}
-  <DirectorioEnlaces />
-  <!-- Legacy views -->
-{:else if currentView === "asistencia-delegado"}
-  <AsistenciaDelegado />
-{:else if currentView === "asistencia-comunidad"}
-  <AsistenciaComunidad />
-{:else if currentView === "registrar-requerimiento"}
-  <RegistrarRequerimiento />
-{:else if currentView === "reportes"}
-  <Reportes />
-{:else}
-  <Home />
+{:else if $authStore.isAuthenticated}
+  {#if currentView === "home"}
+    <Home />
+    <!-- Seguimiento workflow -->
+  {:else if currentView === "programar-visita"}
+    <RegistrarVisita />
+  {:else if currentView === "programar-visita-libre"}
+    <ProgramarVisitaLibre />
+  {:else if currentView === "visitas-programadas"}
+    <VisitasProgramadas />
+  {:else if currentView === "registrar-requerimiento-visita"}
+    <RegistrarRequerimientosVisita />
+  {:else if currentView === "kanban"}
+    <KanbanRequerimientos />
+  {:else if currentView === "directorio-enlaces"}
+    <DirectorioEnlaces />
+    <!-- Legacy views -->
+  {:else if currentView === "asistencia-delegado"}
+    <AsistenciaDelegado />
+  {:else if currentView === "asistencia-comunidad"}
+    <AsistenciaComunidad />
+  {:else if currentView === "registrar-requerimiento"}
+    <RegistrarRequerimiento />
+  {:else if currentView === "reportes"}
+    <Reportes />
+  {:else}
+    <Home />
+  {/if}
 {/if}

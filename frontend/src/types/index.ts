@@ -47,8 +47,7 @@ export interface DirectorioContactosResponse {
 
 /** Payload para POST /registrar-visita/ (JSON body) */
 export interface RegistrarVisitaPayload {
-  barrio_vereda: string;
-  comuna_corregimiento: string;
+  direccion_visita: string;
   descripcion_visita: string;
   observaciones_visita: string;
   acompanantes?: AcompananteModel[];
@@ -61,11 +60,10 @@ export interface VisitaResponse {
   success: boolean;
   vid: string;
   message: string;
-  barrio_vereda: string;
-  comuna_corregimiento: string;
+  direccion_visita: string;
   descripcion_visita: string;
   observaciones_visita: string;
-  acompanantes: AcompananteModel;
+  acompanantes: AcompananteModel | AcompananteModel[] | null;
   fecha_visita: string;
   hora_visita: string;
   timestamp: string;
