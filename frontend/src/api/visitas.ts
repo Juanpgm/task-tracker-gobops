@@ -1,4 +1,4 @@
-import { apiClient, projectApiClient } from '../lib/api-client';
+import { apiClient, projectApiClient, uploadApiClient } from '../lib/api-client';
 import type {
   RegistrarVisitaPayload,
   VisitaResponse,
@@ -176,7 +176,7 @@ export async function registrarRequerimiento(
     }
   }
 
-  return apiClient.postForm<RequerimientoResponse>('/registrar-requerimiento', formData);
+  return uploadApiClient.postForm<RequerimientoResponse>('/registrar-requerimiento', formData);
 }
 
 /* ============================================================

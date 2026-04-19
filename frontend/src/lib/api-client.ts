@@ -1,5 +1,7 @@
 const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL || '/api/auth';
 const PROJECT_API_URL = import.meta.env.VITE_API_URL || '/api/project';
+// Direct URL for multipart/file uploads — bypasses Vercel proxy which can corrupt binary bodies
+const UPLOAD_API_URL = import.meta.env.VITE_UPLOAD_API_URL || import.meta.env.VITE_AUTH_API_URL || '/api/auth';
 
 class ApiClient {
   private baseUrl: string;
@@ -132,5 +134,8 @@ export const apiClient = new ApiClient(AUTH_API_URL);
 
 /** Gestor de proyectos — project API (gestorproyectoapi-production) */
 export const projectApiClient = new ApiClient(PROJECT_API_URL);
+
+/** Direct upload client — bypasses Vercel proxy for multipart/form-data file uploads */
+export const uploadApiClient = new ApiClient(UPLOAD_API_URL);
 
 export default apiClient;
