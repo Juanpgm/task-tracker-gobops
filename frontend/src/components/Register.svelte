@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { registerUser } from "../api/auth";
+  import { registerUser, login } from "../api/auth";
   import type { RegisterUserPayload } from "../types";
   import Button from "./ui/Button.svelte";
   import Input from "./ui/Input.svelte";
@@ -55,10 +55,14 @@
     successMsg = "";
     try {
       await registerUser(normalizedForm);
-      successMsg = "Usuario registrado exitosamente. Ya puede iniciar sesión.";
-      setTimeout(() => {
+      successMsg = "Registro exitoso. Iniciando sesión...";
+      try {
+        await login(normalizedForm.email, normalizedForm.password);
+      } catch {
+        successMsg = "";
+        errorMsg = "Registro exitoso, pero no se pudo iniciar sesión automáticamente. Intente iniciar sesión manualmente.";
         dispatch("success");
-      }, 2000);
+      }
     } catch (err) {
       errorMsg =
         err instanceof Error ? err.message : "Error al registrar usuario.";

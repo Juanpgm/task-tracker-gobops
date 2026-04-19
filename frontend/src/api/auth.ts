@@ -155,6 +155,8 @@ export function initAuthListener(): () => void {
         authStore.login(user);
       } catch (error) {
         console.error('Session validation failed:', error);
+        apiClient.setToken(null);
+        projectApiClient.setToken(null);
         if (!authStore.restoreSession()) {
           authStore.logout();
         }
@@ -169,19 +171,35 @@ export function initAuthListener(): () => void {
 
 /**
  * Registra un nuevo usuario en el sistema.
+ * Usa fetch directo sin auth (endpoint público) para evitar interferencia
+ * con tokens de sesión previos en apiClient.
  */
 export async function registerUser(payload: RegisterUserPayload): Promise<string> {
+  const baseUrl = import.meta.env.VITE_AUTH_API_URL || '/api/auth';
+  const url = `${baseUrl}/auth/register`;
+
   try {
-    const response = await apiClient.post<Record<string, unknown>>('/auth/register', payload as unknown as Record<string, unknown>);
-    if (typeof response?.message === 'string') {
-      return response.message;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`POST /auth/register failed (${response.status}): ${errorBody}`);
+    }
+
+    const data = await response.json();
+    if (typeof data?.message === 'string') {
+      return data.message;
     }
     return 'Usuario registrado exitosamente';
   } catch (error: unknown) {
     let message = 'Error al registrar usuario';
     if (error instanceof Error) {
       if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-        message = 'No se pudo conectar con el servidor de autenticación. Verifique CORS/URL del API en producción.';
+        message = 'No se pudo conectar con el servidor de autenticación. Verifique su conexión a internet.';
       } else if (error.message.includes('already exists') || error.message.includes('ya existe') || error.message.includes('EMAIL_EXISTS')) {
         message = 'Este correo electrónico ya está registrado.';
       } else if (error.message.includes('weak-password') || error.message.includes('WEAK_PASSWORD')) {
