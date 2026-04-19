@@ -3,6 +3,7 @@
   import { seguimientoStore } from "../../stores/seguimientoStore";
   import { CENTROS_GESTORES } from "../../data/mock-seguimiento";
   import type { Requerimiento } from "../../types/seguimiento";
+  import Icon from "../ui/Icon.svelte";
 
   onMount(() => {
     seguimientoStore.loadRequerimientos();
@@ -226,7 +227,7 @@
   <!-- Header -->
   <div class="db-header">
     <div class="db-header-left">
-      <h2 class="db-title">📊 Dashboard de Gestión</h2>
+      <h2 class="db-title"><Icon name="bar-chart" size={20} /> Dashboard de Gestión</h2>
       <span class="db-subtitle"
         >Indicadores de visitas y requerimientos — Alcaldía de Cali</span
       >
@@ -257,42 +258,42 @@
   <!-- ── KPI Cards ── -->
   <div class="kpi-row">
     <div class="kpi-card kpi-blue">
-      <span class="kpi-icon">📋</span>
+      <span class="kpi-icon"><Icon name="clipboard-list" size={22} /></span>
       <div class="kpi-body">
         <span class="kpi-value">{totalReqs}</span>
         <span class="kpi-label">Requerimientos</span>
       </div>
     </div>
     <div class="kpi-card kpi-green">
-      <span class="kpi-icon">🗺️</span>
+      <span class="kpi-icon"><Icon name="map-pin" size={22} /></span>
       <div class="kpi-body">
         <span class="kpi-value">{totalVisitas}</span>
         <span class="kpi-label">Visitas realizadas</span>
       </div>
     </div>
     <div class="kpi-card kpi-teal">
-      <span class="kpi-icon">✅</span>
+      <span class="kpi-icon"><Icon name="check-circle" size={22} /></span>
       <div class="kpi-body">
         <span class="kpi-value">{tasaResolucion}%</span>
         <span class="kpi-label">Tasa de resolución</span>
       </div>
     </div>
     <div class="kpi-card kpi-purple">
-      <span class="kpi-icon">📈</span>
+      <span class="kpi-icon"><Icon name="trending-up" size={22} /></span>
       <div class="kpi-body">
         <span class="kpi-value">{avgAvance}%</span>
         <span class="kpi-label">Avance promedio</span>
       </div>
     </div>
     <div class="kpi-card kpi-orange">
-      <span class="kpi-icon">🚨</span>
+      <span class="kpi-icon"><Icon name="alert-triangle" size={22} /></span>
       <div class="kpi-body">
         <span class="kpi-value">{urgentes}</span>
         <span class="kpi-label">Urgentes</span>
       </div>
     </div>
     <div class="kpi-card kpi-violet">
-      <span class="kpi-icon">📄</span>
+      <span class="kpi-icon"><Icon name="file-text" size={22} /></span>
       <div class="kpi-body">
         <span class="kpi-value">{conOrfeo}</span>
         <span class="kpi-label">Con No. Orfeo</span>
@@ -304,7 +305,7 @@
   <div class="charts-row">
     <!-- Estado Chart -->
     <div class="chart-card">
-      <h3 class="chart-title">📊 Requerimientos por Estado</h3>
+      <h3 class="chart-title"><Icon name="bar-chart" size={16} /> Requerimientos por Estado</h3>
       <div class="hbar-list">
         {#each byEstado as e}
           {#if e.count > 0 || totalReqs === 0}
@@ -330,7 +331,7 @@
 
     <!-- Prioridad Chart -->
     <div class="chart-card">
-      <h3 class="chart-title">🎯 Distribución por Prioridad</h3>
+      <h3 class="chart-title"><Icon name="crosshair" size={16} /> Distribución por Prioridad</h3>
       <div class="prio-grid">
         {#each byPrioridad as p}
           <div class="prio-cell" style="border-color: {p.color}">
@@ -383,7 +384,7 @@
 
   <!-- ── Centro Gestor chart ── -->
   <div class="chart-card chart-card-wide">
-    <h3 class="chart-title">🏢 Requerimientos por Centro Gestor</h3>
+    <h3 class="chart-title"><Icon name="grid" size={16} /> Requerimientos por Centro Gestor</h3>
     {#if byCentroGestor.length === 0}
       <p class="chart-empty">Sin datos en el periodo seleccionado</p>
     {:else}
@@ -410,7 +411,7 @@
 
   <!-- ── Tendencia Histórica ── -->
   <div class="chart-card chart-card-wide">
-    <h3 class="chart-title">📅 Tendencia Histórica — Mes a Mes</h3>
+    <h3 class="chart-title"><Icon name="calendar" size={16} /> Tendencia Histórica — Mes a Mes</h3>
     <div class="legend-row">
       <span class="legend-item"
         ><span class="legend-dot" style="background:#2563eb"
@@ -453,7 +454,7 @@
 
   <!-- ── Tabla resumen ── -->
   <div class="chart-card chart-card-wide">
-    <h3 class="chart-title">📋 Resumen por Comuna</h3>
+    <h3 class="chart-title"><Icon name="clipboard-list" size={16} /> Resumen por Comuna</h3>
     {#if tablaComunas.length === 0}
       <p class="chart-empty">Sin datos en el periodo seleccionado</p>
     {:else}
@@ -577,7 +578,6 @@
     font-weight: 600;
     color: #64748b;
     cursor: pointer;
-    transition: all 0.15s;
   }
   .period-pill.active {
     background: #2563eb;
@@ -627,11 +627,9 @@
     align-items: center;
     gap: 0.75rem;
     border: 1px solid #e2e8f0;
-    transition: transform 0.15s;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   }
   .kpi-card:hover {
-    transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   }
   .kpi-icon {
@@ -749,7 +747,6 @@
   .hbar-fill {
     height: 100%;
     border-radius: 4px;
-    transition: width 0.5s ease;
   }
   .hbar-val {
     font-size: 0.72rem;
@@ -873,7 +870,6 @@
     width: 10px;
     border-radius: 3px 3px 0 0;
     min-height: 2px;
-    transition: height 0.4s ease;
   }
   .trend-bar-req {
     background: #2563eb;

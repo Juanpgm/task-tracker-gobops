@@ -13,6 +13,7 @@
   import Button from "../ui/Button.svelte";
   import Alert from "../ui/Alert.svelte";
   import Card from "../ui/Card.svelte";
+  import Icon from "../ui/Icon.svelte";
 
   let visita: VisitaProgramada | null = null;
   let visitaReqs: Requerimiento[] = [];
@@ -288,7 +289,7 @@
           tipo_requerimiento: req.tipo_requerimiento,
           requerimiento: req.descripcion,
           direccion_requerimiento: req.direccion || undefined,
-          observaciones: req.observaciones,
+          observaciones: req.observaciones || "N/A",
           coords,
           organismos_encargados: organismosEncargados,
           nota_voz: req.nota_voz,
@@ -300,7 +301,7 @@
         registrados++;
       }
 
-      successMsg = `✅ ${registrados} requerimiento(s) registrado(s) para ${solNombre}`;
+      successMsg = `${registrados} requerimiento(s) registrado(s) para ${solNombre}`;
 
       // Reload requerimientos from API to refresh list
       seguimientoStore.loadRequerimientos();
@@ -401,7 +402,7 @@
       on:click={() => navigationStore.navigate("visitas-programadas")}
       >← Visitas</button
     >
-    <h2 class="view-title">📝 Requerimientos</h2>
+    <h2 class="view-title"><Icon name="edit" size={20} /> Requerimientos</h2>
   </header>
 
   <main class="view-body">
@@ -419,18 +420,18 @@
               .unidad_proyecto.nombre_up_detalle}
           </div>
           <div class="up-banner-right">
-            <span>📍 {visita.unidad_proyecto.direccion}</span>
-            <span>📅 {visita.fecha_visita}</span>
+            <span><Icon name="map-pin" size={13} /> {visita.unidad_proyecto.direccion}</span>
+            <span><Icon name="calendar" size={13} /> {visita.fecha_visita}</span>
           </div>
         {:else}
           <div class="up-banner-left">
-            <span class="up-tipo-badge">📍 Sin UP</span>
+            <span class="up-tipo-badge"><Icon name="map-pin" size={13} /> Sin UP</span>
             <strong>{visita.direccion_manual || "Sin dirección"}</strong>
             {#if visita.barrio_vereda}
               — {visita.barrio_vereda}{/if}
           </div>
           <div class="up-banner-right">
-            <span>📅 {visita.fecha_visita}</span>
+            <span><Icon name="calendar" size={13} /> {visita.fecha_visita}</span>
           </div>
         {/if}
       </div>
@@ -446,7 +447,7 @@
         <!-- Existing requirements for this visit -->
         {#if visitaReqs.length > 0}
           <div class="existing-section">
-            <h3>📋 Requerimientos de esta visita ({visitaReqs.length})</h3>
+            <h3><Icon name="clipboard-list" size={16} /> Requerimientos de esta visita ({visitaReqs.length})</h3>
             <div class="req-list">
               {#each visitaReqs as req (req.id)}
                 <div
@@ -473,8 +474,8 @@
                       : ""}
                   </p>
                   <div class="req-mini-footer">
-                    <span>👤 {req.solicitante.nombre_completo}</span>
-                    <span>🏢 {req.centros_gestores.join(", ")}</span>
+                    <span><Icon name="user" size={13} /> {req.solicitante.nombre_completo}</span>
+                    <span><Icon name="grid" size={13} /> {req.centros_gestores.join(", ")}</span>
                   </div>
                 </div>
               {/each}
@@ -491,12 +492,12 @@
                 errorMsg = "";
               }}
             >
-              ➕ Registrar Nuevo Requerimiento
+              <Icon name="plus" size={16} /> Registrar Nuevo Requerimiento
             </Button>
           </div>
         {:else}
           <Card padding="lg">
-            <h3 class="form-section-title">👤 Datos del Solicitante</h3>
+            <h3 class="form-section-title"><Icon name="user" size={16} /> Datos del Solicitante</h3>
             <p class="form-hint">
               Persona de la comunidad que realiza la petición
             </p>
@@ -543,7 +544,7 @@
               class="form-hint"
               style="margin-top: 0.5rem; font-size: 0.75rem;"
             >
-              📍 El barrio y comuna se determinan automáticamente a partir de
+              El barrio y comuna se determinan automáticamente a partir de
               las coordenadas GPS.
             </p>
           </Card>
@@ -552,12 +553,12 @@
           {#each requerimientosDraft as req, idx (idx)}
             <Card padding="lg">
               <div class="req-header-row">
-                <h3 class="form-section-title">📝 Requerimiento #{idx + 1}</h3>
+                <h3 class="form-section-title"><Icon name="edit" size={16} /> Requerimiento #{idx + 1}</h3>
                 {#if requerimientosDraft.length > 1}
                   <button
                     class="remove-req-btn"
                     on:click={() => eliminarRequerimiento(idx)}
-                    >🗑️ Eliminar</button
+                    ><Icon name="trash" size={14} /> Eliminar</button
                   >
                 {/if}
               </div>
@@ -701,7 +702,7 @@
                     <span>Cámara</span>
                     <input
                       type="file"
-                      accept="image/*,video/*"
+                      accept="image/*"
                       capture="environment"
                       on:change={(e) => handleEvidencias(idx, e)}
                       hidden
@@ -772,7 +773,7 @@
 
           <div class="add-req-row">
             <button class="add-req-btn" on:click={agregarRequerimiento}>
-              ➕ Agregar otro requerimiento (mismo solicitante)
+              <Icon name="plus" size={16} /> Agregar otro requerimiento (mismo solicitante)
             </button>
           </div>
 
@@ -785,7 +786,7 @@
               }}>Cancelar</Button
             >
             <Button on:click={guardarRequerimientos} loading={submitting}>
-              💾 Guardar {requerimientosDraft.length} Requerimiento{requerimientosDraft.length >
+              Guardar {requerimientosDraft.length} Requerimiento{requerimientosDraft.length >
               1
                 ? "s"
                 : ""}
@@ -974,7 +975,6 @@
     font-family: inherit;
     outline: none;
     background: #fff;
-    transition: border-color 0.2s, box-shadow 0.2s;
   }
   .field input:focus,
   .field textarea:focus,
@@ -1062,7 +1062,6 @@
     font-size: 0.8rem;
     text-align: left;
     color: var(--text);
-    transition: background 0.1s;
   }
   .cg-dropdown-option:hover { background: #f1f5f9; }
   .cg-dropdown-option.active { background: #eff6ff; }
@@ -1077,7 +1076,6 @@
     font-size: 0.65rem;
     color: white;
     flex-shrink: 0;
-    transition: all 0.15s;
   }
   .cg-check.checked {
     border-color: currentColor;
@@ -1129,7 +1127,6 @@
     font-weight: 600;
     cursor: pointer;
     width: 100%;
-    transition: all 0.2s;
   }
   .add-req-btn:hover {
     background: #f0f7ff;
@@ -1177,7 +1174,6 @@
     font-size: 0.8rem;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.15s ease;
     font-family: inherit;
   }
   .media-btn:hover {
@@ -1244,7 +1240,6 @@
     justify-content: center;
     line-height: 1;
     backdrop-filter: blur(4px);
-    transition: background 0.15s;
   }
   .evidencia-remove:hover {
     background: rgba(220, 38, 38, 0.8);
@@ -1299,7 +1294,6 @@
     color: #16a34a;
     border-radius: 50%;
     margin-left: auto;
-    transition: background 0.15s;
   }
   .nota-voz-remove:hover {
     background: rgba(22, 163, 74, 0.12);

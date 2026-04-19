@@ -6,6 +6,7 @@
   import Button from '../ui/Button.svelte';
   import Input from '../ui/Input.svelte';
   import Alert from '../ui/Alert.svelte';
+  import Icon from '../ui/Icon.svelte';
   import Card from '../ui/Card.svelte';
 
   let submitting = false;
@@ -74,7 +75,7 @@
 <div class="view">
   <header class="view-header">
     <button class="back-btn" on:click={() => navigationStore.goHome()}>← Volver</button>
-    <h2 class="view-title">👤 Asistencia Delegado</h2>
+    <h2 class="view-title"><Icon name="user" size={20} /> Asistencia Delegado</h2>
   </header>
 
   <main class="view-body container">
@@ -169,7 +170,7 @@
             loading={gettingLocation}
             disabled={gettingLocation}
           >
-            📍 {gettingLocation ? 'Obteniendo...' : 'Capturar Ubicación'}
+            <Icon name="crosshair" size={16} /> {gettingLocation ? 'Obteniendo...' : 'Capturar Ubicación'}
           </Button>
         </div>
 

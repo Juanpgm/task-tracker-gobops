@@ -32,7 +32,6 @@
     border-radius: var(--radius-md);
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.15s ease;
     font-family: inherit;
     line-height: 1;
     white-space: nowrap;

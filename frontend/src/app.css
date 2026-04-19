@@ -75,10 +75,7 @@ a:hover {
   text-decoration: underline;
 }
 
-/* ---- Smooth transitions ---- */
-button, a, input, textarea, select {
-  transition: all 0.15s ease;
-}
+
 
 /* ---- Scrollbar (subtle) ---- */
 ::-webkit-scrollbar {

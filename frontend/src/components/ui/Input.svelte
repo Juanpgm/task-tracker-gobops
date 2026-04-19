@@ -77,9 +77,6 @@
     font-family: inherit;
     color: var(--text);
     background: var(--surface);
-    transition:
-      border-color 0.15s ease,
-      box-shadow 0.15s ease;
   }
   .input::placeholder {
     color: #cbd5e1;

@@ -157,7 +157,7 @@ export async function registrarRequerimiento(
   formData.append('tipo_requerimiento', payload.tipo_requerimiento);
   formData.append('requerimiento', payload.requerimiento);
   if (payload.direccion_requerimiento) {
-    formData.append('direccion_requerimiento', payload.direccion_requerimiento);
+    formData.append('direccion', payload.direccion_requerimiento);
   }
   formData.append('observaciones', payload.observaciones);
   formData.append('coords', payload.coords);

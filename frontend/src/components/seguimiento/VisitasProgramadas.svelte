@@ -4,10 +4,11 @@
   import { seguimientoStore } from "../../stores/seguimientoStore";
   import type { VisitaProgramada } from "../../types/seguimiento";
   import Button from "../ui/Button.svelte";
+  import Icon from "../ui/Icon.svelte";
 
   $: visitas = $seguimientoStore.visitas;
   $: requerimientos = $seguimientoStore.requerimientos;
-  $: loading = $seguimientoStore.loading;
+  $: loading = $seguimientoStore.loading && visitas.length === 0;
   $: error = $seguimientoStore.error;
 
   onMount(() => {
@@ -103,52 +104,64 @@
       {#each visitas as visita (visita.id)}
         {@const estilo = getEstadoStyle(visita.estado)}
         {@const reqCount = getReqCount(visita.id)}
-        <div
-          class="visita-card"
-          style="border-left: 4px solid {estilo.border};"
-        >
-          <!-- Header -->
-          <div class="visita-header">
-            <span
-              class="badge"
-              style="background: {estilo.bg}; color: {estilo.color};"
-            >
-              {estadoLabel(visita.estado)}
-            </span>
-            <span class="visita-fecha">{formatDate(visita.fecha_visita)}</span>
-            {#if visita.hora_inicio}
-              <span class="visita-hora"
-                >{visita.hora_inicio}{visita.hora_fin
-                  ? ` – ${visita.hora_fin}`
-                  : ""}</span
+        <div class="visita-card">
+          <!-- Top accent bar -->
+          <div class="card-accent" style="background: {estilo.border};"></div>
+
+          <div class="card-content">
+            <!-- Header row: badge + date/time -->
+            <div class="card-top-row">
+              <span
+                class="badge"
+                style="background: {estilo.bg}; color: {estilo.color};"
               >
-            {/if}
-          </div>
-
-          <!-- Body -->
-          <div class="visita-body">
-            <h3 class="visita-up-name">{visita.id}</h3>
-            <p class="visita-up-detail">
-              {visita.barrio_vereda || "Sin barrio"}{#if visita.comuna_corregimiento}, {visita.comuna_corregimiento}{/if}
-            </p>
-
-            {#if visita.descripcion_visita}
-              <p class="visita-descripcion">{visita.descripcion_visita}</p>
-            {/if}
-
-            <div class="visita-meta">
-              <span class="meta-tag">
-                {visita.colaboradores.length} acompañante{visita.colaboradores.length !== 1 ? "s" : ""}
+                {estadoLabel(visita.estado)}
               </span>
-              {#if reqCount > 0}
-                <span class="meta-tag meta-tag--highlight">
-                  {reqCount} requerimiento{reqCount !== 1 ? "s" : ""}
+              <div class="card-datetime">
+                <span class="date-chip">
+                  <Icon name="calendar" size={13} />
+                  {formatDate(visita.fecha_visita)}
                 </span>
+                {#if visita.hora_inicio}
+                  <span class="time-chip">
+                    <Icon name="clock" size={13} />
+                    {visita.hora_inicio}{visita.hora_fin ? ` – ${visita.hora_fin}` : ""}
+                  </span>
+                {/if}
+              </div>
+            </div>
+
+            <!-- Title + location -->
+            <div class="card-title-section">
+              <h3 class="card-title">{visita.id}</h3>
+              <p class="card-location">
+                <Icon name="map-pin" size={14} />
+                {visita.barrio_vereda || "Sin barrio"}{#if visita.comuna_corregimiento}, {visita.comuna_corregimiento}{/if}
+              </p>
+            </div>
+
+            <!-- Description -->
+            {#if visita.descripcion_visita}
+              <p class="card-description">{visita.descripcion_visita}</p>
+            {/if}
+
+            <!-- Stats row -->
+            <div class="card-stats">
+              <div class="stat-pill">
+                <Icon name="users" size={14} />
+                <span>{visita.colaboradores.length} acompañante{visita.colaboradores.length !== 1 ? "s" : ""}</span>
+              </div>
+              {#if reqCount > 0}
+                <div class="stat-pill stat-pill--warning">
+                  <Icon name="clipboard-list" size={14} />
+                  <span>{reqCount} requerimiento{reqCount !== 1 ? "s" : ""}</span>
+                </div>
               {/if}
             </div>
 
+            <!-- Avatars -->
             {#if visita.colaboradores.length > 0}
-              <div class="col-avatars">
+              <div class="card-avatars">
                 {#each visita.colaboradores.slice(0, 5) as col}
                   <div class="avatar" title={col.nombre}>
                     {col.nombre.charAt(0)}
@@ -162,44 +175,48 @@
               </div>
             {/if}
 
+            <!-- Observations -->
             {#if visita.observaciones}
-              <p class="visita-obs">{visita.observaciones}</p>
+              <div class="card-obs">
+                <Icon name="message-circle" size={14} />
+                <p>{visita.observaciones}</p>
+              </div>
             {/if}
-          </div>
 
-          <!-- Actions -->
-          <div class="visita-actions">
-            {#if visita.estado === "programada"}
-              <Button
-                variant="secondary"
-                size="sm"
-                on:click={() => iniciarVisita(visita.id)}
-              >
-                Iniciar Visita
+            <!-- Actions -->
+            <div class="card-actions">
+              {#if visita.estado === "programada"}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  on:click={() => iniciarVisita(visita.id)}
+                >
+                  <span class="action-content"><Icon name="play" size={14} /> Iniciar Visita</span>
+                </Button>
+              {/if}
+              {#if visita.estado === "en-curso"}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  on:click={() => finalizarVisita(visita.id)}
+                >
+                  <span class="action-content"><Icon name="check-circle" size={14} /> Finalizar</span>
+                </Button>
+              {/if}
+              <Button size="sm" on:click={() => irARequerimientos(visita)}>
+                <span class="action-content"><Icon name="clipboard-list" size={14} /> Registrar Requerimientos</span>
               </Button>
-            {/if}
-            {#if visita.estado === "en-curso"}
-              <Button
-                variant="secondary"
-                size="sm"
-                on:click={() => finalizarVisita(visita.id)}
-              >
-                Finalizar
-              </Button>
-            {/if}
-            <Button size="sm" on:click={() => irARequerimientos(visita)}>
-              Registrar Requerimientos
-            </Button>
-            {#if reqCount > 0}
-              <Button
-                variant="secondary"
-                size="sm"
-                on:click={() =>
-                  navigationStore.navigate("kanban", { visitaId: visita.id })}
-              >
-                Ver Kanban
-              </Button>
-            {/if}
+              {#if reqCount > 0}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  on:click={() =>
+                    navigationStore.navigate("kanban", { visitaId: visita.id })}
+                >
+                  <span class="action-content"><Icon name="eye" size={14} /> Ver Kanban</span>
+                </Button>
+              {/if}
+            </div>
           </div>
         </div>
       {/each}
@@ -248,7 +265,6 @@
     font-size: 0.8rem;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.15s;
   }
   .add-btn:hover {
     background: #1d4ed8;
@@ -263,10 +279,10 @@
   .container {
     display: flex;
     flex-direction: column;
-    gap: 0.85rem;
+    gap: 1rem;
   }
 
-  /* ---- Status states (loading / error / empty) ---- */
+  /* ---- Status states ---- */
   .status-state {
     text-align: center;
     padding: 4rem 1rem;
@@ -303,106 +319,137 @@
   /* ---- Card ---- */
   .visita-card {
     background: white;
-    border-radius: 10px;
+    border-radius: 12px;
     border: 1px solid #e2e8f0;
-    border-left: 4px solid #93c5fd;
     overflow: hidden;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-    transition: box-shadow 0.2s;
   }
-  .visita-card:hover {
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  .card-accent {
+    height: 4px;
+    width: 100%;
+  }
+  .card-content {
+    padding: 1rem 1.15rem 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
   }
 
-  .visita-header {
+  /* ---- Top row ---- */
+  .card-top-row {
     display: flex;
     align-items: center;
     gap: 0.6rem;
-    padding: 0.6rem 1rem;
-    background: #f8fafc;
-    border-bottom: 1px solid #f1f5f9;
+    flex-wrap: wrap;
   }
   .badge {
-    padding: 0.2rem 0.6rem;
+    padding: 0.18rem 0.55rem;
     border-radius: 5px;
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     font-weight: 700;
     letter-spacing: 0.02em;
     text-transform: capitalize;
+    white-space: nowrap;
   }
-  .visita-fecha {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: #334155;
-  }
-  .visita-hora {
-    font-size: 0.75rem;
-    color: #94a3b8;
+  .card-datetime {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     margin-left: auto;
   }
-
-  /* ---- Body ---- */
-  .visita-body {
-    padding: 0.85rem 1rem;
+  .date-chip,
+  .time-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.76rem;
+    font-weight: 500;
+    color: #475569;
+    background: #f1f5f9;
+    padding: 0.2rem 0.55rem;
+    border-radius: 6px;
   }
-  .visita-up-name {
-    font-size: 1rem;
+  .time-chip {
+    color: #64748b;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+  }
+
+  /* ---- Title + location ---- */
+  .card-title-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .card-title {
+    font-size: 1.05rem;
     font-weight: 700;
     color: #0f172a;
     margin: 0;
     line-height: 1.3;
   }
-  .visita-up-detail {
+  .card-location {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
     font-size: 0.8rem;
     color: #64748b;
-    margin: 0.15rem 0 0.5rem;
-  }
-  .visita-descripcion {
-    font-size: 0.8rem;
-    color: #334155;
-    margin: 0 0 0.6rem;
-    line-height: 1.4;
+    margin: 0;
   }
 
-  /* ---- Meta tags ---- */
-  .visita-meta {
+  /* ---- Description ---- */
+  .card-description {
+    font-size: 0.82rem;
+    color: #334155;
+    line-height: 1.45;
+    margin: 0;
+    padding: 0.45rem 0.65rem;
+    background: #f8fafc;
+    border-radius: 8px;
+    border-left: 3px solid #e2e8f0;
+  }
+
+  /* ---- Stats ---- */
+  .card-stats {
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
-    margin-bottom: 0.65rem;
   }
-  .meta-tag {
-    font-size: 0.72rem;
+  .stat-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.73rem;
+    font-weight: 500;
     color: #475569;
     background: #f1f5f9;
-    padding: 0.2rem 0.55rem;
-    border-radius: 4px;
-    font-weight: 500;
+    padding: 0.22rem 0.6rem;
+    border-radius: 20px;
   }
-  .meta-tag--highlight {
+  .stat-pill--warning {
     background: #fef3c7;
     color: #92400e;
     font-weight: 600;
   }
 
   /* ---- Avatars ---- */
-  .col-avatars {
+  .card-avatars {
     display: flex;
-    margin-bottom: 0.5rem;
   }
   .avatar {
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
     background: #3b82f6;
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.7rem;
+    font-size: 0.72rem;
     font-weight: 700;
     border: 2px solid white;
-    margin-left: -6px;
+    margin-left: -7px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   }
   .avatar:first-child {
     margin-left: 0;
@@ -412,20 +459,35 @@
     font-size: 0.65rem;
   }
 
-  .visita-obs {
-    font-size: 0.8rem;
-    color: #64748b;
+  /* ---- Observations ---- */
+  .card-obs {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    padding: 0.4rem 0.6rem;
+    background: #fffbeb;
+    border: 1px solid #fef3c7;
+    border-radius: 8px;
+    color: #92400e;
+  }
+  .card-obs p {
+    font-size: 0.78rem;
     font-style: italic;
-    margin: 0.5rem 0 0;
-    line-height: 1.45;
+    line-height: 1.4;
+    margin: 0;
   }
 
   /* ---- Actions ---- */
-  .visita-actions {
+  .card-actions {
     display: flex;
-    gap: 0.5rem;
-    padding: 0.65rem 1rem;
-    border-top: 1px solid #f1f5f9;
+    gap: 0.45rem;
     flex-wrap: wrap;
+    padding-top: 0.5rem;
+    border-top: 1px solid #f1f5f9;
+  }
+  .action-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
   }
 </style>

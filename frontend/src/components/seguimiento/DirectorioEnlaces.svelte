@@ -5,6 +5,7 @@
   import { getDirectorioContactos } from "../../api/visitas";
   import type { ContactoDirectorio } from "../../types";
   import type { Requerimiento } from "../../types/seguimiento";
+  import Icon from "../ui/Icon.svelte";
 
   /* Palette for dynamically-assigned CG colors */
   const CG_PALETTE = [
@@ -209,14 +210,14 @@
     <button class="back-btn" on:click={() => navigationStore.goHome()}
       >← Volver</button
     >
-    <h2 class="view-title">📇 Directorio de Enlaces</h2>
+    <h2 class="view-title"><Icon name="address-book" size={20} /> Directorio de Enlaces</h2>
   </header>
 
   <main class="view-body">
     {#if loading}
-      <div class="loading-msg">⏳ Cargando directorio de contactos...</div>
+      <div class="loading-msg">Cargando directorio de contactos...</div>
     {:else if errorMsg}
-      <div class="error-msg">⚠️ {errorMsg}</div>
+      <div class="error-msg">{errorMsg}</div>
     {:else}
       <!-- Summary Cards -->
       <div class="summary-row">
@@ -242,7 +243,7 @@
 
       <!-- Centro Gestor Panorama -->
       <section class="cg-panorama">
-        <h3 class="section-title">🏢 Panorama por Centro Gestor</h3>
+        <h3 class="section-title"><Icon name="grid" size={16} /> Panorama por Centro Gestor</h3>
         <div class="cg-grid">
           {#each centrosGestores as cg (cg.id)}
             {@const stats = centroStats[cg.id]}
@@ -295,7 +296,7 @@
           <input
             type="text"
             class="search-input"
-            placeholder="🔍 Buscar enlace por nombre, cargo, email..."
+            placeholder="Buscar enlace por nombre, cargo, email..."
             bind:value={searchText}
           />
           <div class="filter-chips">
@@ -328,7 +329,7 @@
 
       <!-- Enlaces Table -->
       <section class="enlaces-section">
-        <h3 class="section-title">👥 Enlaces ({filteredEnlaces.length})</h3>
+        <h3 class="section-title"><Icon name="users" size={16} /> Enlaces ({filteredEnlaces.length})</h3>
         <div class="table-wrapper">
           <table class="enlaces-table">
             <thead>
@@ -364,8 +365,8 @@
                   <td class="td-cargo">{enlace.cargo}</td>
                   <td class="td-dep">{enlace.cedula || "—"}</td>
                   <td class="td-contacto">
-                    <span class="contact-line">📧 {enlace.email}</span>
-                    <span class="contact-line">📱 {enlace.telefono}</span>
+                    <span class="contact-line">{enlace.email}</span>
+                    <span class="contact-line">{enlace.telefono}</span>
                   </td>
                   <td>
                     <span
@@ -432,7 +433,7 @@
 
                         {#if enlaceReqs.length > 0}
                           <h4 class="reqs-title">
-                            📝 Requerimientos Asignados ({enlaceReqs.length})
+                          <Icon name="edit" size={14} /> Requerimientos Asignados ({enlaceReqs.length})
                           </h4>
                           <div class="reqs-mini-list">
                             {#each enlaceReqs as req (req.id)}
@@ -583,7 +584,6 @@
     padding: 0.6rem 0.75rem;
     cursor: pointer;
     text-align: left;
-    transition: all 0.15s;
     width: 100%;
   }
   .cg-card:hover {
@@ -673,7 +673,6 @@
     font-weight: 600;
     color: #64748b;
     cursor: pointer;
-    transition: all 0.15s;
   }
   .fchip.active {
     background: #2563eb;
@@ -727,7 +726,6 @@
     vertical-align: middle;
   }
   .enlace-row {
-    transition: background 0.1s;
   }
   .enlace-row:hover {
     background: #f8fafc;

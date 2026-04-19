@@ -8,10 +8,24 @@
     EstadoRequerimiento,
   } from "../../types/seguimiento";
   import { CENTROS_GESTORES } from "../../data/mock-seguimiento";
+  import { getDirectorioContactos } from "../../api/visitas";
+  import type { ContactoDirectorio } from "../../types";
   import Button from "../ui/Button.svelte";
 
-  onMount(() => {
+  let directorio: ContactoDirectorio[] = [];
+  let loadingDirectorio = false;
+
+  onMount(async () => {
     seguimientoStore.loadRequerimientos();
+    try {
+      loadingDirectorio = true;
+      const res = await getDirectorioContactos();
+      directorio = res.contactos || [];
+    } catch (e) {
+      console.error('Error cargando directorio de contactos:', e);
+    } finally {
+      loadingDirectorio = false;
+    }
   });
 
   let filterVisitaId = "";
@@ -365,19 +379,32 @@
     return v ? `${v.barrio_vereda || "Visita"} — ${v.fecha_visita}` : visitaId;
   }
 
-  // Enlaces
-  $: allEnlaces = $seguimientoStore.enlaces.filter((e) => e.activo);
-  $: enlacesForSelectedReq = selectedReq
-    ? allEnlaces.filter((e) =>
-        selectedReq!.centros_gestores.includes(e.centro_gestor_nombre),
+  // Contactos del directorio filtrados por centros gestores del requerimiento
+  $: contactosForSelectedReq = selectedReq
+    ? directorio.filter((c) =>
+        selectedReq!.centros_gestores.includes(c.centro_gestor),
       )
     : [];
 
+  $: contactosGrouped = (() => {
+    const groups: Record<string, ContactoDirectorio[]> = {};
+    for (const c of contactosForSelectedReq) {
+      if (!groups[c.centro_gestor]) groups[c.centro_gestor] = [];
+      groups[c.centro_gestor].push(c);
+    }
+    return groups;
+  })();
+
   function handleAsignarEnlace() {
     if (!selectedReq || !enlaceSeleccionado) return;
-    const enlace = allEnlaces.find((e) => e.id === enlaceSeleccionado);
-    if (enlace) {
-      seguimientoStore.asignarEnlace(selectedReq.id, enlace.id, enlace.nombre);
+    const contacto = directorio.find((c) => c.id === enlaceSeleccionado);
+    if (contacto) {
+      const nombreCompleto = `${contacto.nombres} ${contacto.apellidos}`;
+      seguimientoStore.asignarEnlace(
+        selectedReq.id,
+        contacto.id,
+        nombreCompleto,
+      );
     }
     enlaceSeleccionado = "";
   }
@@ -848,21 +875,21 @@
         <!-- Enlace del Organismo -->
         <h4>Enlace del Organismo</h4>
         {#if selectedReq.enlace_nombre}
-          {@const enlaceObj = $seguimientoStore.enlaces.find(
-            (e) => e.id === selectedReq?.enlace_id,
+          {@const contactoObj = directorio.find(
+            (c) => c.id === selectedReq?.enlace_id,
           )}
           <div class="enlace-assigned">
             <div class="enlace-info">
               <span class="enlace-name">{selectedReq.enlace_nombre}</span>
-              {#if enlaceObj}
+              {#if contactoObj}
                 <span class="enlace-meta"
-                  >{enlaceObj.cargo} — {enlaceObj.centro_gestor_nombre}</span
+                  >{contactoObj.funcion} — {contactoObj.centro_gestor}</span
                 >
-                {#if enlaceObj.email}<span class="enlace-contact"
-                    >{enlaceObj.email}</span
+                {#if contactoObj.email}<span class="enlace-contact"
+                    >{contactoObj.email}</span
                   >{/if}
-                {#if enlaceObj.telefono}<span class="enlace-contact"
-                    >{enlaceObj.telefono}</span
+                {#if contactoObj.telefono}<span class="enlace-contact"
+                    >{contactoObj.telefono}</span
                   >{/if}
               {/if}
             </div>
@@ -900,14 +927,22 @@
             Sin enlace asignado
           </p>
         {/if}
-        {#if enlacesForSelectedReq.length > 0}
+        {#if loadingDirectorio}
+          <p class="panel-info-sm" style="color: #94a3b8;">
+            Cargando directorio de contactos...
+          </p>
+        {:else if contactosForSelectedReq.length > 0}
           <div class="enlace-assign-form">
             <select class="enlace-select" bind:value={enlaceSeleccionado}>
               <option value="">— Asignar enlace —</option>
-              {#each enlacesForSelectedReq as enl}
-                <option value={enl.id}
-                  >{enl.nombre} ({enl.cargo} - {enl.centro_gestor_nombre})</option
-                >
+              {#each Object.entries(contactosGrouped) as [cg, contactos]}
+                <optgroup label={cg}>
+                  {#each contactos as c}
+                    <option value={c.id}
+                      >{c.nombres} {c.apellidos} ({c.funcion})</option
+                    >
+                  {/each}
+                </optgroup>
               {/each}
             </select>
             <button
@@ -918,8 +953,8 @@
           </div>
         {:else}
           <p class="panel-info-sm" style="color: #94a3b8;">
-            No hay enlaces registrados para los centros gestores de este
-            requerimiento
+            No hay contactos en el directorio para los organismos encargados de
+            este requerimiento
           </p>
         {/if}
 
@@ -1242,7 +1277,6 @@
     font-weight: 500;
     cursor: pointer;
     padding: 0.25rem 0;
-    transition: color 0.15s;
   }
   .back-btn:hover {
     color: #1e293b;
@@ -1281,7 +1315,6 @@
     font-weight: 500;
     color: #64748b;
     cursor: pointer;
-    transition: all 0.15s;
   }
   .toggle-btn.active {
     background: #1e293b;
@@ -1371,7 +1404,6 @@
     padding: 0.5rem 0.6rem;
     text-align: left;
     cursor: pointer;
-    transition: all 0.15s;
     width: 100%;
     border-left: 3px solid transparent;
   }
@@ -1676,7 +1708,6 @@
     font-weight: 500;
     cursor: pointer;
     white-space: nowrap;
-    transition: background 0.15s;
   }
   .enlace-assign-btn:hover:not(:disabled) {
     background: #0f172a;
@@ -1844,9 +1875,6 @@
     line-height: 1.35;
   }
   .tabla-row {
-    transition:
-      background 0.1s,
-      filter 0.1s;
     cursor: pointer;
   }
   .tabla-row:hover {
@@ -2025,7 +2053,6 @@
     font-weight: 500;
     color: #475569;
     cursor: pointer;
-    transition: all 0.15s;
   }
   .filter-toggle-btn:hover {
     background: #f8f9fb;
@@ -2185,7 +2212,6 @@
     font-size: 0.78rem;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.15s;
     text-align: center;
   }
   .cancel-req-btn:hover {

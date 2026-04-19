@@ -136,6 +136,7 @@ export interface RequerimientoResponse {
   tipo_requerimiento: string;
   requerimiento: string;
   observaciones: string;
+  direccion: string | null;
   barrio_vereda: string | null;
   comuna_corregimiento: string | null;
   coords: { type: string; coordinates: number[] };

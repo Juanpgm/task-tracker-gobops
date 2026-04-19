@@ -64,7 +64,6 @@
     background-repeat: no-repeat;
     background-position: right 0.75rem center;
     padding-right: 2rem;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
   .select:focus {
     outline: none;

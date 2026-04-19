@@ -9,6 +9,7 @@
   import Button from '../ui/Button.svelte';
   import Alert from '../ui/Alert.svelte';
   import Card from '../ui/Card.svelte';
+  import Icon from '../ui/Icon.svelte';
 
   let up: UnidadProyecto | null = null;
   let loading = true;
@@ -98,11 +99,11 @@
         observaciones
       );
 
-      successMsg = `✅ Visita programada exitosamente para ${fechaVisita}`;
+      successMsg = `Visita programada exitosamente para ${fechaVisita}`;
 
       // Simulate Google Calendar integration notification
       setTimeout(() => {
-        successMsg += '\n📅 Se envió invitación de calendario a los colaboradores asignados.';
+        successMsg += '\nSe envió invitación de calendario a los colaboradores asignados.';
       }, 1500);
 
     } catch (err) {
@@ -117,7 +118,7 @@
 <div class="view">
   <header class="view-header">
     <button class="back-btn" on:click={() => navigationStore.navigate('programar-visita')}>← Unidades</button>
-    <h2 class="view-title">📅 Programar Visita</h2>
+    <h2 class="view-title"><Icon name="calendar" size={20} /> Programar Visita</h2>
   </header>
 
   <main class="view-body container">
@@ -152,19 +153,19 @@
 
           <div class="info-grid">
             <div class="info-item">
-              <span class="info-label">📍 Dirección</span>
+              <span class="info-label">Dirección</span>
               <span class="info-value">{up.direccion || 'No especificada'}</span>
             </div>
             <div class="info-item">
-              <span class="info-label">🔧 Intervención</span>
+              <span class="info-label">Intervención</span>
               <span class="info-value">{up.tipo_intervencion || '—'}</span>
             </div>
             <div class="info-item">
-              <span class="info-label">💰 Presupuesto</span>
+              <span class="info-label">Presupuesto</span>
               <span class="info-value">{formatCurrency(up.presupuesto_base)}</span>
             </div>
             <div class="info-item">
-              <span class="info-label">📊 Estado</span>
+              <span class="info-label">Estado</span>
               <span class="info-value estado" class:terminado={up.estado === 'Terminado'}>{up.estado || 'Sin estado'}</span>
             </div>
           </div>
@@ -186,7 +187,7 @@
 
         <!-- Schedule Form -->
         <Card padding="lg">
-          <h3 class="section-title">📅 Datos de la Visita</h3>
+          <h3 class="section-title"><Icon name="calendar" size={16} /> Datos de la Visita</h3>
 
           <div class="form-grid">
             <div class="form-field">
@@ -211,7 +212,7 @@
 
         <!-- Colaboradores -->
         <Card padding="lg">
-          <h3 class="section-title">👥 Asignar Colaboradores *</h3>
+          <h3 class="section-title"><Icon name="users" size={16} /> Asignar Colaboradores *</h3>
           <p class="section-hint">Seleccione las personas que participarán en la visita. Se les enviará una invitación de calendario.</p>
 
           <div class="colaboradores-grid">
@@ -228,7 +229,7 @@
                   <small class="col-cg">{col.centro_gestor}</small>
                 </div>
                 <div class="col-check">
-                  {#if selectedColaboradores.includes(col.id)}✅{:else}◻️{/if}
+                  {#if selectedColaboradores.includes(col.id)}<Icon name="check-circle" size={16} />{:else}<Icon name="square" size={16} />{/if}
                 </div>
               </button>
             {/each}
@@ -243,7 +244,7 @@
         <div class="submit-area">
           <Button variant="secondary" on:click={() => navigationStore.navigate('programar-visita')}>Cancelar</Button>
           <Button on:click={handleProgramar} loading={submitting} disabled={submitting}>
-            {submitting ? 'Programando...' : '📅 Programar Visita'}
+            {submitting ? 'Programando...' : 'Programar Visita'}
           </Button>
         </div>
       {/if}
@@ -281,7 +282,7 @@
   .avance-label { font-size: 0.72rem; color: #94a3b8; font-weight: 600; }
   .avance-bar-wrap { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem; }
   .avance-bar-bg { flex: 1; height: 10px; background: #e2e8f0; border-radius: 5px; overflow: hidden; }
-  .avance-bar-fill { height: 100%; border-radius: 5px; transition: width 0.3s; }
+  .avance-bar-fill { height: 100%; border-radius: 5px; }
   .avance-pct { font-size: 0.875rem; font-weight: 700; min-width: 40px; text-align: right; }
 
   /* Form */
@@ -300,7 +301,7 @@
   .col-card {
     display: flex; align-items: center; gap: 0.6rem; padding: 0.65rem;
     border: 2px solid #e2e8f0; border-radius: 8px; background: white;
-    cursor: pointer; transition: all 0.2s; text-align: left; width: 100%;
+    cursor: pointer; text-align: left; width: 100%;
   }
   .col-card:hover { border-color: #93c5fd; }
   .col-card.selected { border-color: #2563eb; background: #eff6ff; }

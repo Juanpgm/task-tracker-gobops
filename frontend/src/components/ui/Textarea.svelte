@@ -57,7 +57,6 @@
     color: var(--text);
     background: var(--surface);
     resize: vertical;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
   .textarea:focus {
     outline: none;

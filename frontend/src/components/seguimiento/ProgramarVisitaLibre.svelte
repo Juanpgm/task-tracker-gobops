@@ -13,6 +13,7 @@
   import type { Colaborador } from "../../types/seguimiento";
   import Button from "../ui/Button.svelte";
   import Alert from "../ui/Alert.svelte";
+  import Icon from "../ui/Icon.svelte";
   import Card from "../ui/Card.svelte";
 
   let errorMsg = "";
@@ -61,7 +62,7 @@
       latitud = coords.latitud.toFixed(6);
       longitud = coords.longitud.toFixed(6);
       geocodingSource = "gps";
-      geoMsg = `📍 GPS obtenido: ${formatCoordinates(coords)} (precisión: ${coords.accuracy?.toFixed(0) || "?"}m)`;
+      geoMsg = `GPS obtenido: ${formatCoordinates(coords)} (precisión: ${coords.accuracy?.toFixed(0) || "?"}m)`;
 
       // Intentar geocodificación inversa
       const result = await reverseGeocode(coords.latitud, coords.longitud);
@@ -74,7 +75,7 @@
           );
           if (match) comunaCorregimiento = match.nombre;
         }
-        geoMsg += "\n✅ Dirección obtenida por geocodificación inversa.";
+        geoMsg += "\nDirección obtenida por geocodificación inversa.";
       }
     } catch (err) {
       errorMsg = err instanceof Error ? err.message : "Error al obtener GPS";
@@ -103,10 +104,10 @@
         latitud = result.latitud.toFixed(6);
         longitud = result.longitud.toFixed(6);
         geocodingSource = "geocoded";
-        geoMsg = `✅ Ubicación encontrada: ${result.direccion_formateada}`;
+        geoMsg = `Ubicación encontrada: ${result.direccion_formateada}`;
       } else {
         geoMsg =
-          "⚠️ No se encontró la ubicación. Intente ser más específico o use el GPS.";
+          "No se encontró la ubicación. Intente ser más específico o use el GPS.";
       }
     } catch {
       errorMsg = "Error al geocodificar la dirección.";
@@ -168,7 +169,7 @@
       };
       const result = await registrarVisita(payload);
 
-      successMsg = `✅ Visita registrada para ${fechaVisita} en ${direccion || "ubicación GPS"}${result.vid ? ` (ID: ${result.vid})` : ""}`;
+      successMsg = `Visita registrada para ${fechaVisita} en ${direccion || "ubicación GPS"}${result.vid ? ` (ID: ${result.vid})` : ""}`;
     } catch {
       errorMsg = "Error al programar la visita.";
     } finally {
@@ -184,7 +185,7 @@
       on:click={() => navigationStore.navigate("programar-visita")}
       >← Unidades</button
     >
-    <h2 class="view-title">📍 Programar Visita sin UP</h2>
+    <h2 class="view-title"><Icon name="map-pin" size={20} /> Programar Visita sin UP</h2>
   </header>
 
   <main class="view-body container">
@@ -207,7 +208,7 @@
 
       <!-- Ubicación -->
       <Card padding="lg">
-        <h3 class="section-title">📍 Ubicación del Punto de Intervención</h3>
+        <h3 class="section-title"><Icon name="map-pin" size={16} /> Ubicación del Punto de Intervención</h3>
         <p class="section-hint">
           Ingrese la dirección o use el GPS del dispositivo. Se intentará
           geocodificar automáticamente.
@@ -221,7 +222,7 @@
             loading={geoLoading}
             disabled={geoLoading}
           >
-            {geoLoading ? "Obteniendo..." : "📡 Usar GPS del dispositivo"}
+            {geoLoading ? "Obteniendo..." : "Usar GPS del dispositivo"}
           </Button>
         </div>
 
@@ -289,7 +290,7 @@
               loading={geoLoading}
               disabled={geoLoading || !direccion.trim()}
             >
-              🔍 Geocodificar dirección
+              <Icon name="search" size={14} /> Geocodificar dirección
             </Button>
             <button class="link-btn" on:click={ingresarCoordenadas}>
               Ingresar coordenadas manualmente
@@ -319,7 +320,7 @@
 
           {#if latitud && longitud}
             <div class="coords-preview">
-              📌 Coordenadas: {latitud}, {longitud}
+              Coordenadas: {latitud}, {longitud}
               <span class="coords-source"
                 >({geocodingSource === "gps"
                   ? "GPS"
@@ -334,7 +335,7 @@
 
       <!-- Datos de la visita -->
       <Card padding="lg">
-        <h3 class="section-title">📅 Datos de la Visita</h3>
+        <h3 class="section-title"><Icon name="calendar" size={16} /> Datos de la Visita</h3>
 
         <div class="form-grid-3">
           <div class="form-field">
@@ -364,7 +365,7 @@
 
       <!-- Colaboradores -->
       <Card padding="lg">
-        <h3 class="section-title">👥 Asignar Colaboradores *</h3>
+        <h3 class="section-title"><Icon name="users" size={16} /> Asignar Colaboradores *</h3>
         <p class="section-hint">
           Seleccione las personas que participarán en la visita.
         </p>
@@ -383,7 +384,7 @@
                 <small class="col-cg">{col.centro_gestor}</small>
               </div>
               <div class="col-check">
-                {#if selectedColaboradores.includes(col.id)}✅{:else}◻️{/if}
+                {#if selectedColaboradores.includes(col.id)}<Icon name="check-circle" size={16} />{:else}<Icon name="square" size={16} />{/if}
               </div>
             </button>
           {/each}
@@ -411,7 +412,7 @@
           loading={submitting}
           disabled={submitting}
         >
-          {submitting ? "Programando..." : "📅 Programar Visita"}
+          {submitting ? "Programando..." : "Programar Visita"}
         </Button>
       </div>
     {/if}
@@ -575,7 +576,6 @@
     border-radius: 8px;
     background: white;
     cursor: pointer;
-    transition: all 0.2s;
     text-align: left;
     width: 100%;
   }

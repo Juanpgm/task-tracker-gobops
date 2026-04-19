@@ -6,6 +6,7 @@
   import type { AsistenciaComunidadPayload, Coordenadas } from '../../types';
   import Button from '../ui/Button.svelte';
   import Input from '../ui/Input.svelte';
+  import Icon from '../ui/Icon.svelte';
   import Select from '../ui/Select.svelte';
   import Alert from '../ui/Alert.svelte';
   import Card from '../ui/Card.svelte';
@@ -95,7 +96,7 @@
 <div class="view">
   <header class="view-header">
     <button class="back-btn" on:click={() => navigationStore.goHome()}>← Volver</button>
-    <h2 class="view-title">👥 Asistencia Comunidad</h2>
+    <h2 class="view-title"><Icon name="users" size={20} /> Asistencia Comunidad</h2>
   </header>
 
   <main class="view-body container">
@@ -206,7 +207,7 @@
             loading={gettingLocation}
             disabled={gettingLocation}
           >
-            📍 {gettingLocation ? 'Obteniendo...' : 'Capturar Ubicación'}
+            <Icon name="crosshair" size={16} /> {gettingLocation ? 'Obteniendo...' : 'Capturar Ubicación'}
           </Button>
         </div>
 

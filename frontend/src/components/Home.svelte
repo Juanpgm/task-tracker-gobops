@@ -5,6 +5,7 @@
   import { logout } from '../api/auth';
   import Button from './ui/Button.svelte';
   import Card from './ui/Card.svelte';
+  import Icon from './ui/Icon.svelte';
   import ChangePassword from './ChangePassword.svelte';
 
   let loggingOut = false;
@@ -29,49 +30,49 @@
       id: 'programar-visita',
       title: 'Programar Visita',
       description: 'Buscar UP y programar una visita con colaboradores',
-      icon: '📅',
+      icon: 'calendar',
       color: '#2563eb',
     },
     {
       id: 'visitas-programadas',
       title: 'Visitas Programadas',
       description: 'Ver visitas activas e iniciar registros',
-      icon: '📋',
+      icon: 'clipboard-list',
       color: '#7c3aed',
     },
     {
       id: 'kanban',
       title: 'Gestión Requerimientos',
       description: 'Tablero Kanban de estados y seguimiento',
-      icon: '📊',
+      icon: 'bar-chart',
       color: '#0891b2',
     },
     {
       id: 'directorio-enlaces',
       title: 'Directorio de Enlaces',
       description: 'Consultar enlaces de organismos y sus requerimientos',
-      icon: '📇',
+      icon: 'address-book',
       color: '#0d9488',
     },
     {
       id: 'asistencia-delegado',
       title: 'Asistencia Delegado',
       description: 'Registrar asistencia de delegados al evento',
-      icon: '👤',
+      icon: 'user',
       color: '#d97706',
     },
     {
       id: 'asistencia-comunidad',
       title: 'Asistencia Comunidad',
       description: 'Registrar asistencia de la comunidad',
-      icon: '👥',
+      icon: 'users',
       color: '#16a34a',
     },
     {
       id: 'reportes',
       title: 'Reportes',
       description: 'Consultar y gestionar reportes del grupo operativo',
-      icon: '📈',
+      icon: 'trending-up',
       color: '#64748b',
     },
   ];
@@ -92,7 +93,7 @@
         </div>
         <div class="header-actions">
           <Button variant="ghost" size="sm" on:click={() => showChangePassword = true}>
-            🔐
+            <Icon name="lock" size={18} />
           </Button>
           <Button variant="ghost" size="sm" on:click={handleLogout} loading={loggingOut}>
             Salir
@@ -117,14 +118,14 @@
         >
           <Card padding="md">
             <div class="action-inner">
-              <span class="action-icon" style="background:{action.color}15; color:{action.color}">
-                {action.icon}
+              <span class="action-icon" style="background:{action.color}12; color:{action.color}">
+                <Icon name={action.icon} size={22} />
               </span>
               <div class="action-text">
                 <h3 class="action-title">{action.title}</h3>
                 <p class="action-desc">{action.description}</p>
               </div>
-              <span class="action-arrow">→</span>
+              <span class="action-arrow"><Icon name="chevron-right" size={18} /></span>
             </div>
           </Card>
         </button>
@@ -231,13 +232,6 @@
     cursor: pointer;
     text-align: left;
     width: 100%;
-    transition: transform 0.15s ease;
-  }
-  .action-card:hover {
-    transform: translateY(-1px);
-  }
-  .action-card:active {
-    transform: translateY(0);
   }
   .action-inner {
     display: flex;

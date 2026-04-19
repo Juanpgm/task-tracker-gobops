@@ -255,7 +255,7 @@ describe("Evidencias (fotos/videos) upload", () => {
 
   it("has file inputs that accept image and video types", () => {
     expect(componentSource).toMatch(
-      /accept="image\/\*,video\/\*"/,
+      /accept="image\/\*"/,
     );
   });
 

@@ -7,6 +7,7 @@
   import Alert from '../ui/Alert.svelte';
   import Card from '../ui/Card.svelte';
   import Modal from '../ui/Modal.svelte';
+  import Icon from '../ui/Icon.svelte';
   import DashboardRequerimientos from './DashboardRequerimientos.svelte';
 
   let loading = false;
@@ -61,19 +62,19 @@
 <div class="view">
   <header class="view-header">
     <button class="back-btn" on:click={() => navigationStore.goHome()}>← Volver</button>
-    <h2 class="view-title">📊 Reportes</h2>
+    <h2 class="view-title"><Icon name="bar-chart" size={20} /> Reportes</h2>
     <!-- Tab selector -->
     <div class="tabs">
       <button class="tab" class:active={activeTab === 'dashboard'} on:click={() => (activeTab = 'dashboard')}>
-        📊 Dashboard
+        <Icon name="bar-chart" size={15} /> Dashboard
       </button>
       <button class="tab" class:active={activeTab === 'lista'} on:click={() => (activeTab = 'lista')}>
-        📋 Lista de Reportes
+        <Icon name="list" size={15} /> Lista de Reportes
       </button>
     </div>
     {#if activeTab === 'lista'}
       <Button variant="ghost" size="sm" on:click={loadReportes} disabled={loading}>
-        🔄 Actualizar
+        <Icon name="arrow-right" size={14} /> Actualizar
       </Button>
     {/if}
   </header>
@@ -96,7 +97,7 @@
       {:else if reportes.length === 0}
         <Card padding="lg">
           <div class="empty-state">
-            <span class="empty-icon">📋</span>
+            <span class="empty-icon"><Icon name="clipboard-list" size={32} /></span>
             <p class="empty-text">No hay reportes disponibles</p>
             <Button variant="secondary" size="sm" on:click={loadReportes}>
               Reintentar
@@ -116,18 +117,18 @@
                   {/if}
                   <div class="reporte-meta">
                     {#if reporte.barrio_vereda}
-                      <span class="meta-tag">📍 {reporte.barrio_vereda}</span>
+                      <span class="meta-tag"><Icon name="map-pin" size={13} /> {reporte.barrio_vereda}</span>
                     {/if}
                     {#if reporte.comuna_corregimiento}
-                      <span class="meta-tag">🏘️ {reporte.comuna_corregimiento}</span>
+                      <span class="meta-tag"><Icon name="grid" size={13} /> {reporte.comuna_corregimiento}</span>
                     {/if}
                     {#if reporte.fecha_visita}
-                      <span class="meta-tag">📅 {reporte.fecha_visita}</span>
+                      <span class="meta-tag"><Icon name="calendar" size={13} /> {reporte.fecha_visita}</span>
                     {/if}
                   </div>
                 </div>
                 <Button variant="danger" size="sm" on:click={() => confirmDelete(reporte)}>
-                  🗑️
+                  <Icon name="trash" size={15} />
                 </Button>
               </div>
             </Card>
@@ -213,7 +214,6 @@
     font-weight: 600;
     color: #64748b;
     cursor: pointer;
-    transition: all 0.15s;
     font-family: inherit;
   }
   .tab.active {

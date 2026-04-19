@@ -6,6 +6,7 @@
   import Button from "../ui/Button.svelte";
   import Input from "../ui/Input.svelte";
   import Alert from "../ui/Alert.svelte";
+  import Icon from "../ui/Icon.svelte";
 
   let loading = true;
   let errorMsg = "";
@@ -170,12 +171,12 @@
     <button class="back-btn" on:click={() => navigationStore.goHome()}
       >← Volver</button
     >
-    <h2 class="view-title">📋 Unidades de Proyecto</h2>
+    <h2 class="view-title"><Icon name="clipboard-list" size={20} /> Unidades de Proyecto</h2>
     <button
       class="btn-sin-up"
       on:click={() => navigationStore.navigate("programar-visita-libre")}
     >
-      📍 Programar sin UP
+      <Icon name="map-pin" size={14} /> Programar sin UP
     </button>
     <span class="badge-count">{filtered.length} de {allUnidades.length}</span>
   </header>
@@ -197,7 +198,7 @@
       <!-- Search bar -->
       <div class="search-bar container">
         <div class="search-input-wrap">
-          <span class="search-icon">🔍</span>
+          <span class="search-icon"><Icon name="search" size={16} /></span>
           <input
             type="text"
             placeholder="Buscar por nombre, dirección, UPID..."
@@ -220,7 +221,7 @@
           class:active={showFilters}
           on:click={() => (showFilters = !showFilters)}
         >
-          🎛️ Filtros {showFilters ? "▲" : "▼"}
+          <Icon name="filter" size={14} /> Filtros {showFilters ? "▲" : "▼"}
         </button>
       </div>
 
@@ -456,7 +457,6 @@
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
-    transition: all 0.2s;
   }
   .btn-sin-up:hover {
     background: #16a34a;
@@ -504,7 +504,6 @@
     border-radius: 8px;
     font-size: 0.875rem;
     outline: none;
-    transition: border-color 0.2s;
   }
   .search-input:focus {
     border-color: #2563eb;
@@ -526,7 +525,6 @@
     font-size: 0.8rem;
     cursor: pointer;
     white-space: nowrap;
-    transition: all 0.2s;
   }
   .filter-toggle.active {
     background: #2563eb;
@@ -615,7 +613,6 @@
   }
   .up-table tbody tr {
     cursor: pointer;
-    transition: background 0.15s;
   }
   .up-table tbody tr:hover {
     background: #f0f7ff;
@@ -681,7 +678,6 @@
   .avance-fill {
     height: 100%;
     border-radius: 3px;
-    transition: width 0.3s;
   }
   .avance-text {
     font-size: 0.72rem;
@@ -700,7 +696,6 @@
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
-    transition: background 0.2s;
   }
   .btn-select:hover {
     background: #1d4ed8;

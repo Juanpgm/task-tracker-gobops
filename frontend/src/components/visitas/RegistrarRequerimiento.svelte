@@ -13,6 +13,7 @@
   import Select from "../ui/Select.svelte";
   import Alert from "../ui/Alert.svelte";
   import Card from "../ui/Card.svelte";
+  import Icon from "../ui/Icon.svelte";
 
   let submitting = false;
   let gettingLocation = false;
@@ -163,7 +164,7 @@
     <button class="back-btn" on:click={() => navigationStore.goHome()}
       >← Volver</button
     >
-    <h2 class="view-title">📝 Registrar Requerimiento</h2>
+    <h2 class="view-title"><Icon name="edit" size={20} /> Registrar Requerimiento</h2>
   </header>
 
   <main class="view-body container">
@@ -210,7 +211,7 @@
         />
 
         <fieldset class="fieldset">
-          <legend>👤 Datos del Solicitante</legend>
+          <legend><Icon name="user" size={16} /> Datos del Solicitante</legend>
           <Input
             id="sol_nombre"
             label="Nombre Completo"
@@ -279,7 +280,7 @@
             class="file-input"
           />
           {#if notaVozFile}
-            <span class="file-name">📎 {notaVozFile.name}</span>
+            <span class="file-name"><Icon name="paperclip" size={14} /> {notaVozFile.name}</span>
           {/if}
         </div>
 
@@ -311,7 +312,7 @@
             loading={gettingLocation}
             disabled={gettingLocation}
           >
-            📍 {gettingLocation ? "Obteniendo..." : "Capturar Ubicación"}
+            <Icon name="crosshair" size={16} /> {gettingLocation ? "Obteniendo..." : "Capturar Ubicación"}
           </Button>
         </div>
 
