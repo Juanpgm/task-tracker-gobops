@@ -1,6 +1,6 @@
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged, getIdToken } from 'firebase/auth';
 import { auth } from '../lib/firebase';
-import { apiClient, projectApiClient } from '../lib/api-client';
+import { apiClient, projectApiClient, uploadApiClient } from '../lib/api-client';
 import { authStore } from '../stores/authStore';
 import type {
   UserProfile,
@@ -31,6 +31,7 @@ export async function login(email: string, password: string): Promise<void> {
 
     apiClient.setToken(idToken);
     projectApiClient.setToken(idToken);
+    uploadApiClient.setToken(idToken);
 
     const loginPayload: Record<string, unknown> = { id_token: idToken };
     const backendUser = await apiClient.post<LoginResponse>('/auth/login', loginPayload);
@@ -105,6 +106,7 @@ export async function logout(): Promise<void> {
 
   apiClient.setToken(null);
   projectApiClient.setToken(null);
+  uploadApiClient.setToken(null);
   authStore.logout();
 }
 
@@ -133,6 +135,7 @@ export function initAuthListener(): () => void {
         const idToken = await getIdToken(firebaseUser, true);
         apiClient.setToken(idToken);
         projectApiClient.setToken(idToken);
+        uploadApiClient.setToken(idToken);
 
         const backendUser = await apiClient.post<ValidateSessionResponse>('/auth/validate-session', {});
 
@@ -157,6 +160,7 @@ export function initAuthListener(): () => void {
         console.error('Session validation failed:', error);
         apiClient.setToken(null);
         projectApiClient.setToken(null);
+        uploadApiClient.setToken(null);
         if (!authStore.restoreSession()) {
           authStore.logout();
         }
