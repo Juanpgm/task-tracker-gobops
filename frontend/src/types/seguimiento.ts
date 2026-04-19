@@ -97,6 +97,13 @@ export interface DocumentoAdjunto {
   tipo: string;
 }
 
+export interface Transcripcion {
+  archivo: string;
+  transcripcion: string;
+  duracion_segundos?: number;
+  idioma?: string;
+}
+
 export interface Requerimiento {
   id: string;
   rid?: string;
@@ -111,6 +118,7 @@ export interface Requerimiento {
   longitud: string;
   evidencia_fotos: string[];        // URLs de fotos
   nota_voz_url?: string | null;     // URL del audio grabado
+  transcripciones?: Transcripcion[]; // Transcripciones de notas de voz
   documentos_adjuntos: DocumentoAdjunto[]; // Fotos/docs subidos a S3
   estado: EstadoRequerimiento;
   encargado?: string;                // persona asignada del centro gestor

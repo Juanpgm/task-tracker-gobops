@@ -164,15 +164,33 @@ function createSeguimientoStore() {
             latitud: String(lat),
             longitud: String(lng),
             evidencia_fotos: [],
-            nota_voz_url: item.nota_voz_url || null,
+            nota_voz_url: (() => {
+              // Prefer presigned URL from documentos_con_enlaces over plain s3_url
+              if (item.nota_voz_url) {
+                const raw = item.documentos_con_enlaces || [];
+                const arr = Array.isArray(raw) ? raw : [raw];
+                const notaVozDoc = arr.find((d: Record<string, string>) =>
+                  d?.filename?.startsWith('nota_voz_')
+                );
+                if (notaVozDoc) {
+                  return notaVozDoc.url_visualizar || notaVozDoc.url_presigned || item.nota_voz_url;
+                }
+                return item.nota_voz_url;
+              }
+              return null;
+            })(),
+            transcripciones: Array.isArray(item.transcripciones) ? item.transcripciones : [],
             documentos_adjuntos: (() => {
               const raw = item.documentos_con_enlaces || item.documentos_s3 || [];
               const arr = Array.isArray(raw) ? raw : [raw];
-              return arr.filter((d: Record<string, unknown>) => d && typeof d === 'object' && Object.keys(d).length > 0).map((d: Record<string, string>) => ({
-                nombre: d.filename || d.nombre || 'archivo',
-                url: d.url_visualizar || d.url_presigned || d.s3_url || d.url || '',
-                tipo: d.content_type || d.tipo || '',
-              }));
+              return arr
+                .filter((d: Record<string, unknown>) => d && typeof d === 'object' && Object.keys(d).length > 0)
+                .filter((d: Record<string, string>) => !d.filename?.startsWith('nota_voz_'))
+                .map((d: Record<string, string>) => ({
+                  nombre: d.filename || d.nombre || 'archivo',
+                  url: d.url_visualizar || d.url_presigned || d.s3_url || d.url || '',
+                  tipo: d.content_type || d.tipo || '',
+                }));
             })(),
             rid: item.rid,
             tipo_requerimiento: item.tipo_requerimiento,

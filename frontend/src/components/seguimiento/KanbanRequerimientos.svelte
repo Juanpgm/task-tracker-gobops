@@ -73,6 +73,21 @@
   let lightboxUrl = "";
   let lightboxName = "";
 
+  // Audio helper for proxy URL
+  function audioSrc(url: string): string {
+    const s3Host = 'https://catatrack-photos.s3.amazonaws.com';
+    if (url.startsWith(s3Host)) {
+      return '/s3-audio' + url.slice(s3Host.length);
+    }
+    return url;
+  }
+
+  function getTranscripcion(req: Requerimiento): string | null {
+    if (!req.transcripciones || req.transcripciones.length === 0) return null;
+    const t = req.transcripciones.find(t => t.transcripcion && t.transcripcion.trim().length > 0);
+    return t ? t.transcripcion : null;
+  }
+
   $: params = $navigationStore.params;
   $: filterVisitaId = params.visitaId || "";
 
@@ -1105,7 +1120,7 @@
           {#if selectedReq.documentos_adjuntos.length > 0}
             <div class="media-gallery">
               {#each selectedReq.documentos_adjuntos as doc, i}
-                {#if doc.tipo.startsWith('image/') || doc.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)}
+                {#if doc.tipo.startsWith('image/') || doc.nombre.match(/\.(jpg|jpeg|png|gif|webp)/i)}
                   <button
                     class="media-thumb"
                     on:click={() => { lightboxUrl = doc.url; lightboxName = doc.nombre; }}
@@ -1113,7 +1128,7 @@
                   >
                     <img src={doc.url} alt={doc.nombre} loading="lazy" />
                   </button>
-                {:else if doc.tipo.startsWith('video/') || doc.url.match(/\.(mp4|webm|mov)$/i)}
+                {:else if doc.tipo.startsWith('video/') || doc.nombre.match(/\.(mp4|webm|mov)/i)}
                   <div class="media-video-card">
                     <video src={doc.url} controls preload="metadata" class="media-video">
                       <track kind="captions" />
@@ -1134,9 +1149,15 @@
           {#if selectedReq.nota_voz_url}
             <div class="media-audio-section">
               <span class="media-audio-label">Nota de voz</span>
-              <audio src={selectedReq.nota_voz_url} controls preload="metadata" class="media-audio-player">
+              <audio src={audioSrc(selectedReq.nota_voz_url)} controls preload="metadata" class="media-audio-player">
                 <track kind="captions" />
               </audio>
+              {#if getTranscripcion(selectedReq)}
+                <div class="transcripcion-box">
+                  <span class="transcripcion-label">Transcripción</span>
+                  <p class="transcripcion-text">{getTranscripcion(selectedReq)}</p>
+                </div>
+              {/if}
             </div>
           {/if}
 
@@ -1802,6 +1823,66 @@
     width: 100%;
     height: 36px;
     border-radius: 6px;
+  }
+
+  /* Transcripción */
+  .transcripcion-box {
+    padding: 0.4rem 0.55rem;
+    background: #f1f5f9;
+    border-radius: 6px;
+    border-left: 3px solid #2563eb;
+  }
+  .transcripcion-label {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: 0.15rem;
+  }
+  .transcripcion-text {
+    font-size: 0.78rem;
+    color: #334155;
+    line-height: 1.45;
+    margin: 0;
+    font-style: italic;
+    word-break: break-word;
+  }
+  .audio-play-btn {
+    display: none;
+  }
+  .audio-loading-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    height: 36px;
+    font-size: 0.75rem;
+    color: #64748b;
+  }
+  .audio-loading-pulse {
+    width: 100%;
+    max-width: 200px;
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, #e2e8f0 25%, #cbd5e1 50%, #e2e8f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  .audio-loading {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-style: italic;
+    padding: 0.3rem 0;
+  }
+  .audio-error {
+    font-size: 0.75rem;
+    color: #dc2626;
+    padding: 0.3rem 0;
   }
 
   /* Lightbox */

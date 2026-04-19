@@ -19,6 +19,21 @@
     brokenImages = { ...brokenImages, [url]: true };
   }
 
+  function audioSrc(url: string): string {
+    const s3Host = 'https://catatrack-photos.s3.amazonaws.com';
+    if (url.startsWith(s3Host)) {
+      return '/s3-audio' + url.slice(s3Host.length);
+    }
+    return url;
+  }
+
+  function getTranscripcion(req: Requerimiento): string | null {
+    if (!req.transcripciones || req.transcripciones.length === 0) return null;
+    // Return the first non-empty transcription
+    const t = req.transcripciones.find(t => t.transcripcion && t.transcripcion.trim().length > 0);
+    return t ? t.transcripcion : null;
+  }
+
   $: params = $navigationStore.params;
   $: visitaId = params.visitaId || "";
   $: reqStore = getRequerimientosByVisita(visitaId);
@@ -57,15 +72,15 @@
   }
 
   function isImage(doc: DocumentoAdjunto): boolean {
-    return doc.tipo.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp)$/i.test(doc.url);
+    return doc.tipo.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp)/i.test(doc.nombre);
   }
 
   function isVideo(doc: DocumentoAdjunto): boolean {
-    return doc.tipo.startsWith("video/") || /\.(mp4|webm|mov)$/i.test(doc.url);
+    return doc.tipo.startsWith("video/") || /\.(mp4|webm|mov)/i.test(doc.nombre);
   }
 
   function isAudio(doc: DocumentoAdjunto): boolean {
-    return doc.tipo.startsWith("audio/") || /\.(mp3|wav|ogg|m4a|webm)$/i.test(doc.url);
+    return doc.tipo.startsWith("audio/") || /\.(mp3|wav|ogg|m4a|webm)/i.test(doc.nombre) || doc.nombre.startsWith("nota_voz_");
   }
 
   function getImages(req: Requerimiento): DocumentoAdjunto[] {
@@ -82,10 +97,6 @@
 
   function getFiles(req: Requerimiento): DocumentoAdjunto[] {
     return req.documentos_adjuntos.filter(d => !isImage(d) && !isVideo(d) && !isAudio(d));
-  }
-
-  function carouselIdx(reqId: string): number {
-    return carouselIndices[reqId] || 0;
   }
 
   function carouselPrev(reqId: string, total: number) {
@@ -144,7 +155,7 @@
         {@const videos = getVideos(req)}
         {@const audios = getAudios(req)}
         {@const files = getFiles(req)}
-        {@const idx = carouselIdx(req.id)}
+        {@const idx = carouselIndices[req.id] || 0}
         <div class="req-card" class:expanded={isExpanded}>
           <!-- Card header (always visible) -->
           <button class="req-card-header" on:click={() => toggleExpand(req.id)} type="button">
@@ -262,15 +273,21 @@
               {#if req.nota_voz_url}
                 <div class="audio-item">
                   <span class="audio-label"><Icon name="mic" size={14} /> Nota de voz</span>
-                  <audio src={req.nota_voz_url} controls preload="metadata" class="audio-player">
+                  <audio src={audioSrc(req.nota_voz_url)} controls preload="metadata" class="audio-player">
                     <track kind="captions" />
                   </audio>
+                  {#if getTranscripcion(req)}
+                    <div class="transcripcion-box">
+                      <span class="transcripcion-label"><Icon name="file-text" size={12} /> Transcripción</span>
+                      <p class="transcripcion-text">{getTranscripcion(req)}</p>
+                    </div>
+                  {/if}
                 </div>
               {/if}
               {#each audios as aud}
                 <div class="audio-item">
                   <span class="audio-label"><Icon name="mic" size={14} /> {aud.nombre}</span>
-                  <audio src={aud.url} controls preload="metadata" class="audio-player">
+                  <audio src={audioSrc(aud.url)} controls preload="metadata" class="audio-player">
                     <track kind="captions" />
                   </audio>
                 </div>
@@ -878,6 +895,69 @@
     width: 100%;
     height: 36px;
     border-radius: 6px;
+  }
+
+  /* Transcripción */
+  .transcripcion-box {
+    margin-top: 0.25rem;
+    padding: 0.4rem 0.55rem;
+    background: #f1f5f9;
+    border-radius: 6px;
+    border-left: 3px solid #2563eb;
+  }
+  .transcripcion-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: 0.15rem;
+  }
+  .transcripcion-text {
+    font-size: 0.78rem;
+    color: #334155;
+    line-height: 1.45;
+    margin: 0;
+    font-style: italic;
+    word-break: break-word;
+  }
+  .audio-play-btn {
+    display: none;
+  }
+  .audio-loading-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    height: 36px;
+    font-size: 0.75rem;
+    color: #64748b;
+  }
+  .audio-loading-pulse {
+    width: 100%;
+    max-width: 200px;
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, #e2e8f0 25%, #cbd5e1 50%, #e2e8f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  .audio-loading {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-style: italic;
+    padding: 0.3rem 0;
+  }
+  .audio-error {
+    font-size: 0.75rem;
+    color: #dc2626;
+    padding: 0.3rem 0;
   }
 
   /* Actions in detail */
