@@ -2,8 +2,8 @@
   import { onMount, onDestroy } from "svelte";
   import { navigationStore } from "../../stores/navigationStore";
   import { seguimientoStore } from "../../stores/seguimientoStore";
+  import { authStore } from "../../stores/authStore";
   import { registrarRequerimiento } from "../../api/visitas";
-  import { CENTROS_GESTORES } from "../../data/mock-seguimiento";
   import { getCurrentPosition } from "../../lib/geolocation";
   import type {
     VisitaProgramada,
@@ -20,7 +20,15 @@
   let errorMsg = "";
   let successMsg = "";
   let showForm = false;
+  let showSolicitanteSection = false;
   let submitting = false;
+
+  // Usuario que registra (derivado de la sesión activa)
+  $: registradoPor =
+    $authStore.user?.full_name ||
+    $authStore.user?.displayName ||
+    $authStore.user?.email ||
+    "Usuario desconocido";
 
   // Solicitante form (matches datos_solicitante.personas[])
   let solNombre = "";
@@ -33,8 +41,6 @@
   const MAX_EVIDENCIAS_PER_REQ = 10;
 
   interface ReqDraft {
-    centros_gestores: string[];
-    tipo_requerimiento: string;
     descripcion: string;
     direccion: string;
     observaciones: string;
@@ -43,10 +49,18 @@
   }
   let requerimientosDraft: ReqDraft[] = [createEmptyReq()];
 
+  // Resultado del clasificador automático para los últimos requerimientos registrados.
+  interface ReqClassificationResult {
+    rid: string;
+    tipo_requerimiento: string;
+    tipo_requerimiento_origen: string | null;
+    organismos_encargados: string[];
+    acciones_por_organismo: Record<string, string[]>;
+  }
+  let lastResults: ReqClassificationResult[] = [];
+
   function createEmptyReq(): ReqDraft {
     return {
-      centros_gestores: [],
-      tipo_requerimiento: "",
       descripcion: "",
       direccion: "",
       observaciones: "",
@@ -223,18 +237,6 @@
     visita = found;
 
     updateReqList();
-
-    // Close CG dropdowns on outside click
-    function onDocClick(e: MouseEvent) {
-      const target = e.target as HTMLElement;
-      for (let i = 0; i < cgDropdownOpen.length; i++) {
-        if (cgDropdownOpen[i] && !target.closest(`.cg-dropdown-container-${i}`)) {
-          closeCgDropdown(i);
-        }
-      }
-    }
-    document.addEventListener("click", onDocClick);
-    return () => document.removeEventListener("click", onDocClick);
   });
 
   function updateReqList() {
@@ -252,50 +254,6 @@
     );
   }
 
-  function toggleCentroGestor(reqIdx: number, centroNombre: string) {
-    const req = requerimientosDraft[reqIdx];
-    if (req.centros_gestores.includes(centroNombre)) {
-      req.centros_gestores = req.centros_gestores.filter(
-        (c) => c !== centroNombre,
-      );
-    } else {
-      req.centros_gestores = [...req.centros_gestores, centroNombre];
-    }
-    requerimientosDraft = [...requerimientosDraft];
-  }
-
-  // Searchable CG dropdown state per requirement
-  let cgSearches: string[] = [];
-  let cgDropdownOpen: boolean[] = [];
-
-  function getCgFiltered(idx: number) {
-    const term = (cgSearches[idx] || "").toLowerCase();
-    if (!term) return CENTROS_GESTORES;
-    return CENTROS_GESTORES.filter(
-      (cg) =>
-        cg.nombre.toLowerCase().includes(term) ||
-        cg.sigla.toLowerCase().includes(term),
-    );
-  }
-
-  function openCgDropdown(idx: number) {
-    cgDropdownOpen[idx] = true;
-    cgDropdownOpen = [...cgDropdownOpen];
-  }
-
-  function closeCgDropdown(idx: number) {
-    cgDropdownOpen[idx] = false;
-    cgSearches[idx] = "";
-    cgDropdownOpen = [...cgDropdownOpen];
-    cgSearches = [...cgSearches];
-  }
-
-  function handleCgClickOutside(idx: number, e: MouseEvent) {
-    const target = e.target as HTMLElement;
-    const container = target.closest(`.cg-dropdown-container-${idx}`);
-    if (!container) closeCgDropdown(idx);
-  }
-
   function agregarRequerimiento() {
     requerimientosDraft = [...requerimientosDraft, createEmptyReq()];
   }
@@ -308,23 +266,9 @@
   async function guardarRequerimientos() {
     if (!visita) return;
 
-    // Validate solicitante
-    if (!solNombre.trim()) {
-      errorMsg = "El nombre del solicitante es obligatorio";
-      return;
-    }
-
     // Validate each req
     for (let i = 0; i < requerimientosDraft.length; i++) {
       const req = requerimientosDraft[i];
-      if (req.centros_gestores.length === 0) {
-        errorMsg = `Requerimiento #${i + 1}: Seleccione al menos un centro gestor`;
-        return;
-      }
-      if (!req.tipo_requerimiento.trim()) {
-        errorMsg = `Requerimiento #${i + 1}: El tipo de requerimiento es obligatorio`;
-        return;
-      }
       if (!req.descripcion.trim()) {
         errorMsg = `Requerimiento #${i + 1}: La descripción es obligatoria`;
         return;
@@ -345,7 +289,10 @@
     errorMsg = "";
     submitting = true;
 
-    // Auto-capture GPS
+    // Auto-capture GPS — con fallback al centro de Cali si no hay GPS
+    // (caso típico: desktop sin geolocalización o permiso denegado).
+    const FALLBACK_LAT = 3.4516;   // Cali centro
+    const FALLBACK_LNG = -76.5320;
     let latitud: string;
     let longitud: string;
     try {
@@ -353,25 +300,37 @@
       latitud = pos.latitud.toFixed(8);
       longitud = pos.longitud.toFixed(8);
     } catch (err) {
-      errorMsg =
-        "No se pudo obtener la ubicación GPS. Verifique que el GPS esté habilitado.";
-      submitting = false;
-      return;
+      console.warn(
+        "[RegistrarRequerimientos] GPS no disponible, usando coordenadas por defecto (Cali centro):",
+        err,
+      );
+      latitud = FALLBACK_LAT.toFixed(8);
+      longitud = FALLBACK_LNG.toFixed(8);
     }
 
     try {
       let registrados = 0;
+      const resultsAcc: ReqClassificationResult[] = [];
       for (const req of requerimientosDraft) {
+        const hasSolicitanteData =
+          solNombre.trim() ||
+          solEmail.trim() ||
+          solTelefono.trim() ||
+          solDireccion.trim();
+
         const datosSolicitante = JSON.stringify({
-          personas: [
-            {
-              nombre: solNombre,
-              email: solEmail || undefined,
-              telefono: solTelefono || undefined,
-              direccion: solDireccion || undefined,
-              centro_gestor: req.centros_gestores[0] || undefined,
-            },
-          ],
+          registrado_por: registradoPor,
+          personas:
+            showSolicitanteSection && hasSolicitanteData
+              ? [
+                  {
+                    nombre: solNombre || undefined,
+                    email: solEmail || undefined,
+                    telefono: solTelefono || undefined,
+                    direccion: solDireccion || undefined,
+                  },
+                ]
+              : [],
         });
 
         const coords = JSON.stringify({
@@ -379,27 +338,45 @@
           coordinates: [parseFloat(longitud), parseFloat(latitud)],
         });
 
-        const organismosEncargados = JSON.stringify(req.centros_gestores);
-
         const payload: RequerimientoPayload = {
           vid: visita!.id,
           datos_solicitante: datosSolicitante,
-          tipo_requerimiento: req.tipo_requerimiento,
+          // tipo_requerimiento se omite: el backend lo deriva del clasificador automático.
           requerimiento: req.descripcion,
           direccion_requerimiento: req.direccion || undefined,
           observaciones: req.observaciones || "N/A",
           coords,
-          organismos_encargados: organismosEncargados,
+          // organismos_encargados se omite a propósito: el backend lo clasifica automáticamente
+          // con el SLM en base a `requerimiento`, `observaciones` y la transcripción del audio.
           nota_voz: req.nota_voz,
           evidencias: req.evidencias.length > 0 ? req.evidencias : null,
         };
 
         const result = await registrarRequerimiento(payload);
-        console.log("Requerimiento registrado:", result.rid);
+        console.log(
+          "Requerimiento registrado:",
+          result.rid,
+          "tipo:",
+          result.tipo_requerimiento,
+          "organismos:",
+          result.organismos_encargados,
+          "origen:",
+          result.organismos_encargados_origen,
+        );
+        resultsAcc.push({
+          rid: result.rid,
+          tipo_requerimiento: result.tipo_requerimiento || "Otros",
+          tipo_requerimiento_origen: result.tipo_requerimiento_origen ?? null,
+          organismos_encargados: result.organismos_encargados ?? [],
+          acciones_por_organismo: (result.acciones_por_organismo ?? {}) as Record<string, string[]>,
+        });
         registrados++;
       }
+      lastResults = resultsAcc;
 
-      successMsg = `${registrados} requerimiento(s) registrado(s) para ${solNombre}`;
+      successMsg = solNombre.trim()
+        ? `${registrados} requerimiento(s) registrado(s) para ${solNombre} · por ${registradoPor}`
+        : `${registrados} requerimiento(s) registrado(s) · por ${registradoPor}`;
 
       // Reload requerimientos from API to refresh list
       seguimientoStore.loadRequerimientos();
@@ -409,6 +386,7 @@
       solTelefono = "";
       solEmail = "";
       solDireccion = "";
+      showSolicitanteSection = false;
       requerimientosDraft = [createEmptyReq()];
       showForm = false;
 
@@ -542,6 +520,47 @@
           <Alert type="error" message={errorMsg} />
         {/if}
 
+        {#if lastResults.length > 0}
+          <div class="classif-results">
+            <h3>
+              <Icon name="sparkles" size={16} /> Clasificación automática
+            </h3>
+            {#each lastResults as r (r.rid)}
+              <div class="classif-card">
+                <div class="classif-head">
+                  <strong>{r.rid}</strong>
+                  <span class="classif-tipo" title="Tipo determinado por el clasificador">
+                    {r.tipo_requerimiento}
+                  </span>
+                  {#if r.tipo_requerimiento_origen}
+                    <span class="classif-origen">({r.tipo_requerimiento_origen})</span>
+                  {/if}
+                </div>
+                {#if r.organismos_encargados.length === 0}
+                  <p class="classif-empty">El clasificador no encontró organismos para este requerimiento.</p>
+                {:else}
+                  <ul class="classif-list">
+                    {#each r.organismos_encargados as org}
+                      <li>
+                        <span class="classif-org">{org}</span>
+                        {#if (r.acciones_por_organismo[org] ?? []).length > 0}
+                          <ul class="classif-acciones">
+                            {#each r.acciones_por_organismo[org] as accion}
+                              <li>{accion}</li>
+                            {/each}
+                          </ul>
+                        {:else}
+                          <span class="classif-no-accion">sin acciones recomendadas</span>
+                        {/if}
+                      </li>
+                    {/each}
+                  </ul>
+                {/if}
+              </div>
+            {/each}
+          </div>
+        {/if}
+
         <!-- Existing requirements for this visit -->
         {#if visitaReqs.length > 0}
           <div class="existing-section">
@@ -594,59 +613,6 @@
             </Button>
           </div>
         {:else}
-          <Card padding="lg">
-            <h3 class="form-section-title"><Icon name="user" size={16} /> Datos del Solicitante</h3>
-            <p class="form-hint">
-              Persona de la comunidad que realiza la petición
-            </p>
-
-            <div class="form-grid-2">
-              <div class="field">
-                <label for="sol-nombre">Nombre Completo *</label>
-                <input
-                  id="sol-nombre"
-                  type="text"
-                  bind:value={solNombre}
-                  placeholder="Nombre del solicitante"
-                />
-              </div>
-              <div class="field">
-                <label for="sol-telefono">Teléfono</label>
-                <input
-                  id="sol-telefono"
-                  type="tel"
-                  bind:value={solTelefono}
-                  placeholder="+57 300 1234567"
-                />
-              </div>
-              <div class="field">
-                <label for="sol-email">Email</label>
-                <input
-                  id="sol-email"
-                  type="email"
-                  bind:value={solEmail}
-                  placeholder="correo@ejemplo.com"
-                />
-              </div>
-              <div class="field" style="grid-column: 1 / -1;">
-                <label for="sol-direccion">Dirección del Solicitante</label>
-                <input
-                  id="sol-direccion"
-                  type="text"
-                  bind:value={solDireccion}
-                  placeholder="Calle 1 #2-3, Barrio..."
-                />
-              </div>
-            </div>
-            <p
-              class="form-hint"
-              style="margin-top: 0.5rem; font-size: 0.75rem;"
-            >
-              El barrio y comuna se determinan automáticamente a partir de
-              las coordenadas GPS.
-            </p>
-          </Card>
-
           <!-- Requerimientos del solicitante -->
           {#each requerimientosDraft as req, idx (idx)}
             <Card padding="lg">
@@ -661,101 +627,17 @@
                 {/if}
               </div>
 
-              <!-- Centro Gestor Multi-Select Dropdown -->
-              <div class="field">
-                <!-- svelte-ignore a11y-label-has-associated-control -->
-                <label
-                  >Centro(s) Gestor(es) * <small>(multi-selección)</small
-                  ></label
-                >
-                <div class="cg-dropdown-container cg-dropdown-container-{idx}">
-                  {#if req.centros_gestores.length > 0}
-                    <div class="cg-selected-chips">
-                      {#each req.centros_gestores as nombre}
-                        {@const cg = CENTROS_GESTORES.find((c) => c.nombre === nombre)}
-                        <span
-                          class="cg-sel-chip"
-                          style="background: {cg?.color || '#2563eb'}; color: white;"
-                        >
-                          {cg?.sigla || nombre}
-                          <button
-                            type="button"
-                            class="cg-chip-remove"
-                            on:click={() => toggleCentroGestor(idx, nombre)}
-                          >&times;</button>
-                        </span>
-                      {/each}
-                    </div>
-                  {/if}
-                  <input
-                    type="text"
-                    class="cg-search-input"
-                    placeholder="Buscar organismo..."
-                    bind:value={cgSearches[idx]}
-                    on:focus={() => openCgDropdown(idx)}
-                    on:input={() => openCgDropdown(idx)}
-                    on:keydown={(e) => e.key === "Escape" && closeCgDropdown(idx)}
-                    autocomplete="off"
-                  />
-                  {#if cgDropdownOpen[idx]}
-                    <ul class="cg-dropdown-list">
-                      {#each getCgFiltered(idx) as cg (cg.id)}
-                        <li>
-                          <button
-                            type="button"
-                            class="cg-dropdown-option"
-                            class:active={req.centros_gestores.includes(cg.nombre)}
-                            on:click={() => toggleCentroGestor(idx, cg.nombre)}
-                          >
-                            <span
-                              class="cg-check"
-                              class:checked={req.centros_gestores.includes(cg.nombre)}
-                              style="border-color: {cg.color}; {req.centros_gestores.includes(cg.nombre) ? `background: ${cg.color};` : ''}"
-                            >{#if req.centros_gestores.includes(cg.nombre)}✓{/if}</span>
-                            <span class="cg-option-sigla" style="color: {cg.color}">{cg.sigla}</span>
-                            <span class="cg-option-nombre">{cg.nombre}</span>
-                          </button>
-                        </li>
-                      {:else}
-                        <li class="cg-no-results">Sin resultados</li>
-                      {/each}
-                    </ul>
-                  {/if}
-                </div>
-              </div>
-
-              <div class="field">
-                <label for="req-tipo-{idx}">Tipo de Requerimiento *</label>
-                <select id="req-tipo-{idx}" bind:value={req.tipo_requerimiento}>
-                  <option value="">-- Seleccione --</option>
-                  <option value="Poda de árboles">Poda de árboles</option>
-                  <option value="Arbustos">Arbustos</option>
-                  <option value="Emergencias arbóreas"
-                    >Emergencias arbóreas</option
-                  >
-                  <option value="Siembra indiscriminada"
-                    >Siembra indiscriminada</option
-                  >
-                  <option value="Recolección de residuos sólidos"
-                    >Recolección de residuos sólidos</option
-                  >
-                  <option value="Barrido y limpieza de vías y espacio público"
-                    >Barrido y limpieza de vías y espacio público</option
-                  >
-                  <option value="Alumbrado público">Alumbrado público</option>
-                  <option value="Acueducto y alcantarillado"
-                    >Acueducto y alcantarillado</option
-                  >
-                  <option value="Habitantes de calle"
-                    >Habitantes de calle</option
-                  >
-                  <option value="Invasión de espacio público"
-                    >Invasión de espacio público</option
-                  >
-                  <option value="Ruido">Ruido</option>
-                  <option value="Movilidad">Movilidad</option>
-                  <option value="Otros">Otros</option>
-                </select>
+              <!--
+                Centro(s) Gestor(es): se asignan automáticamente en el backend
+                a partir de la descripción + observaciones + transcripción del
+                audio (clasificador SLM local). Ya no se solicitan al usuario.
+              -->
+              <div class="cg-auto-notice">
+                <Icon name="info" size={14} />
+                <span>
+                  Los <strong>organismos encargados</strong> se asignarán
+                  automáticamente según la descripción del requerimiento.
+                </span>
               </div>
 
               <div class="field">
@@ -909,6 +791,78 @@
             </button>
           </div>
 
+          <Card padding="lg">
+            <!-- Registrado por (sesión activa, sólo lectura) -->
+            <div class="registrado-por-row">
+              <span class="registrado-por-label">Registrado por</span>
+              <span class="registrado-por-value">{registradoPor}</span>
+            </div>
+
+            <div class="optional-toggle-row">
+              <label class="optional-toggle-label" for="toggle-solicitante">
+                <input
+                  id="toggle-solicitante"
+                  type="checkbox"
+                  bind:checked={showSolicitanteSection}
+                />
+                Registrar datos del solicitante (opcional)
+              </label>
+            </div>
+
+            {#if showSolicitanteSection}
+              <h3 class="form-section-title"><Icon name="user" size={16} /> Datos del Solicitante</h3>
+              <p class="form-hint">
+                Persona de la comunidad que realiza la petición (todos los campos son opcionales)
+              </p>
+
+              <div class="form-grid-2">
+                <div class="field">
+                  <label for="sol-nombre">Nombre Completo</label>
+                  <input
+                    id="sol-nombre"
+                    type="text"
+                    bind:value={solNombre}
+                    placeholder="Nombre del solicitante"
+                  />
+                </div>
+                <div class="field">
+                  <label for="sol-telefono">Teléfono</label>
+                  <input
+                    id="sol-telefono"
+                    type="tel"
+                    bind:value={solTelefono}
+                    placeholder="+57 300 1234567"
+                  />
+                </div>
+                <div class="field">
+                  <label for="sol-email">Email</label>
+                  <input
+                    id="sol-email"
+                    type="email"
+                    bind:value={solEmail}
+                    placeholder="correo@ejemplo.com"
+                  />
+                </div>
+                <div class="field" style="grid-column: 1 / -1;">
+                  <label for="sol-direccion">Dirección del Solicitante</label>
+                  <input
+                    id="sol-direccion"
+                    type="text"
+                    bind:value={solDireccion}
+                    placeholder="Calle 1 #2-3, Barrio..."
+                  />
+                </div>
+              </div>
+              <p
+                class="form-hint"
+                style="margin-top: 0.5rem; font-size: 0.75rem;"
+              >
+                El barrio y comuna se determinan automáticamente a partir de
+                las coordenadas GPS.
+              </p>
+            {/if}
+          </Card>
+
           <div class="submit-row">
             <Button
               variant="secondary"
@@ -931,6 +885,75 @@
 </div>
 
 <style>
+  .classif-results {
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 1rem;
+  }
+  .classif-results h3 {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.95rem;
+    margin-bottom: 0.5rem;
+    color: #075985;
+  }
+  .classif-card {
+    background: white;
+    border: 1px solid #e0f2fe;
+    border-radius: 8px;
+    padding: 0.6rem 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+  .classif-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.35rem;
+  }
+  .classif-tipo {
+    background: #2563eb;
+    color: white;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .classif-origen {
+    color: #64748b;
+    font-size: 0.72rem;
+  }
+  .classif-list {
+    margin: 0;
+    padding-left: 1.1rem;
+  }
+  .classif-list > li {
+    margin-bottom: 0.25rem;
+  }
+  .classif-org {
+    font-weight: 600;
+    color: #0f172a;
+  }
+  .classif-acciones {
+    margin: 0.15rem 0 0.25rem 0;
+    padding-left: 1rem;
+    color: #475569;
+    font-size: 0.82rem;
+  }
+  .classif-no-accion {
+    margin-left: 0.4rem;
+    color: #94a3b8;
+    font-size: 0.78rem;
+    font-style: italic;
+  }
+  .classif-empty {
+    margin: 0;
+    color: #64748b;
+    font-size: 0.82rem;
+  }
   .view {
     min-height: 100vh;
     background: #f8fafc;
@@ -1119,113 +1142,24 @@
     color: #cbd5e1;
   }
 
-  /* Centro Gestor searchable dropdown */
-  .cg-dropdown-container {
-    position: relative;
-  }
-  .cg-selected-chips {
+  /* Aviso de asignación automática de centros gestores */
+  .cg-auto-notice {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem;
-    margin-bottom: 0.35rem;
-  }
-  .cg-sel-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.2rem 0.5rem;
-    border-radius: 20px;
-    font-size: 0.7rem;
-    font-weight: 600;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.55rem 0.75rem;
+    margin-bottom: 0.75rem;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    color: #1e40af;
     line-height: 1.4;
   }
-  .cg-chip-remove {
-    background: none;
-    border: none;
-    color: inherit;
-    font-size: 0.85rem;
-    line-height: 1;
-    cursor: pointer;
-    opacity: 0.8;
-    padding: 0;
-  }
-  .cg-chip-remove:hover { opacity: 1; }
-  .cg-search-input {
-    width: 100%;
-    padding: 0.5rem 0.65rem;
-    border: 1.5px solid var(--border);
-    border-radius: 0.5rem;
-    font-size: 0.82rem;
-    outline: none;
-    background: white;
-    color: var(--text);
-  }
-  .cg-search-input:focus {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
-  }
-  .cg-search-input::placeholder { color: #cbd5e1; }
-  .cg-dropdown-list {
-    position: absolute;
-    z-index: 50;
-    top: 100%;
-    left: 0;
-    right: 0;
-    max-height: 220px;
-    overflow-y: auto;
-    background: white;
-    border: 1.5px solid var(--border);
-    border-top: none;
-    border-radius: 0 0 0.5rem 0.5rem;
-    box-shadow: var(--shadow-md);
-    list-style: none;
-    margin: 0;
-    padding: 0.25rem 0;
-  }
-  .cg-dropdown-option {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    width: 100%;
-    padding: 0.45rem 0.65rem;
-    border: none;
-    background: none;
-    cursor: pointer;
-    font-size: 0.8rem;
-    text-align: left;
-    color: var(--text);
-  }
-  .cg-dropdown-option:hover { background: #f1f5f9; }
-  .cg-dropdown-option.active { background: #eff6ff; }
-  .cg-check {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    border: 1.5px solid #cbd5e1;
-    border-radius: 3px;
-    font-size: 0.65rem;
-    color: white;
+  .cg-auto-notice :global(svg) {
     flex-shrink: 0;
-  }
-  .cg-check.checked {
-    border-color: currentColor;
-  }
-  .cg-option-sigla {
-    font-weight: 700;
-    font-size: 0.72rem;
-    min-width: 42px;
-  }
-  .cg-option-nombre {
-    color: #475569;
-    font-size: 0.78rem;
-  }
-  .cg-no-results {
-    padding: 0.6rem 0.65rem;
-    color: #94a3b8;
-    font-size: 0.8rem;
-    text-align: center;
+    margin-top: 1px;
+    opacity: 0.85;
   }
 
   /* Req header */
@@ -1271,6 +1205,44 @@
     justify-content: flex-end;
     gap: 0.75rem;
     margin-top: 0.5rem;
+  }
+
+  /* "Registrado por" badge */
+  .registrado-por-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.75rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.8rem;
+  }
+  .registrado-por-label {
+    color: #64748b;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .registrado-por-label::after {
+    content: ':';
+  }
+  .registrado-por-value {
+    color: #1e293b;
+    font-weight: 500;
+  }
+
+  .optional-toggle-row {
+    margin-bottom: 0.5rem;
+  }
+  .optional-toggle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #334155;
+    cursor: pointer;
   }
 
   /* ── Media Attachments (unified) ── */

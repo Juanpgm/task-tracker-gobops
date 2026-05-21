@@ -116,14 +116,16 @@ describe("GPS auto-capture (no manual button)", () => {
     expect(fnBody).toContain("getCurrentPosition()");
   });
 
-  it("shows GPS error message when getCurrentPosition fails", () => {
+  it("usa coordenadas por defecto cuando getCurrentPosition falla (no bloquea el registro)", () => {
     const fnMatch = componentSource.match(
       /async function guardarRequerimientos\(\)[\s\S]*?finally\s*\{[\s\S]*?\}/,
     );
     const fnBody = fnMatch![0];
 
-    // Should have a catch block that sets errorMsg about GPS
-    expect(fnBody).toMatch(/No se pudo obtener la ubicación GPS/);
+    // El catch ya no debe mostrar el error ni hacer return; debe usar el fallback.
+    expect(fnBody).not.toMatch(/No se pudo obtener la ubicación GPS/);
+    expect(fnBody).toMatch(/FALLBACK_LAT/);
+    expect(fnBody).toMatch(/FALLBACK_LNG/);
   });
 
   it("builds GeoJSON Point coords from auto-captured GPS", () => {
@@ -141,9 +143,12 @@ describe("GPS auto-capture (no manual button)", () => {
  *  3. FORM VALIDATION
  * ============================================================ */
 describe("Form validation", () => {
-  it("validates solicitante name is required", () => {
-    expect(componentSource).toContain(
+  it("does NOT validate solicitante name (sección 100% opcional)", () => {
+    expect(componentSource).not.toContain(
       'El nombre del solicitante es obligatorio',
+    );
+    expect(componentSource).not.toContain(
+      'Si registra solicitante, el nombre completo es obligatorio',
     );
   });
 
@@ -163,8 +168,8 @@ describe("Form validation", () => {
     );
   });
 
-  it("validates centros_gestores selection is required", () => {
-    expect(componentSource).toContain(
+  it("does NOT validate centros_gestores (asignación automática en backend)", () => {
+    expect(componentSource).not.toContain(
       "Seleccione al menos un centro gestor",
     );
   });
@@ -186,13 +191,13 @@ describe("ReqDraft interface", () => {
     expect(ifaceBody).not.toContain("longitud");
   });
 
-  it("includes expected fields: centros_gestores, tipo_requerimiento, descripcion, observaciones, nota_voz", () => {
+  it("includes expected fields: tipo_requerimiento, descripcion, observaciones, nota_voz (sin centros_gestores)", () => {
     const ifaceMatch = componentSource.match(
       /interface ReqDraft\s*\{[\s\S]*?\}/,
     );
     const ifaceBody = ifaceMatch![0];
 
-    expect(ifaceBody).toContain("centros_gestores");
+    expect(ifaceBody).not.toContain("centros_gestores");
     expect(ifaceBody).toContain("tipo_requerimiento");
     expect(ifaceBody).toContain("descripcion");
     expect(ifaceBody).toContain("observaciones");
@@ -208,14 +213,30 @@ describe("API payload structure", () => {
     expect(componentSource).toMatch(/vid:\s*visita.*\.id/);
   });
 
+  it("includes registrado_por in datos_solicitante from authStore session", () => {
+    expect(componentSource).toContain("registrado_por");
+    expect(componentSource).toContain("registradoPor");
+    expect(componentSource).toContain("authStore");
+  });
+
+  it("derives registradoPor from full_name then displayName then email", () => {
+    expect(componentSource).toMatch(/full_name/);
+    expect(componentSource).toMatch(/displayName/);
+    expect(componentSource).toMatch(/authStore\.user/);
+  });
+
   it("sends datos_solicitante as JSON string with personas array", () => {
     expect(componentSource).toContain("JSON.stringify");
     expect(componentSource).toContain("personas");
   });
 
-  it("sends organismos_encargados from centros_gestores", () => {
-    expect(componentSource).toMatch(
+  it("does NOT send organismos_encargados (clasificación automática en backend)", () => {
+    // Ya no se construye un JSON con req.centros_gestores ni se asigna al payload.
+    expect(componentSource).not.toMatch(
       /JSON\.stringify\(req\.centros_gestores\)/,
+    );
+    expect(componentSource).not.toMatch(
+      /organismos_encargados:\s*organismosEncargados/,
     );
   });
 

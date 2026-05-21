@@ -157,14 +157,20 @@ export async function registrarRequerimiento(
   const formData = new FormData();
   formData.append('vid', payload.vid);
   formData.append('datos_solicitante', payload.datos_solicitante);
-  formData.append('tipo_requerimiento', payload.tipo_requerimiento);
+  // tipo_requerimiento es opcional: si se omite, el backend lo clasifica automáticamente.
+  if (payload.tipo_requerimiento && payload.tipo_requerimiento.trim()) {
+    formData.append('tipo_requerimiento', payload.tipo_requerimiento);
+  }
   formData.append('requerimiento', payload.requerimiento);
   if (payload.direccion_requerimiento) {
     formData.append('direccion', payload.direccion_requerimiento);
   }
   formData.append('observaciones', payload.observaciones);
   formData.append('coords', payload.coords);
-  formData.append('organismos_encargados', payload.organismos_encargados);
+  // organismos_encargados es opcional: si se omite, el backend lo clasifica automáticamente.
+  if (payload.organismos_encargados) {
+    formData.append('organismos_encargados', payload.organismos_encargados);
+  }
 
   if (payload.nota_voz) {
     formData.append('nota_voz', payload.nota_voz);

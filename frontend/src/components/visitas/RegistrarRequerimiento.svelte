@@ -19,6 +19,7 @@
   let gettingLocation = false;
   let successMsg = "";
   let errorMsg = "";
+  let showSolicitanteSection = false;
   let coords: Coordenadas | null = null;
   let notaVozFile: File | null = null;
   let comunasOptions = getComunasCorregimientos();
@@ -89,8 +90,8 @@
         "Complete los campos obligatorios: VID, Tipo de Requerimiento y Requerimiento.";
       return;
     }
-    if (!sol_nombre) {
-      errorMsg = "Ingrese al menos el nombre del solicitante.";
+    if (showSolicitanteSection && !sol_nombre.trim()) {
+      errorMsg = "Si registra solicitante, ingrese al menos el nombre.";
       return;
     }
 
@@ -98,16 +99,22 @@
     errorMsg = "";
     successMsg = "";
     try {
+      const hasSolicitanteData =
+        sol_nombre.trim() || sol_email.trim() || sol_telefono.trim() || sol_centro_gestor.trim();
+
       // Build datos_solicitante as JSON string
       const datosSolicitante = JSON.stringify({
-        personas: [
-          {
-            nombre: sol_nombre,
-            email: sol_email || undefined,
-            telefono: sol_telefono || undefined,
-            centro_gestor: sol_centro_gestor || undefined,
-          },
-        ],
+        personas:
+          showSolicitanteSection && hasSolicitanteData
+            ? [
+                {
+                  nombre: sol_nombre,
+                  email: sol_email || undefined,
+                  telefono: sol_telefono || undefined,
+                  centro_gestor: sol_centro_gestor || undefined,
+                },
+              ]
+            : [],
       });
 
       // Build coords as GeoJSON Point string
@@ -148,6 +155,7 @@
       sol_email = "";
       sol_telefono = "";
       sol_centro_gestor = "";
+      showSolicitanteSection = false;
       organismos_text = "";
       notaVozFile = null;
     } catch (err) {
@@ -209,37 +217,6 @@
           bind:value={observaciones}
           rows={3}
         />
-
-        <fieldset class="fieldset">
-          <legend><Icon name="user" size={16} /> Datos del Solicitante</legend>
-          <Input
-            id="sol_nombre"
-            label="Nombre Completo"
-            placeholder="Nombre del solicitante"
-            bind:value={sol_nombre}
-            required
-          />
-          <Input
-            id="sol_telefono"
-            type="tel"
-            label="Teléfono"
-            placeholder="Ej: +57 300 1234567"
-            bind:value={sol_telefono}
-          />
-          <Input
-            id="sol_email"
-            type="email"
-            label="Email"
-            placeholder="solicitante@ejemplo.com"
-            bind:value={sol_email}
-          />
-          <Input
-            id="sol_centro_gestor"
-            label="Centro Gestor"
-            placeholder="Ej: DAGMA"
-            bind:value={sol_centro_gestor}
-          />
-        </fieldset>
 
         <Textarea
           id="organismos_encargados"
@@ -315,6 +292,47 @@
             <Icon name="crosshair" size={16} /> {gettingLocation ? "Obteniendo..." : "Capturar Ubicación"}
           </Button>
         </div>
+
+        <fieldset class="fieldset">
+          <legend><Icon name="user" size={16} /> Datos del Solicitante (opcional)</legend>
+          <label class="optional-toggle-label" for="toggle-solicitante-legacy">
+            <input
+              id="toggle-solicitante-legacy"
+              type="checkbox"
+              bind:checked={showSolicitanteSection}
+            />
+            Registrar datos del solicitante
+          </label>
+
+          {#if showSolicitanteSection}
+            <Input
+              id="sol_nombre"
+              label="Nombre Completo"
+              placeholder="Nombre del solicitante"
+              bind:value={sol_nombre}
+            />
+            <Input
+              id="sol_telefono"
+              type="tel"
+              label="Teléfono"
+              placeholder="Ej: +57 300 1234567"
+              bind:value={sol_telefono}
+            />
+            <Input
+              id="sol_email"
+              type="email"
+              label="Email"
+              placeholder="solicitante@ejemplo.com"
+              bind:value={sol_email}
+            />
+            <Input
+              id="sol_centro_gestor"
+              label="Centro Gestor"
+              placeholder="Ej: DAGMA"
+              bind:value={sol_centro_gestor}
+            />
+          {/if}
+        </fieldset>
 
         <div class="form-actions">
           <Button variant="secondary" on:click={() => navigationStore.goHome()}>
@@ -425,5 +443,14 @@
     font-size: 0.9rem;
     color: var(--text);
     padding: 0 0.4rem;
+  }
+  .optional-toggle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
   }
 </style>

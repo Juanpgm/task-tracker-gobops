@@ -114,12 +114,20 @@ export interface AsistenciaComunidadPayload {
 export interface RequerimientoPayload {
   vid: string;
   datos_solicitante: string;       // JSON string: { personas: [...] }
-  tipo_requerimiento: string;
+  /**
+   * Tipo de requerimiento. OPCIONAL: si se omite o llega vacío, el backend
+   * lo deriva automáticamente del clasificador a partir del texto.
+   */
+  tipo_requerimiento?: string;
   requerimiento: string;
   direccion_requerimiento?: string;
   observaciones: string;
   coords: string;                  // GeoJSON Point: {"type":"Point","coordinates":[lng,lat]}
-  organismos_encargados: string;   // JSON array: ["DAGMA", "Secretaría de Obras"]
+  /**
+   * JSON array opcional: ["DAGMA", "Secretaría de Obras"].
+   * Si se omite, el backend lo clasifica automáticamente con el SLM.
+   */
+  organismos_encargados?: string;
   nota_voz?: File | null;
   evidencias?: File[] | null;      // Fotos/videos para subir a S3
 }
@@ -143,6 +151,14 @@ export interface RequerimientoResponse {
   documentos_urls: Array<{ nombre: string; url: string; tipo: string }> | null;
   fecha_registro: string;
   organismos_encargados: string[];
+  /** "cliente" si vino del front, "auto" si lo asignó el clasificador, null si no se determinó. */
+  organismos_encargados_origen?: string | null;
+  /** "cliente" si el front envió tipo_requerimiento, "auto" si lo derivó el clasificador. */
+  tipo_requerimiento_origen?: string | null;
+  /** Acciones recomendadas por cada organismo encargado. */
+  acciones_por_organismo?: Record<string, string[]> | null;
+  /** Metadatos del clasificador automático (método, confianza, matches). */
+  clasificacion_meta?: Record<string, unknown> | null;
   timestamp: string;
 }
 
