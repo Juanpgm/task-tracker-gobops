@@ -92,7 +92,56 @@ export async function geocodeAddress(query: string): Promise<GeocodingResult | n
 }
 
 /**
+ * Expande abreviaturas viales colombianas al nombre completo.
+ * Cubre tanto las usadas por OSM (KR, CL…) como por Google (Cra., Cl.…).
+ */
+function expandVia(raw: string): string {
+  return raw
+    .replace(/^(Cl\.?|Cll?\.?)\s+/i, 'Calle ')
+    .replace(/^(Kr\.?|Kra\.?|Cra?\.?)\s+/i, 'Carrera ')
+    .replace(/^(Tv\.?|Trv\.?)\s+/i, 'Transversal ')
+    .replace(/^(Dg\.?|Diag?\.?)\s+/i, 'Diagonal ')
+    .replace(/^(Av\.?)\s+/i, 'Avenida ')
+    .replace(/^AKR\s+/i, 'Avenida Carrera ')
+    .replace(/^AC\s+/i, 'Avenida Calle ')
+    .replace(/^AK\s+/i, 'Autopista ')
+    .replace(/^AV\s+/i, 'Avenida ')
+    .replace(/^KR\s+/i, 'Carrera ')
+    .replace(/^CL\s+/i, 'Calle ')
+    .replace(/^TV\s+/i, 'Transversal ')
+    .replace(/^DG\s+/i, 'Diagonal ');
+}
+
+/**
+ * Construye una dirección en formato colombiano a partir del objeto
+ * `address` devuelto por Nominatim.
+ *
+ * Resultado esperado: "Carrera 3 #7-55, El Peñón"
+ * Si faltan componentes usa display_name limpiado como fallback.
+ */
+function buildCaliAddress(addr: Record<string, string>, displayName: string): string {
+  const road = expandVia(
+    addr.road || addr.pedestrian || addr.path || addr.footway || addr.cycleway || '',
+  );
+  const houseNum = addr.house_number ?? '';
+  const barrio = addr.neighbourhood || addr.suburb || addr.quarter || '';
+
+  if (road) {
+    const streetPart = houseNum ? `${road} #${houseNum}` : road;
+    return barrio ? `${streetPart}, ${barrio}` : streetPart;
+  }
+
+  // Fallback: quitar metadatos verbosos del display_name
+  return displayName
+    .replace(/,?\s*(Colombia|Valle del Cauca|\d{5,6}|RAP Pac[íi]fico|Cali ciudad)\s*/gi, '')
+    .replace(/,\s*Cali\s*$/i, '')
+    .replace(/,\s*$/, '')
+    .trim();
+}
+
+/**
  * Geocodificación inversa: coordenadas → dirección.
+ * Usa zoom=18 (nivel edificio) y Accept-Language: es para máxima precisión en Cali.
  */
 export async function reverseGeocode(lat: number, lon: number): Promise<GeocodingResult | null> {
   const url = `https://nominatim.openstreetmap.org/reverse?` +
@@ -101,10 +150,14 @@ export async function reverseGeocode(lat: number, lon: number): Promise<Geocodin
       lon: lon.toString(),
       format: 'json',
       addressdetails: '1',
+      zoom: '18',
     }).toString();
 
   const response = await fetch(url, {
-    headers: { 'User-Agent': 'TaskTrackerGobOps/1.0' },
+    headers: {
+      'User-Agent': 'TaskTrackerGobOps/1.0',
+      'Accept-Language': 'es',
+    },
   });
 
   if (!response.ok) return null;
@@ -112,12 +165,14 @@ export async function reverseGeocode(lat: number, lon: number): Promise<Geocodin
   const r = await response.json();
   if (!r || r.error) return null;
 
+  const addr: Record<string, string> = r.address ?? {};
+
   return {
     latitud: parseFloat(r.lat),
     longitud: parseFloat(r.lon),
-    direccion_formateada: r.display_name || '',
-    barrio: r.address?.suburb || r.address?.neighbourhood || '',
-    comuna: r.address?.city_district || '',
+    direccion_formateada: buildCaliAddress(addr, r.display_name ?? ''),
+    barrio: addr.neighbourhood || addr.suburb || addr.quarter || '',
+    comuna: addr.city_district || '',
   };
 }
 
@@ -135,17 +190,31 @@ async function reverseGeocodeGoogle(lat: number, lon: number): Promise<Geocoding
     if (!response.ok) return null;
     const data = await response.json();
     if (data.status !== 'OK' || !data.results || data.results.length === 0) return null;
-    const r = data.results[0];
+    // Preferir el resultado más específico (route level)
+    const r = data.results.find((res: any) =>
+      res.types?.some((t: string) => ['street_address', 'premise', 'route'].includes(t)),
+    ) ?? data.results[0];
     const get = (type: string): string => {
       const c = r.address_components?.find((c: any) => c.types?.includes(type));
       return c?.long_name || '';
     };
+    const road = expandVia(get('route'));
+    const num = get('street_number');
+    const barrio = get('neighborhood') || get('sublocality_level_2') || get('sublocality_level_1') || get('sublocality') || '';
+    const street = road ? (num ? `${road} #${num}` : road) : '';
+    const direccion = street
+      ? (barrio ? `${street}, ${barrio}` : street)
+      // Limpiar formatted_address quitando datos de país/depto
+      : r.formatted_address
+          .replace(/,\s*Cali\s*,\s*Valle del Cauca\s*,\s*Colombia\s*$/i, '')
+          .replace(/,\s*Colombia\s*$/i, '')
+          .trim();
     return {
       latitud: lat,
       longitud: lon,
-      direccion_formateada: r.formatted_address || '',
-      barrio: get('neighborhood') || get('sublocality_level_1') || get('sublocality') || '',
-      comuna: get('administrative_area_level_2') || '',
+      direccion_formateada: direccion,
+      barrio,
+      comuna: get('administrative_area_level_3') || get('administrative_area_level_2') || '',
     };
   } catch {
     return null;
