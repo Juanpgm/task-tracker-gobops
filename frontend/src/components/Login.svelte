@@ -92,6 +92,16 @@
         required
         disabled={loading}
       />
+      <div class="forgot-row">
+        <button
+          type="button"
+          class="forgot-btn"
+          on:click={() => dispatch("forgot")}
+          disabled={loading}
+        >
+          ¿Olvidaste tu contraseña?
+        </button>
+      </div>
       <Button type="submit" fullWidth {loading} disabled={loading}>
         {loading ? "Ingresando..." : "Iniciar Sesión"}
       </Button>
@@ -188,5 +198,26 @@
   }
   .register-btn:hover {
     text-decoration: underline;
+  }
+  .forgot-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: calc(-1 * var(--space-xs, 0.25rem));
+  }
+  .forgot-btn {
+    background: none;
+    border: none;
+    color: var(--primary);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    padding: 0;
+    font-family: inherit;
+  }
+  .forgot-btn:hover {
+    text-decoration: underline;
+  }
+  .forgot-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 </style>

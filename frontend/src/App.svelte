@@ -5,6 +5,8 @@
   import { initAuthListener } from "./api/auth";
   import Login from "./components/Login.svelte";
   import Register from "./components/Register.svelte";
+  import ForgotPassword from "./components/ForgotPassword.svelte";
+  import ResetPasswordHandler from "./components/ResetPasswordHandler.svelte";
   import Home from "./components/Home.svelte";
   // Legacy views
   import RegistrarVisita from "./components/visitas/RegistrarVisita.svelte";
@@ -22,10 +24,16 @@
 
   let unsubscribeAuth: (() => void) | undefined;
   let showRegister = false;
+  let showForgotPassword = false;
+  let isResetFlow = false;
 
   $: currentView = $navigationStore.view;
 
   onMount(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("mode") === "resetPassword" && params.get("oobCode")) {
+      isResetFlow = true;
+    }
     unsubscribeAuth = initAuthListener();
   });
 
@@ -39,18 +47,39 @@
 
   function handleBackToLogin() {
     showRegister = false;
+    showForgotPassword = false;
   }
 
   function handleRegisterSuccess() {
     showRegister = false;
   }
+
+  function handleForgotPassword() {
+    showForgotPassword = true;
+  }
+
+  function handleBackFromForgot() {
+    showForgotPassword = false;
+  }
+
+  function handleResetDone() {
+    isResetFlow = false;
+  }
+
+  function handleResetInvalid() {
+    isResetFlow = false;
+  }
 </script>
 
-{#if !$authStore.isAuthenticated && !$authStore.loading}
+{#if isResetFlow}
+  <ResetPasswordHandler on:done={handleResetDone} on:invalid={handleResetInvalid} />
+{:else if !$authStore.isAuthenticated && !$authStore.loading}
   {#if showRegister}
     <Register on:back={handleBackToLogin} on:success={handleRegisterSuccess} />
+  {:else if showForgotPassword}
+    <ForgotPassword on:back={handleBackFromForgot} />
   {:else}
-    <Login on:register={handleRegister} />
+    <Login on:register={handleRegister} on:forgot={handleForgotPassword} />
   {/if}
 {:else if $authStore.isAuthenticated}
   {#if currentView === "home"}
