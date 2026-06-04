@@ -7,11 +7,19 @@ export interface ViaInfo {
   nombre_catastral: string | null;
   clase: string | null;
   distancia_m: number | null;
+  soporte_cruces: number | null;
+  inferida: boolean | null;
 }
 
 export interface CruceInfo {
   nombre: string | null;
   distancia_m: number | null;
+}
+
+export interface VerificacionInfo {
+  score: number;
+  nivel: 'alta' | 'media' | 'baja' | 'fuera_cali';
+  advertencias: string[];
 }
 
 export interface ReverseGeocodeResponse {
@@ -26,6 +34,7 @@ export interface ReverseGeocodeResponse {
   direccion_osm: string | null;
   osm: Record<string, unknown> | null;
   fuentes: string[];
+  verificacion: VerificacionInfo | null;
 }
 
 /**

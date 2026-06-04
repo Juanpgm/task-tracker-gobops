@@ -141,10 +141,31 @@
           {/if}
           {#if geoInfo}
             <div class="geo-context">
+              {#if geoInfo.verificacion}
+                <span class="geo-confianza geo-confianza--{geoInfo.verificacion.nivel}">
+                  Confianza: <strong>{geoInfo.verificacion.nivel}</strong> ({geoInfo.verificacion.score}/100)
+                </span>
+              {/if}
               {#if geoInfo.barrio_vereda}<span>Barrio: <strong>{geoInfo.barrio_vereda}</strong></span>{/if}
               {#if geoInfo.comuna_corregimiento}<span>Comuna: <strong>{geoInfo.comuna_corregimiento}</strong></span>{/if}
-              {#if geoInfo.via?.nombre}<span>Vía: <strong>{geoInfo.via.nombre}</strong> ({geoInfo.via.distancia_m} m)</span>{/if}
+              {#if geoInfo.via?.nombre}
+                <span>
+                  Vía: <strong>{geoInfo.via.nombre}</strong>
+                  {#if geoInfo.via.nombre_catastral && geoInfo.via.nombre_catastral !== geoInfo.via.nombre}
+                    <em>({geoInfo.via.nombre_catastral})</em>
+                  {/if}
+                  {#if geoInfo.via.distancia_m !== null} — {geoInfo.via.distancia_m} m{/if}
+                  {#if geoInfo.via.inferida && geoInfo.via.soporte_cruces !== null}
+                    <span class="geo-tag">inferida · {geoInfo.via.soporte_cruces} cruces</span>
+                  {/if}
+                </span>
+              {/if}
               {#if geoInfo.cruce_mas_cercano?.nombre}<span>Cruce: <strong>{geoInfo.cruce_mas_cercano.nombre}</strong> ({geoInfo.cruce_mas_cercano.distancia_m} m)</span>{/if}
+              {#if geoInfo.verificacion?.advertencias?.length}
+                {#each geoInfo.verificacion.advertencias as adv}
+                  <span class="geo-advertencia">⚠ {adv}</span>
+                {/each}
+              {/if}
             </div>
           {/if}
         </div>
@@ -288,5 +309,28 @@
     background: var(--surface-alt, rgba(0, 0, 0, 0.03));
     padding: var(--space-xs) var(--space-sm);
     border-radius: var(--radius-sm, 6px);
+  }
+  .geo-confianza {
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  .geo-confianza--alta { background: #d4edda; color: #155724; }
+  .geo-confianza--media { background: #fff3cd; color: #856404; }
+  .geo-confianza--baja { background: #f8d7da; color: #721c24; }
+  .geo-confianza--fuera_cali { background: #e2e3e5; color: #383d41; }
+  .geo-tag {
+    display: inline-block;
+    font-size: 0.75rem;
+    background: var(--primary-light, #e8f0fe);
+    color: var(--primary, #1a73e8);
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: 4px;
+  }
+  .geo-advertencia {
+    width: 100%;
+    color: var(--warning, #856404);
+    font-size: 0.75rem;
   }
 </style>
