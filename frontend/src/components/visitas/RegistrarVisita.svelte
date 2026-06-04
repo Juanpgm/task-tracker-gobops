@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { navigationStore } from "../../stores/navigationStore";
   import { registrarVisita } from "../../api/visitas";
   import { reverseGeocode, type ReverseGeocodeResponse } from "../../api/geocoding";
@@ -27,6 +28,10 @@
   let geoInfo: ReverseGeocodeResponse | null = null;
   let geoError = "";
   let direccionEditada = false;
+
+  onMount(() => {
+    usarMiUbicacion();
+  });
 
   async function usarMiUbicacion() {
     locating = true;
