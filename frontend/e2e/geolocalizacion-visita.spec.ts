@@ -91,15 +91,19 @@ test.describe('Botón GPS en RegistrarVisita', () => {
 
     await page.goto('/');
 
-    // Navegar a Registrar Visita — busca el card en Home
+    // Esperar a que Home termine de hidratar (Svelte) — el grid de acciones
+    // siempre contiene la card "Programar Visita".
     const cardVisita = page
       .locator('button.action-card', { hasText: /Registrar Visita|Programar Visita/i })
       .first();
 
-    // Si el card no existe en el home, puede estar en "Visitas Programadas"
-    const cardVisible = await cardVisita.isVisible().catch(() => false);
-    if (!cardVisible) {
-      // Intento alternativo: acceder a visitas programadas y crear nueva visita
+    // Espera explícita: cubre viewports lentos (Pixel 7 ~412px) y montaje async.
+    try {
+      await cardVisita.waitFor({ state: 'visible', timeout: 15_000 });
+      await cardVisita.click();
+    } catch {
+      // Fallback defensivo: si por alguna razón el Home no muestra "Programar
+      // Visita" (variante de UI), entrar vía "Visitas Programadas".
       const btnVisitas = page
         .locator('button.action-card', { hasText: /Visitas Programadas/i })
         .first();
@@ -108,8 +112,6 @@ test.describe('Botón GPS en RegistrarVisita', () => {
       const btnNuevaVisita = page.getByRole('button', { name: /Nueva visita/i });
       await expect(btnNuevaVisita).toBeVisible({ timeout: 15_000 });
       await btnNuevaVisita.click();
-    } else {
-      await cardVisita.click();
     }
 
     // Esperar a que el formulario de registro se renderice
