@@ -181,6 +181,8 @@
 <style>
   .register-wrapper {
     min-height: 100vh;
+    min-height: -webkit-fill-available;
+    min-height: 100dvh;
     min-height: 100dvh;
     display: flex;
     align-items: center;

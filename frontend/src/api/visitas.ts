@@ -11,7 +11,6 @@ import type {
   VisitaProgramadaOut,
   CrearRequerimientoBody,
   RequerimientoOut,
-  DirectorioContactosResponse,
 } from '../types';
 
 type ApiListResponse<T> = { success?: boolean; data?: T[] } | T[];
@@ -20,14 +19,6 @@ function extractList<T>(response: ApiListResponse<T>): T[] {
   if (Array.isArray(response)) return response;
   if (Array.isArray(response?.data)) return response.data;
   return [];
-}
-
-/* ============================================================
- *  GET /obtener_directorio_contactos
- *  Obtiene el directorio de contactos (delegados por centro gestor)
- * ============================================================ */
-export async function getDirectorioContactos(): Promise<DirectorioContactosResponse> {
-  return apiClient.get<DirectorioContactosResponse>('/obtener_directorio_contactos');
 }
 
 /* ============================================================
@@ -242,15 +233,6 @@ export async function asignarEncargadoAPI(
   return apiClient.patch<RequerimientoOut>(`/seguimiento/requerimientos/${encodeURIComponent(reqId)}/encargado`, { encargado });
 }
 
-/** PATCH /seguimiento/requerimientos/:id/enlace — Asignar enlace */
-export async function asignarEnlaceAPI(
-  reqId: string,
-  enlace_id: string,
-  enlace_nombre: string
-): Promise<RequerimientoOut> {
-  return apiClient.patch<RequerimientoOut>(`/seguimiento/requerimientos/${encodeURIComponent(reqId)}/enlace`, { enlace_id, enlace_nombre });
-}
-
 /** GET /seguimiento/colaboradores — Obtener colaboradores */
 export async function getColaboradores(): Promise<unknown[]> {
   return apiClient.get<unknown[]>('/seguimiento/colaboradores');
@@ -259,13 +241,6 @@ export async function getColaboradores(): Promise<unknown[]> {
 /** GET /seguimiento/centros-gestores — Obtener catálogo de centros gestores */
 export async function getCentrosGestores(): Promise<unknown[]> {
   return apiClient.get<unknown[]>('/seguimiento/centros-gestores');
-}
-
-/** GET /seguimiento/enlaces — Obtener directorio de enlaces */
-export async function getEnlaces(
-  params?: { centro_gestor_id?: string; activo?: string }
-): Promise<unknown[]> {
-  return apiClient.get<unknown[]>('/seguimiento/enlaces', params as Record<string, string>);
 }
 
 /* ============================================================

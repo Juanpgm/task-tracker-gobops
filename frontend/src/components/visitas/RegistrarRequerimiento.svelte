@@ -1,12 +1,11 @@
 <script lang="ts">
   import { navigationStore } from "../../stores/navigationStore";
   import { registrarRequerimiento } from "../../api/visitas";
-  import { getCurrentPosition } from "../../lib/geolocation";
   import {
     getComunasCorregimientos,
     getBarriosVeredas,
   } from "../../data/cali-geopolitica";
-  import type { RequerimientoPayload, Coordenadas } from "../../types";
+  import type { RequerimientoPayload } from "../../types";
   import Button from "../ui/Button.svelte";
   import Input from "../ui/Input.svelte";
   import Textarea from "../ui/Textarea.svelte";
@@ -14,13 +13,12 @@
   import Alert from "../ui/Alert.svelte";
   import Card from "../ui/Card.svelte";
   import Icon from "../ui/Icon.svelte";
+  import LocationPicker from "../shared/LocationPicker.svelte";
 
   let submitting = false;
-  let gettingLocation = false;
   let successMsg = "";
   let errorMsg = "";
   let showSolicitanteSection = false;
-  let coords: Coordenadas | null = null;
   let notaVozFile: File | null = null;
   let comunasOptions = getComunasCorregimientos();
   let barriosOptions: { value: string; label: string }[] = [];
@@ -32,6 +30,7 @@
   let observaciones = "";
   let latitud = "";
   let longitud = "";
+  let direccion = "";
 
   // Solicitante fields (will be serialized as JSON)
   let sol_nombre = "";
@@ -62,21 +61,6 @@
     }
   }
 
-  async function captureLocation() {
-    gettingLocation = true;
-    errorMsg = "";
-    try {
-      coords = await getCurrentPosition();
-      latitud = coords.latitud.toString();
-      longitud = coords.longitud.toString();
-    } catch (err) {
-      errorMsg =
-        err instanceof Error ? err.message : "Error al obtener ubicación";
-    } finally {
-      gettingLocation = false;
-    }
-  }
-
   function handleFileChange(event: Event) {
     const target = event.target as HTMLInputElement;
     if (target.files && target.files.length > 0) {
@@ -88,6 +72,11 @@
     if (!vid || !requerimiento || !tipo_requerimiento) {
       errorMsg =
         "Complete los campos obligatorios: VID, Tipo de Requerimiento y Requerimiento.";
+      return;
+    }
+    if (!latitud || !longitud) {
+      errorMsg =
+        "Defina la ubicación del requerimiento (espere al GPS o ajústela en el mapa).";
       return;
     }
     if (showSolicitanteSection && !sol_nombre.trim()) {
@@ -118,13 +107,10 @@
       });
 
       // Build coords as GeoJSON Point string
-      const coordsJson =
-        latitud && longitud
-          ? JSON.stringify({
-              type: "Point",
-              coordinates: [parseFloat(longitud), parseFloat(latitud)],
-            })
-          : JSON.stringify({ type: "Point", coordinates: [0, 0] });
+      const coordsJson = JSON.stringify({
+        type: "Point",
+        coordinates: [parseFloat(longitud), parseFloat(latitud)],
+      });
 
       // Build organismos_encargados as JSON array string
       const organismos = organismos_text
@@ -138,6 +124,7 @@
         datos_solicitante: datosSolicitante,
         tipo_requerimiento,
         requerimiento,
+        direccion_requerimiento: direccion || undefined,
         observaciones: observaciones || "Sin observaciones",
         coords: coordsJson,
         organismos_encargados: organismosJson,
@@ -261,37 +248,8 @@
           {/if}
         </div>
 
-        <!-- GPS -->
-        <div class="gps-section">
-          <label class="gps-label" for="latitud"
-            >Ubicación GPS (coordenadas del dispositivo)</label
-          >
-          <div class="gps-row">
-            <Input
-              id="latitud"
-              label="Latitud"
-              bind:value={latitud}
-              placeholder="0.000000"
-              disabled
-            />
-            <Input
-              id="longitud"
-              label="Longitud"
-              bind:value={longitud}
-              placeholder="0.000000"
-              disabled
-            />
-          </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            on:click={captureLocation}
-            loading={gettingLocation}
-            disabled={gettingLocation}
-          >
-            <Icon name="crosshair" size={16} /> {gettingLocation ? "Obteniendo..." : "Capturar Ubicación"}
-          </Button>
-        </div>
+        <!-- Ubicación: GPS automático + mapa Leaflet con marcador arrastrable + dirección por reverse geocoding -->
+        <LocationPicker bind:latitud bind:longitud bind:direccion />
 
         <fieldset class="fieldset">
           <legend><Icon name="user" size={16} /> Datos del Solicitante (opcional)</legend>
@@ -350,6 +308,8 @@
 <style>
   .view {
     min-height: 100vh;
+    min-height: -webkit-fill-available;
+    min-height: 100dvh;
     min-height: 100dvh;
     background: var(--bg);
   }
@@ -408,21 +368,6 @@
   .file-name {
     font-size: 0.8125rem;
     color: var(--text-secondary);
-  }
-  .gps-section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-sm);
-  }
-  .gps-label {
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--text);
-  }
-  .gps-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-sm);
   }
   .form-actions {
     display: flex;

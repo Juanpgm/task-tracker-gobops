@@ -3,6 +3,9 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { VitePWA } from 'vite-plugin-pwa';
 import https from 'https';
 import zlib from 'zlib';
+import { createRequire } from 'module';
+const _require = createRequire(import.meta.url);
+const pkg = _require('./package.json');
 
 function s3AudioProxy() {
   return {
@@ -47,54 +50,56 @@ function s3AudioProxy() {
 }
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __BUILD_DATE__: JSON.stringify(new Date().toISOString().split('T')[0]),
+  },
   plugins: [
     s3AudioProxy(),
     svelte({ hot: !process.env.VITEST }),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2}'],
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+      },
+      includeAssets: [
+        'favicon.ico',
+        'favicon.svg',
+        'favicon-16.png',
+        'favicon-32.png',
+        'apple-touch-icon.png',
+        'apple-touch-icon-152.png',
+        'apple-touch-icon-167.png',
+        'logo.svg'
+      ],
       manifest: {
+        id: '/?source=pwa',
         name: 'Task Tracker GobOps',
         short_name: 'GobOps',
         description: 'Sistema de gestión de visitas y requerimientos del grupo operativo',
         theme_color: '#2563eb',
         background_color: '#ffffff',
         display: 'standalone',
+        display_override: ['standalone', 'minimal-ui'],
         orientation: 'portrait',
         scope: '/',
-        start_url: '/',
+        start_url: '/?source=pwa',
+        lang: 'es-CO',
+        categories: ['productivity', 'business', 'government'],
         icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable'
-          }
+          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
         ]
       },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/web-production-79739\.up\.railway\.app\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          }
-        ]
+      // NOTE: runtime caching now lives in src/sw.ts (injectManifest mode)
+      devOptions: {
+        enabled: false,
+        type: 'module'
       }
     })
   ],

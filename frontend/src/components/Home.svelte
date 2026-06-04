@@ -3,13 +3,16 @@
   import { navigationStore } from '../stores/navigationStore';
   import type { AppView } from '../stores/navigationStore';
   import { logout } from '../api/auth';
+  import { pwaStore } from '../stores/pwaStore';
   import Button from './ui/Button.svelte';
   import Card from './ui/Card.svelte';
   import Icon from './ui/Icon.svelte';
   import ChangePassword from './ChangePassword.svelte';
+  import AppInfoPanel from './AppInfoPanel.svelte';
 
   let loggingOut = false;
   let showChangePassword = false;
+  let showInfoPanel = false;
 
   async function handleLogout() {
     loggingOut = true;
@@ -46,13 +49,6 @@
       description: 'Tablero Kanban de estados y seguimiento',
       icon: 'bar-chart',
       color: '#0891b2',
-    },
-    {
-      id: 'directorio-enlaces',
-      title: 'Directorio de Enlaces',
-      description: 'Consultar enlaces de organismos y sus requerimientos',
-      icon: 'address-book',
-      color: '#0d9488',
     },
     {
       id: 'asistencia-delegado',
@@ -92,6 +88,18 @@
           <span class="user-role">{$authStore.user?.role || 'Operador'}</span>
         </div>
         <div class="header-actions">
+          <button
+            class="info-btn"
+            class:info-btn--update={$pwaStore.needRefresh}
+            on:click={() => (showInfoPanel = true)}
+            aria-label="Información de la aplicación"
+            title="v{__APP_VERSION__}"
+          >
+            <Icon name="settings" size={17} />
+            {#if $pwaStore.needRefresh}
+              <span class="info-update-dot" />
+            {/if}
+          </button>
           <Button variant="ghost" size="sm" on:click={() => showChangePassword = true}>
             <Icon name="lock" size={18} />
           </Button>
@@ -134,11 +142,14 @@
   </main>
 
   <ChangePassword bind:show={showChangePassword} />
+  <AppInfoPanel bind:show={showInfoPanel} />
 </div>
 
 <style>
   .home {
     min-height: 100vh;
+    min-height: -webkit-fill-available;
+    min-height: 100dvh;
     min-height: 100dvh;
     background: var(--bg);
   }
@@ -273,5 +284,46 @@
 
   @media (max-width: 400px) {
     .user-info { display: none; }
+  }
+
+  /* Info / settings button */
+  .info-btn {
+    position: relative;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+  }
+  .info-btn:hover {
+    background: var(--bg);
+    color: var(--primary);
+    border-color: var(--primary);
+  }
+  .info-btn--update {
+    border-color: #f59e0b;
+    color: #d97706;
+  }
+  .info-update-dot {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #f59e0b;
+    border: 1.5px solid var(--surface);
+    animation: info-pulse 2s infinite;
+  }
+  @keyframes info-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.6; transform: scale(0.8); }
   }
 </style>

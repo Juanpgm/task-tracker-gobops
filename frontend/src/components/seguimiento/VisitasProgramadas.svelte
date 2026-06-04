@@ -228,6 +228,8 @@
 <style>
   .view {
     min-height: 100vh;
+    min-height: -webkit-fill-available;
+    min-height: 100dvh;
     background: #f8fafc;
   }
 

@@ -211,6 +211,8 @@
                       src={images[idx].url}
                       alt={images[idx].nombre}
                       loading="lazy"
+                      decoding="async"
+                      fetchpriority="low"
                       on:error={() => handleImgError(images[idx].url)}
                     />
                   </button>
@@ -251,7 +253,7 @@
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="3" x2="21" y2="21"/></svg>
                         </div>
                       {:else}
-                        <img src={img.url} alt={img.nombre} loading="lazy" on:error={() => handleImgError(img.url)} />
+                        <img src={img.url} alt={img.nombre} loading="lazy" decoding="async" fetchpriority="low" on:error={() => handleImgError(img.url)} />
                       {/if}
                     </button>
                   {/each}
@@ -409,6 +411,8 @@
 <style>
   .view {
     min-height: 100vh;
+    min-height: -webkit-fill-available;
+    min-height: 100dvh;
     background: #f8fafc;
   }
 

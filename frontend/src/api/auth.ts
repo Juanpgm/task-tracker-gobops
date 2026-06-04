@@ -119,7 +119,10 @@ export function initAuthListener(): () => void {
   if (!auth) {
     console.warn('Firebase auth not initialized. Falling back to local session.');
     if (!authStore.restoreSession()) {
-      authStore.setLoading(false);
+      // iOS ITP fallback: try IndexedDB before giving up
+      authStore.restoreSessionFromIdb().then((ok) => {
+        if (!ok) authStore.setLoading(false);
+      });
     }
     return () => {};
   }
@@ -162,12 +165,14 @@ export function initAuthListener(): () => void {
         projectApiClient.setToken(null);
         uploadApiClient.setToken(null);
         if (!authStore.restoreSession()) {
-          authStore.logout();
+          const ok = await authStore.restoreSessionFromIdb();
+          if (!ok) authStore.logout();
         }
       }
     } else {
       if (!authStore.restoreSession()) {
-        authStore.logout();
+        const ok = await authStore.restoreSessionFromIdb();
+        if (!ok) authStore.logout();
       }
     }
   });

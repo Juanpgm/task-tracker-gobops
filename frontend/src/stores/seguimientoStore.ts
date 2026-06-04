@@ -12,11 +12,9 @@ import type {
   Colaborador,
   Solicitante,
   RegistroAvance,
-  Enlace,
 } from '../types/seguimiento';
 import {
   MOCK_COLABORADORES,
-  MOCK_ENLACES,
   generateVisitaId,
   generateRequerimientoId,
 } from '../data/mock-seguimiento';
@@ -27,7 +25,6 @@ import {
   obtenerVisitasProgramadas,
   getRequerimientosSeguimiento,
   getColaboradores,
-  getEnlaces,
   registrarVisita,
   registrarRequerimiento,
   obtenerRequerimientos,
@@ -42,7 +39,6 @@ interface SeguimientoState {
   visitas: VisitaProgramada[];
   requerimientos: Requerimiento[];
   colaboradores: Colaborador[];
-  enlaces: Enlace[];
   loading: boolean;
   error: string | null;
 }
@@ -51,7 +47,6 @@ const initialState: SeguimientoState = {
   visitas: [],
   requerimientos: [],
   colaboradores: [...MOCK_COLABORADORES],
-  enlaces: [...MOCK_ENLACES],
   loading: false,
   error: null,
 };
@@ -196,8 +191,6 @@ function createSeguimientoStore() {
             tipo_requerimiento: item.tipo_requerimiento,
             estado,
             encargado: undefined,
-            enlace_id: undefined,
-            enlace_nombre: undefined,
             porcentaje_avance: estado === 'resuelto' || estado === 'cerrado' ? 100 : 0,
             prioridad: 'media' as const,
             historial: [],
@@ -536,30 +529,6 @@ function createSeguimientoStore() {
         requerimientos: state.requerimientos.map((r) =>
           r.id === reqId
             ? { ...r, encargado, updated_at: new Date().toISOString() }
-            : r
-        ),
-      }));
-    },
-
-    /** Asigna un enlace del organismo a un requerimiento */
-    asignarEnlace: (reqId: string, enlaceId: string, enlaceNombre: string) => {
-      update((state) => ({
-        ...state,
-        requerimientos: state.requerimientos.map((r) =>
-          r.id === reqId
-            ? { ...r, enlace_id: enlaceId, enlace_nombre: enlaceNombre, updated_at: new Date().toISOString() }
-            : r
-        ),
-      }));
-    },
-
-    /** Asigna fecha propuesta de solución */
-    asignarFechaPropuestaSolucion: (reqId: string, fecha: string) => {
-      update((state) => ({
-        ...state,
-        requerimientos: state.requerimientos.map((r) =>
-          r.id === reqId
-            ? { ...r, fecha_propuesta_solucion: fecha, updated_at: new Date().toISOString() }
             : r
         ),
       }));

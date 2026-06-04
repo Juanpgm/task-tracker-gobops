@@ -44,3 +44,11 @@ Thumbs.db
 # Vercel
 .vercel/
 .vercel
+
+# Playwright E2E — artefactos generados (nunca subir a producción)
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/playwright/.cache/
+frontend/playwright/.auth/
+frontend/.env.test

@@ -4,7 +4,6 @@
   import { seguimientoStore } from "../../stores/seguimientoStore";
   import { authStore } from "../../stores/authStore";
   import { registrarRequerimiento } from "../../api/visitas";
-  import { getCurrentPosition } from "../../lib/geolocation";
   import type {
     VisitaProgramada,
     Requerimiento,
@@ -14,6 +13,7 @@
   import Alert from "../ui/Alert.svelte";
   import Card from "../ui/Card.svelte";
   import Icon from "../ui/Icon.svelte";
+  import LocationPicker from "../shared/LocationPicker.svelte";
 
   let visita: VisitaProgramada | null = null;
   let visitaReqs: Requerimiento[] = [];
@@ -46,6 +46,8 @@
     observaciones: string;
     nota_voz: File | null;
     evidencias: File[];
+    latitud: string;
+    longitud: string;
   }
   let requerimientosDraft: ReqDraft[] = [createEmptyReq()];
 
@@ -66,6 +68,8 @@
       observaciones: "",
       nota_voz: null,
       evidencias: [],
+      latitud: "",
+      longitud: "",
     };
   }
 
@@ -129,8 +133,16 @@
   let mediaRecorder: MediaRecorder | null = null;
   let recordingChunks: Blob[] = [];
   let recordingSeconds = 0;
-  let recordingTimer: ReturnType<typeof setInterval> | null = null;
+  // iOS perf: rAF-based timer instead of setInterval (avoids battery drain + DOM thrash)
+  let recordingStartMs = 0;
+  let recordingRafId: number | null = null;
   let notaVozPreviewUrl: Record<number, string> = {};
+
+  function recordingTick() {
+    const next = Math.floor((Date.now() - recordingStartMs) / 1000);
+    if (next !== recordingSeconds) recordingSeconds = next;
+    recordingRafId = requestAnimationFrame(recordingTick);
+  }
 
   async function startRecording(reqIdx: number) {
     try {
@@ -157,8 +169,10 @@
       mediaRecorder = recorder;
       recordingReqIdx = reqIdx;
       recordingSeconds = 0;
+      recordingStartMs = Date.now();
       recorder.start();
-      recordingTimer = setInterval(() => { recordingSeconds++; }, 1000);
+      if (recordingRafId !== null) cancelAnimationFrame(recordingRafId);
+      recordingRafId = requestAnimationFrame(recordingTick);
     } catch (err) {
       errorMsg = 'No se pudo acceder al micrófono. Verifica los permisos.';
       console.error('Mic error:', err);
@@ -185,7 +199,7 @@
   }
 
   function cleanupRecording() {
-    if (recordingTimer) { clearInterval(recordingTimer); recordingTimer = null; }
+    if (recordingRafId !== null) { cancelAnimationFrame(recordingRafId); recordingRafId = null; }
     mediaRecorder = null;
     recordingReqIdx = null;
     recordingSeconds = 0;
@@ -273,6 +287,10 @@
         errorMsg = `Requerimiento #${i + 1}: La descripción es obligatoria`;
         return;
       }
+      if (!req.latitud || !req.longitud) {
+        errorMsg = `Requerimiento #${i + 1}: Defina la ubicación (espere al GPS o ajústela en el mapa).`;
+        return;
+      }
       // Validate evidencias
       if (req.evidencias.length > MAX_EVIDENCIAS_PER_REQ) {
         errorMsg = `Requerimiento #${i + 1}: Máximo ${MAX_EVIDENCIAS_PER_REQ} archivos permitidos`;
@@ -288,25 +306,6 @@
 
     errorMsg = "";
     submitting = true;
-
-    // Auto-capture GPS — con fallback al centro de Cali si no hay GPS
-    // (caso típico: desktop sin geolocalización o permiso denegado).
-    const FALLBACK_LAT = 3.4516;   // Cali centro
-    const FALLBACK_LNG = -76.5320;
-    let latitud: string;
-    let longitud: string;
-    try {
-      const pos = await getCurrentPosition();
-      latitud = pos.latitud.toFixed(8);
-      longitud = pos.longitud.toFixed(8);
-    } catch (err) {
-      console.warn(
-        "[RegistrarRequerimientos] GPS no disponible, usando coordenadas por defecto (Cali centro):",
-        err,
-      );
-      latitud = FALLBACK_LAT.toFixed(8);
-      longitud = FALLBACK_LNG.toFixed(8);
-    }
 
     try {
       let registrados = 0;
@@ -335,7 +334,7 @@
 
         const coords = JSON.stringify({
           type: "Point",
-          coordinates: [parseFloat(longitud), parseFloat(latitud)],
+          coordinates: [parseFloat(req.longitud), parseFloat(req.latitud)],
         });
 
         const payload: RequerimientoPayload = {
@@ -652,15 +651,12 @@
                 ></textarea>
               </div>
 
-              <div class="field">
-                <label for="req-dir-{idx}">Dirección</label>
-                <input
-                  id="req-dir-{idx}"
-                  type="text"
-                  bind:value={req.direccion}
-                  placeholder="Dirección del requerimiento..."
-                />
-              </div>
+              <!-- Ubicación: GPS automático + mapa Leaflet con marcador arrastrable + dirección por reverse geocoding -->
+              <LocationPicker
+                bind:latitud={req.latitud}
+                bind:longitud={req.longitud}
+                bind:direccion={req.direccion}
+              />
 
               <div class="field">
                 <label for="req-obs-{idx}">Observaciones</label>
@@ -956,6 +952,8 @@
   }
   .view {
     min-height: 100vh;
+    min-height: -webkit-fill-available;
+    min-height: 100dvh;
     background: #f8fafc;
   }
   .view-header {

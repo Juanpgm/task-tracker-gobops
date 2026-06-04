@@ -253,7 +253,7 @@
 </div>
 
 <style>
-  .view { min-height: 100vh; background: #f8fafc; }
+  .view { min-height: 100vh; min-height: -webkit-fill-available; min-height: 100dvh; background: #f8fafc; }
   .view-header {
     background: white; border-bottom: 1px solid #e2e8f0; padding: 0.75rem 1rem;
     display: flex; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 100;

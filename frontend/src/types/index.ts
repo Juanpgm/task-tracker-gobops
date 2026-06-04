@@ -25,26 +25,6 @@ export interface AcompananteModel {
   centro_gestor: string;
 }
 
-/** Contacto del directorio (GET /obtener_directorio_contactos) */
-export interface ContactoDirectorio {
-  id: string;
-  funcion: string;
-  nombres: string;
-  apellidos: string;
-  cedula: string;
-  email: string;
-  telefono: string;
-  centro_gestor: string;
-}
-
-/** Respuesta de GET /obtener_directorio_contactos */
-export interface DirectorioContactosResponse {
-  success: boolean;
-  total: number;
-  contactos: ContactoDirectorio[];
-  timestamp: string;
-}
-
 /** Payload para POST /registrar-visita/ (JSON body) */
 export interface RegistrarVisitaPayload {
   direccion_visita: string;
@@ -228,9 +208,6 @@ export interface RequerimientoOut {
   evidencia_fotos: string[];
   estado: string;
   encargado: string | null;
-  enlace_id: string | null;
-  enlace_nombre: string | null;
-  fecha_propuesta_solucion: string | null;
   porcentaje_avance: number;
   prioridad: string;
   historial: Record<string, unknown>[];

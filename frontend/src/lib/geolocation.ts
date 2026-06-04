@@ -120,3 +120,51 @@ export async function reverseGeocode(lat: number, lon: number): Promise<Geocodin
     comuna: r.address?.city_district || '',
   };
 }
+
+/**
+ * Geocodificación inversa con Google Maps API (fallback).
+ * Solo se activa si VITE_GOOGLE_MAPS_API_KEY está configurado en env.
+ * TODO: activar agregando la key a env.local cuando esté disponible.
+ */
+async function reverseGeocodeGoogle(lat: number, lon: number): Promise<GeocodingResult | null> {
+  const apiKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
+  if (!apiKey) return null;
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${apiKey}&language=es&region=co`;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (data.status !== 'OK' || !data.results || data.results.length === 0) return null;
+    const r = data.results[0];
+    const get = (type: string): string => {
+      const c = r.address_components?.find((c: any) => c.types?.includes(type));
+      return c?.long_name || '';
+    };
+    return {
+      latitud: lat,
+      longitud: lon,
+      direccion_formateada: r.formatted_address || '',
+      barrio: get('neighborhood') || get('sublocality_level_1') || get('sublocality') || '',
+      comuna: get('administrative_area_level_2') || '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reverse geocoding con fallback: Nominatim → Google (si hay key).
+ * Devuelve null sólo si ambos fallan.
+ */
+export async function reverseGeocodeWithFallback(
+  lat: number,
+  lon: number
+): Promise<GeocodingResult | null> {
+  try {
+    const osm = await reverseGeocode(lat, lon);
+    if (osm && osm.direccion_formateada) return osm;
+  } catch (err) {
+    console.warn('[geolocation] Nominatim falló, intentando Google:', err);
+  }
+  return await reverseGeocodeGoogle(lat, lon);
+}

@@ -1,5 +1,9 @@
 import { writable, derived } from 'svelte/store';
 import type { AuthState, UserProfile, TemporaryPermission } from '../types';
+import { idbGet, idbSet, idbDel } from '../lib/idbStorage';
+
+const IDB_USER_KEY = 'auth_user';
+const IDB_TOKEN_KEY = 'auth_token';
 
 const initialState: AuthState = {
   isAuthenticated: false,
@@ -31,6 +35,9 @@ function createAuthStore() {
       } catch {
         // Ignore storage errors
       }
+      // Mirror to IndexedDB (ITP-resistant on iOS Safari)
+      idbSet(IDB_USER_KEY, user).catch(() => undefined);
+      idbSet(IDB_TOKEN_KEY, user.token).catch(() => undefined);
     },
     logout: () => {
       set({
@@ -46,6 +53,8 @@ function createAuthStore() {
       } catch {
         // Ignore storage errors
       }
+      idbDel(IDB_USER_KEY).catch(() => undefined);
+      idbDel(IDB_TOKEN_KEY).catch(() => undefined);
     },
     setError: (error: string) => {
       update((state) => ({ ...state, error, loading: false }));
@@ -75,6 +84,40 @@ function createAuthStore() {
       return false;
     },
     /**
+     * Restaura sesión desde IndexedDB cuando localStorage fue purgado
+     * (iOS Safari Intelligent Tracking Prevention - 7 días).
+     * Devuelve true si se pudo rehidratar.
+     */
+    restoreSessionFromIdb: async (): Promise<boolean> => {
+      try {
+        const [savedUser, savedToken] = await Promise.all([
+          idbGet<UserProfile>(IDB_USER_KEY),
+          idbGet<string>(IDB_TOKEN_KEY),
+        ]);
+        if (savedUser && savedToken) {
+          savedUser.token = savedToken;
+          set({
+            isAuthenticated: true,
+            user: savedUser,
+            token: savedToken,
+            loading: false,
+            error: null,
+          });
+          // Repopulate volatile storage for this session
+          try {
+            localStorage.setItem('auth_user', JSON.stringify(savedUser));
+            sessionStorage.setItem('auth_token', savedToken);
+          } catch {
+            // ignore
+          }
+          return true;
+        }
+      } catch {
+        // Ignore
+      }
+      return false;
+    },
+    /**
      * Actualiza la información de roles y permisos del usuario.
      */
     updateUserRolesAndPermissions: (roles: string[], permissions: string[], temporaryPermissions: TemporaryPermission[] = []) => {
@@ -100,6 +143,7 @@ function createAuthStore() {
           } catch {
             // Ignore storage errors
           }
+          idbSet(IDB_USER_KEY, state.user).catch(() => undefined);
         }
         return state;
       });

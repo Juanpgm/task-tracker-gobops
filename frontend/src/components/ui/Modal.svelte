@@ -2,8 +2,30 @@
   export let show = false;
   export let title = '';
 
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onDestroy } from 'svelte';
   const dispatch = createEventDispatcher();
+
+  let scrollY = 0;
+
+  function lockBody() {
+    if (typeof document === 'undefined') return;
+    scrollY = window.scrollY;
+    document.body.style.top = `-${scrollY}px`;
+    document.body.classList.add('modal-open');
+  }
+  function unlockBody() {
+    if (typeof document === 'undefined') return;
+    document.body.classList.remove('modal-open');
+    document.body.style.top = '';
+    window.scrollTo(0, scrollY);
+  }
+
+  // React to show prop changes (iOS scroll lock)
+  $: if (typeof document !== 'undefined') {
+    if (show) lockBody(); else unlockBody();
+  }
+
+  onDestroy(() => { if (show) unlockBody(); });
 
   function close() {
     show = false;
@@ -11,7 +33,7 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') close();
+    if (e.key === 'Escape' && show) close();
   }
 </script>
 
@@ -46,6 +68,11 @@
     justify-content: center;
     z-index: 1000;
     padding: var(--space-md);
+    /* iOS: ensure backdrop covers full dynamic viewport */
+    height: 100vh;
+    height: 100dvh;
+    overscroll-behavior: contain;
+    -webkit-tap-highlight-color: transparent;
   }
   .modal {
     background: var(--surface);
@@ -54,7 +81,10 @@
     width: 100%;
     max-width: 480px;
     max-height: 90vh;
+    max-height: 90dvh;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
   .modal-header {
     display: flex;

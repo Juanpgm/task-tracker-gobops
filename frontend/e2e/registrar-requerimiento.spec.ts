@@ -78,6 +78,16 @@ test.describe('Registrar requerimiento sin tipo (clasificación automática)', (
       await obsTextarea.first().fill('[E2E] Test automatizado de clasificación');
     }
 
+    // Descartar el chip flotante de instalación PWA si está visible,
+    // ya que su posición fixed puede interceptar el click en Guardar.
+    const pwaChip = page.locator('button[aria-label="Instalar app"]');
+    if (await pwaChip.isVisible({ timeout: 1000 }).catch(() => false)) {
+      const closeBtn = page.locator('.pwa-chip__close');
+      if (await closeBtn.isVisible({ timeout: 500 }).catch(() => false)) {
+        await closeBtn.click();
+      }
+    }
+
     // Esperar al POST /registrar-requerimiento mientras hacemos click en Guardar.
     const respPromise: Promise<APIResponse> = page.waitForResponse(
       (resp) =>
@@ -85,7 +95,7 @@ test.describe('Registrar requerimiento sin tipo (clasificación automática)', (
       { timeout: 60_000 },
     );
 
-    await page.getByRole('button', { name: /^Guardar \d+ Requerimiento/i }).click();
+    await page.getByRole('button', { name: /^Guardar \d+ Requerimiento/i }).click({ force: true });
 
     const resp = await respPromise;
     expect(

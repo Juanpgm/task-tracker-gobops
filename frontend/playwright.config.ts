@@ -34,6 +34,42 @@ export default defineConfig({
       },
       dependencies: ['setup'],
     },
+    // ---- iOS (WebKit) emulation matrix ----
+    // Runs against the same Playwright WebKit binary that backs Safari rendering.
+    // Approx. 80% fidelity vs. real Safari; pair with BrowserStack for release smokes.
+    {
+      name: 'webkit-iphone-15',
+      use: {
+        ...devices['iPhone 15'],
+        storageState: 'playwright/.auth/user.json',
+      },
+      dependencies: ['setup'],
+    },
+    {
+      name: 'webkit-iphone-se',
+      use: {
+        ...devices['iPhone SE'],
+        storageState: 'playwright/.auth/user.json',
+      },
+      dependencies: ['setup'],
+    },
+    {
+      name: 'webkit-ipad-pro',
+      use: {
+        ...devices['iPad Pro 11'],
+        storageState: 'playwright/.auth/user.json',
+      },
+      dependencies: ['setup'],
+    },
+    // Android parity check
+    {
+      name: 'mobile-chrome-pixel',
+      use: {
+        ...devices['Pixel 7'],
+        storageState: 'playwright/.auth/user.json',
+      },
+      dependencies: ['setup'],
+    },
   ],
   webServer: {
     command: 'npm run dev',

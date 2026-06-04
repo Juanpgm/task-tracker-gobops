@@ -16,9 +16,9 @@
   import VisitasProgramadas from "./components/seguimiento/VisitasProgramadas.svelte";
   import RegistrarRequerimientosVisita from "./components/seguimiento/RegistrarRequerimientosVisita.svelte";
   import KanbanRequerimientos from "./components/seguimiento/KanbanRequerimientos.svelte";
-  import DirectorioEnlaces from "./components/seguimiento/DirectorioEnlaces.svelte";
   import ProgramarVisitaLibre from "./components/seguimiento/ProgramarVisitaLibre.svelte";
   import ListaRequerimientosVisita from "./components/seguimiento/ListaRequerimientosVisita.svelte";
+  import PWAInstall from "./components/PWAInstall.svelte";
 
   let unsubscribeAuth: (() => void) | undefined;
   let showRegister = false;
@@ -68,8 +68,6 @@
     <KanbanRequerimientos />
   {:else if currentView === "lista-requerimientos-visita"}
     <ListaRequerimientosVisita />
-  {:else if currentView === "directorio-enlaces"}
-    <DirectorioEnlaces />
     <!-- Legacy views -->
   {:else if currentView === "asistencia-delegado"}
     <AsistenciaDelegado />
@@ -83,3 +81,6 @@
     <Home />
   {/if}
 {/if}
+
+<!-- Global PWA install banner (auto-hidden when already installed or recently dismissed) -->
+<PWAInstall />

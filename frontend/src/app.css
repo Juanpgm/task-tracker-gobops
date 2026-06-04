@@ -59,11 +59,28 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  /* iOS Safari: prevent overscroll bounce + lock to dynamic viewport */
+  overscroll-behavior-y: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+html, body {
+  min-height: 100vh;
+  min-height: -webkit-fill-available; /* iOS <= 15 fallback */
+  min-height: 100dvh;
 }
 
 #app {
   min-height: 100vh;
+  min-height: -webkit-fill-available;
   min-height: 100dvh;
+}
+
+/* iOS body scroll lock helper (toggled by Modal) */
+body.modal-open {
+  position: fixed;
+  width: 100%;
+  overflow: hidden;
 }
 
 a {
@@ -109,6 +126,7 @@ a:hover {
   border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
+  will-change: transform; /* GPU-accelerate on iOS */
 }
 
 @keyframes spin {

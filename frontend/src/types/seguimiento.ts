@@ -122,9 +122,6 @@ export interface Requerimiento {
   documentos_adjuntos: DocumentoAdjunto[]; // Fotos/docs subidos a S3
   estado: EstadoRequerimiento;
   encargado?: string;                // persona asignada del centro gestor
-  enlace_id?: string;                // ID del enlace del organismo asignado
-  enlace_nombre?: string;            // nombre del enlace (desnormalizado)
-  fecha_propuesta_solucion?: string; // habilitada al asignar enlace
   porcentaje_avance: number;         // 0-100
   historial: RegistroAvance[];
   prioridad: 'baja' | 'media' | 'alta' | 'urgente';
@@ -139,21 +136,6 @@ export interface Requerimiento {
   documento_cancelacion_nombre?: string;
   created_at: string;
   updated_at: string;
-}
-
-/* ============================================================
- *  ENLACES (representantes de cada organismo/centro gestor)
- * ============================================================ */
-export interface Enlace {
-  id: string;
-  nombre: string;
-  email: string;
-  telefono: string;
-  cargo: string;
-  centro_gestor_id: string;       // id del CentroGestor
-  centro_gestor_nombre: string;   // nombre display
-  dependencia?: string;           // subdependencia dentro del centro gestor
-  activo: boolean;
 }
 
 /* ============================================================

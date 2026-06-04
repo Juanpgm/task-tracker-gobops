@@ -21,7 +21,7 @@ npm install
 
 **NUNCA** subas archivos con credenciales reales al repositorio.
 
-#### Configuración segura:
+#### Configuración segura
 
 ```bash
 # Copia el archivo de ejemplo
@@ -31,13 +31,13 @@ cp .env.local.example .env.local
 nano .env.local
 ```
 
-#### Credenciales requeridas:
+#### Credenciales requeridas
 
 - **Firebase Config**: Obtén desde Firebase Console > Project Settings > General
 - **Firebase Service Account**: Descarga JSON desde Firebase Console > Service Accounts
 - **URLs de API**: Ya configuradas para producción
 
-#### Archivos de configuración:
+#### Archivos de configuración
 
 - ✅ **`.env.local`** → Tus credenciales reales (ignoradas por git)
 - ✅ **`.env.example`** → Template público con placeholders
@@ -64,7 +64,6 @@ npm run build
   - Administración de usuarios y roles
   - Super admins y admins con diferentes niveles de acceso
 - ✅ Seguimiento de requerimientos con Kanban
-- ✅ Directorio de enlaces de organismos
 - ✅ Registro de visitas programadas
 - ✅ Gestión de evidencias fotográficas
 - ✅ PWA (Progressive Web App)
@@ -115,7 +114,7 @@ El sistema implementa una arquitectura completa de **Administración y Control d
 
 Ver [API_ENDPOINTS.md](./API_ENDPOINTS.md) para documentación completa de endpoints.
 
-### APIs disponibles:
+### APIs disponibles
 
 - **Auth API** (Control de Accesos):
   - Base: `https://web-production-79739.up.railway.app`
@@ -128,7 +127,7 @@ Ver [API_ENDPOINTS.md](./API_ENDPOINTS.md) para documentación completa de endpo
 
 Ver [DEPLOY_VERCEL.md](./DEPLOY_VERCEL.md) para instrucciones completas de despliegue y configuración de variables de entorno.
 
-### Configuración rápida:
+### Configuración rápida
 
 ```bash
 # Instalar Vercel CLI

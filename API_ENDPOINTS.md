@@ -1,5 +1,7 @@
 # 📡 API Endpoints — Task Tracker GobOps
 
+<!-- markdownlint-disable MD031 MD040 -->
+
 > Documento generado automáticamente a partir del análisis del frontend.
 > Fecha: 2026-02-09
 
@@ -441,7 +443,7 @@
     }
   ]
   ```
-- **Usado por:** RegistrarRequerimientosVisita (multi-select), DirectorioEnlaces (agrupación)
+- **Usado por:** RegistrarRequerimientosVisita (multi-select)
 - **Mock actual:** `CENTROS_GESTORES` constante (14 entidades)
 
 ---
@@ -570,8 +572,6 @@
       "evidencia_fotos": ["string (URL)"],
       "estado": "nuevo | radicado | en-gestion | asignado | en-proceso | resuelto | cerrado",
       "encargado": "string | null",
-      "enlace_id": "string | null",
-      "enlace_nombre": "string | null",
       "porcentaje_avance": "number (0-100)",
       "prioridad": "baja | media | alta | urgente",
       "historial": [
@@ -649,70 +649,6 @@
   ```
 - **Response:** `Requerimiento` (actualizado)
 
-#### `PATCH /seguimiento/requerimientos/:reqId/enlace`
-
-- **Descripción:** Asignar enlace del organismo a un requerimiento
-- **Auth:** Bearer Token
-- **Body:**
-  ```json
-  {
-    "enlace_id": "string",
-    "enlace_nombre": "string"
-  }
-  ```
-- **Response:** `Requerimiento` (actualizado)
-
----
-
-### 10. Enlaces (Directorio de Representantes)
-
-#### `GET /seguimiento/enlaces`
-
-- **Descripción:** Listar todos los enlaces de organismos
-- **Auth:** Bearer Token
-- **Query params (opcionales):** `?centro_gestor_id=emcali&activo=true`
-- **Response:**
-  ```json
-  [
-    {
-      "id": "string",
-      "nombre": "string",
-      "email": "string",
-      "telefono": "string",
-      "cargo": "string",
-      "centro_gestor_id": "string",
-      "centro_gestor_nombre": "string",
-      "dependencia": "string | null",
-      "activo": "boolean"
-    }
-  ]
-  ```
-- **Mock actual:** `MOCK_ENLACES` (20 enlaces, 14 centros gestores)
-
-#### `POST /seguimiento/enlaces` _(futuro — crear enlace)_
-
-- **Body:**
-  ```json
-  {
-    "nombre": "string",
-    "email": "string",
-    "telefono": "string",
-    "cargo": "string",
-    "centro_gestor_id": "string",
-    "dependencia": "string | null"
-  }
-  ```
-- **Response:** `Enlace` (creado)
-
-#### `PATCH /seguimiento/enlaces/:enlaceId` _(futuro — actualizar enlace)_
-
-- **Body:** Campos parciales de Enlace
-- **Response:** `Enlace` (actualizado)
-
-#### `DELETE /seguimiento/enlaces/:enlaceId` _(futuro — desactivar enlace)_
-
-- **Response:** `{ message: string }`
-
 ---
 
 ## 📊 Resumen
@@ -728,10 +664,9 @@
 | Centros Gestores          | 1         | 🔴 Requiere backend |
 | Colaboradores             | 1         | 🔴 Requiere backend |
 | Visitas Programadas       | 3         | 🔴 Requiere backend |
-| Requerimientos            | 5         | 🔴 Requiere backend |
-| Enlaces                   | 4         | 🔴 Requiere backend |
-| **Subtotal Mock**         | **14**    |                     |
-| **TOTAL**                 | **26**    |                     |
+| Requerimientos            | 4         | 🔴 Requiere backend |
+| **Subtotal Mock**         | **9**     |                     |
+| **TOTAL**                 | **21**    |                     |
 
 ---
 
@@ -749,54 +684,52 @@
 │ color               │     │ email                │
 └─────────┬───────────┘     │ activo               │
           │                 └──────────────────────┘
-          │ 1:N
-┌─────────▼───────────┐
-│      enlaces         │     ┌──────────────────────┐
-├─────────────────────┤     │  visitas_programadas   │
-│ id (PK)             │     ├──────────────────────┤
-│ nombre              │     │ id (PK)              │
-│ email               │     │ upid (FK→UP)         │
-│ telefono            │     │ fecha_visita         │
-│ cargo               │     │ hora_inicio          │
-│ centro_gestor_id(FK)│     │ hora_fin             │
-│ dependencia         │     │ estado               │
-│ activo              │     │ observaciones        │
-└─────────────────────┘     │ created_at           │
-                            │ updated_at           │
-                            └──────────┬───────────┘
-                                       │ 1:N
-                            ┌──────────▼───────────┐
-                            │   requerimientos      │
-                            ├──────────────────────┤
-                            │ id (PK)              │
-                            │ visita_id (FK)       │
-                            │ solicitante (JSON)   │
-                            │ centros_gestores[]   │
-                            │ descripcion          │
-                            │ estado               │
-                            │ prioridad            │
-                            │ encargado            │
-                            │ enlace_id (FK→enl)   │
-                            │ porcentaje_avance    │
-                            │ evidencia_fotos[]    │
-                            │ latitud, longitud    │
-                            │ created_at           │
-                            │ updated_at           │
-                            └──────────┬───────────┘
-                                       │ 1:N
-                            ┌──────────▼───────────┐
-                            │   historial_avance    │
-                            ├──────────────────────┤
-                            │ id (PK)              │
-                            │ requerimiento_id(FK) │
-                            │ fecha                │
-                            │ autor                │
-                            │ descripcion          │
-                            │ estado_anterior      │
-                            │ estado_nuevo         │
-                            │ porcentaje           │
-                            │ evidencias (JSON)    │
-                            └──────────────────────┘
+
+┌──────────────────────┐
+│  visitas_programadas   │
+├──────────────────────┤
+│ id (PK)              │
+│ upid (FK→UP)         │
+│ fecha_visita         │
+│ hora_inicio          │
+│ hora_fin             │
+│ estado               │
+│ observaciones        │
+│ created_at           │
+│ updated_at           │
+└──────────┬───────────┘
+           │ 1:N
+┌──────────▼───────────┐
+│   requerimientos      │
+├──────────────────────┤
+│ id (PK)              │
+│ visita_id (FK)       │
+│ solicitante (JSON)   │
+│ centros_gestores[]   │
+│ descripcion          │
+│ estado               │
+│ prioridad            │
+│ encargado            │
+│ porcentaje_avance    │
+│ evidencia_fotos[]    │
+│ latitud, longitud    │
+│ created_at           │
+│ updated_at           │
+└──────────┬───────────┘
+           │ 1:N
+┌──────────▼───────────┐
+│   historial_avance    │
+├──────────────────────┤
+│ id (PK)              │
+│ requerimiento_id(FK) │
+│ fecha                │
+│ autor                │
+│ descripcion          │
+│ estado_anterior      │
+│ estado_nuevo         │
+│ porcentaje           │
+│ evidencias (JSON)    │
+└──────────────────────┘
 
 Tabla intermedia: visita_colaboradores (visita_id, colaborador_id)
 Tabla intermedia: requerimiento_centros (requerimiento_id, centro_gestor_id)

@@ -1,18 +1,14 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { navigationStore } from "../../stores/navigationStore";
-  import { registrarVisita, getDirectorioContactos } from "../../api/visitas";
+  import { registrarVisita } from "../../api/visitas";
   import type {
     RegistrarVisitaPayload,
-    ContactoDirectorio,
-    AcompananteModel,
   } from "../../types";
   import Button from "../ui/Button.svelte";
   import Input from "../ui/Input.svelte";
   import Textarea from "../ui/Textarea.svelte";
   import Alert from "../ui/Alert.svelte";
   import Card from "../ui/Card.svelte";
-  import GroupedMultiSelect from "../ui/GroupedMultiSelect.svelte";
 
   let submitting = false;
   let successMsg = "";
@@ -23,53 +19,6 @@
   let observaciones_visita = "";
   let fecha_visita = new Date().toISOString().split("T")[0];
   let hora_visita = "";
-
-  // Directorio de contactos
-  let contactos: ContactoDirectorio[] = [];
-  let selectedContactIds: string[] = [];
-  let loadingContactos = false;
-
-  $: contactGroups = (() => {
-    const map = new Map<
-      string,
-      { id: string; label: string; sublabel?: string }[]
-    >();
-    for (const c of contactos) {
-      const key = c.centro_gestor || "Sin centro gestor";
-      if (!map.has(key)) map.set(key, []);
-      const nombre = `${c.nombres} ${c.apellidos}`.trim();
-      map.get(key)!.push({
-        id: c.id,
-        label: nombre,
-        sublabel: c.funcion || undefined,
-      });
-    }
-    return Array.from(map.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([category, items]) => ({ category, items }));
-  })();
-
-  $: acompanantes = selectedContactIds
-    .map((id) => contactos.find((c) => c.id === id))
-    .filter((c): c is ContactoDirectorio => !!c)
-    .map<AcompananteModel>((c) => ({
-      nombre_completo: `${c.nombres} ${c.apellidos}`.trim(),
-      telefono: c.telefono,
-      email: c.email,
-      centro_gestor: c.centro_gestor,
-    }));
-
-  onMount(async () => {
-    loadingContactos = true;
-    try {
-      const res = await getDirectorioContactos();
-      if (res.success) contactos = res.contactos;
-    } catch (err) {
-      console.error("Error cargando directorio de contactos:", err);
-    } finally {
-      loadingContactos = false;
-    }
-  });
 
   /** Convert YYYY-MM-DD to dd/mm/aaaa */
   function formatDateForAPI(isoDate: string): string {
@@ -95,7 +44,6 @@
         direccion_visita,
         descripcion_visita,
         observaciones_visita: observaciones_visita.trim() || "Sin observaciones",
-        acompanantes: acompanantes.length > 0 ? acompanantes : undefined,
         fecha_visita: formatDateForAPI(fecha_visita),
         hora_visita,
       };
@@ -107,7 +55,6 @@
       observaciones_visita = "";
       fecha_visita = new Date().toISOString().split("T")[0];
       hora_visita = "";
-      selectedContactIds = [];
       // Navegar a Visitas Programadas
       navigationStore.navigate("visitas-programadas");
     } catch (err) {
@@ -180,17 +127,6 @@
           />
         </div>
 
-        <GroupedMultiSelect
-          id="acompanantes"
-          label="Delegados Acompañantes"
-          placeholder={loadingContactos
-            ? "Cargando contactos..."
-            : "Buscar delegado por nombre o centro gestor..."}
-          groups={contactGroups}
-          bind:selected={selectedContactIds}
-          disabled={loadingContactos}
-        />
-
         <div class="form-actions">
           <Button variant="secondary" on:click={() => navigationStore.goHome()}>
             Cancelar
@@ -207,6 +143,8 @@
 <style>
   .view {
     min-height: 100vh;
+    min-height: -webkit-fill-available;
+    min-height: 100dvh;
     min-height: 100dvh;
     background: var(--bg);
   }

@@ -8,24 +8,10 @@
     EstadoRequerimiento,
   } from "../../types/seguimiento";
   import { CENTROS_GESTORES } from "../../data/mock-seguimiento";
-  import { getDirectorioContactos } from "../../api/visitas";
-  import type { ContactoDirectorio } from "../../types";
   import Button from "../ui/Button.svelte";
-
-  let directorio: ContactoDirectorio[] = [];
-  let loadingDirectorio = false;
 
   onMount(async () => {
     seguimientoStore.loadRequerimientos();
-    try {
-      loadingDirectorio = true;
-      const res = await getDirectorioContactos();
-      directorio = res.contactos || [];
-    } catch (e) {
-      console.error('Error cargando directorio de contactos:', e);
-    } finally {
-      loadingDirectorio = false;
-    }
   });
 
   let filterVisitaId = "";
@@ -33,7 +19,6 @@
   let showDetailPanel = false;
   let viewMode: "kanban" | "tabla" = "kanban";
   let groupBy: "estado" | "centro_gestor" = "estado";
-  let enlaceSeleccionado = "";
   let showFilters = false;
 
   // Filters
@@ -44,7 +29,6 @@
   let filterFechaFin = "";
   let filterEstado = "";
   let filterPrioridad = "";
-  let filterConEnlace = ""; // 'con' | 'sin' | ''
   let filterConOrfeo = ""; // 'con' | 'sin' | ''
   let filterTexto = "";
 
@@ -60,9 +44,6 @@
   let orfeoNumero = "";
   let orfeoFechaRadicado = "";
   let orfeoPeticionFile: FileList | null = null;
-
-  // Propuesta solucion
-  let fechaPropuestaSolucion = "";
 
   // Cancelar form
   let showCancelForm = false;
@@ -112,8 +93,6 @@
       return false;
     if (filterEstado && r.estado !== filterEstado) return false;
     if (filterPrioridad && r.prioridad !== filterPrioridad) return false;
-    if (filterConEnlace === "con" && !r.enlace_id) return false;
-    if (filterConEnlace === "sin" && r.enlace_id) return false;
     if (filterConOrfeo === "con" && !r.numero_orfeo) return false;
     if (filterConOrfeo === "sin" && r.numero_orfeo) return false;
     if (filterTexto) {
@@ -187,7 +166,6 @@
     filterFechaFin,
     filterEstado,
     filterPrioridad,
-    filterConEnlace,
     filterConOrfeo,
     filterTexto,
   ].filter(Boolean).length;
@@ -200,7 +178,6 @@
     filterFechaFin = "";
     filterEstado = "";
     filterPrioridad = "";
-    filterConEnlace = "";
     filterConOrfeo = "";
     filterTexto = "";
   }
@@ -211,8 +188,6 @@
     showAvanceForm = false;
     showOrfeoForm = false;
     showCancelForm = false;
-    enlaceSeleccionado = "";
-    fechaPropuestaSolucion = req.fecha_propuesta_solucion || "";
   }
 
   function closeDetail() {
@@ -285,18 +260,6 @@
     );
     if (updated) selectedReq = updated;
     showOrfeoForm = false;
-  }
-
-  function guardarFechaPropuestaSolucion() {
-    if (!selectedReq || !fechaPropuestaSolucion) return;
-    seguimientoStore.asignarFechaPropuestaSolucion(
-      selectedReq.id,
-      fechaPropuestaSolucion,
-    );
-    const updated = $seguimientoStore.requerimientos.find(
-      (r) => r.id === selectedReq!.id,
-    );
-    if (updated) selectedReq = updated;
   }
 
   function confirmarCancelacion() {
@@ -405,36 +368,6 @@
   function getVisitaLabel(visitaId: string): string {
     const v = $seguimientoStore.visitas.find((v) => v.id === visitaId);
     return v ? `${v.barrio_vereda || "Visita"} — ${v.fecha_visita}` : visitaId;
-  }
-
-  // Contactos del directorio filtrados por centros gestores del requerimiento
-  $: contactosForSelectedReq = selectedReq
-    ? directorio.filter((c) =>
-        selectedReq!.centros_gestores.includes(c.centro_gestor),
-      )
-    : [];
-
-  $: contactosGrouped = (() => {
-    const groups: Record<string, ContactoDirectorio[]> = {};
-    for (const c of contactosForSelectedReq) {
-      if (!groups[c.centro_gestor]) groups[c.centro_gestor] = [];
-      groups[c.centro_gestor].push(c);
-    }
-    return groups;
-  })();
-
-  function handleAsignarEnlace() {
-    if (!selectedReq || !enlaceSeleccionado) return;
-    const contacto = directorio.find((c) => c.id === enlaceSeleccionado);
-    if (contacto) {
-      const nombreCompleto = `${contacto.nombres} ${contacto.apellidos}`;
-      seguimientoStore.asignarEnlace(
-        selectedReq.id,
-        contacto.id,
-        nombreCompleto,
-      );
-    }
-    enlaceSeleccionado = "";
   }
 
   // Stats
@@ -567,14 +500,6 @@
           </select>
         </div>
         <div class="filter-group">
-          <label for="f-enlace">Enlace</label>
-          <select id="f-enlace" bind:value={filterConEnlace}>
-            <option value="">Todos</option>
-            <option value="con">Con enlace</option>
-            <option value="sin">Sin enlace</option>
-          </select>
-        </div>
-        <div class="filter-group">
           <label for="f-orfeo">Orfeo</label>
           <select id="f-orfeo" bind:value={filterConOrfeo}>
             <option value="">Todos</option>
@@ -666,9 +591,6 @@
                         <span class="kcard-tag">{cg}</span>
                       {/each}
                     </div>
-                    {#if req.enlace_nombre}<div class="kcard-enlace">
-                        {req.enlace_nombre}
-                      </div>{/if}
                     {#if req.numero_orfeo}<div class="kcard-orfeo">
                         Orfeo: {req.numero_orfeo}
                       </div>{/if}
@@ -733,9 +655,6 @@
                         >{req.estado}</span
                       >
                     </div>
-                    {#if req.enlace_nombre}<div class="kcard-enlace">
-                        {req.enlace_nombre}
-                      </div>{/if}
                     {#if req.numero_orfeo}<div class="kcard-orfeo">
                         Orfeo: {req.numero_orfeo}
                       </div>{/if}
@@ -779,7 +698,6 @@
               <th>Centro(s) Gestor</th>
               <th>Descripción</th>
               <th>Avance</th>
-              <th>Enlace</th>
               <th>Encargado</th>
               <th>Fecha</th>
             </tr>
@@ -829,7 +747,6 @@
                     <span class="tabla-pct">{req.porcentaje_avance}%</span>
                   </div>
                 </td>
-                <td class="td-enlace">{req.enlace_nombre || "—"}</td>
                 <td class="td-encargado">{req.encargado || "—"}</td>
                 <td class="td-fecha"
                   >{new Date(req.created_at).toLocaleDateString("es-CO", {
@@ -840,7 +757,7 @@
               </tr>
             {:else}
               <tr
-                ><td colspan="10" class="empty-table">No hay requerimientos</td
+                ><td colspan="9" class="empty-table">No hay requerimientos</td
                 ></tr
               >
             {/each}
@@ -910,94 +827,6 @@
             <span class="panel-label">Encargado</span>
             <span>{selectedReq.encargado}</span>
           </div>
-        {/if}
-
-        <hr />
-
-        <!-- Enlace del Organismo -->
-        <h4>Enlace del Organismo</h4>
-        {#if selectedReq.enlace_nombre}
-          {@const contactoObj = directorio.find(
-            (c) => c.id === selectedReq?.enlace_id,
-          )}
-          <div class="enlace-assigned">
-            <div class="enlace-info">
-              <span class="enlace-name">{selectedReq.enlace_nombre}</span>
-              {#if contactoObj}
-                <span class="enlace-meta"
-                  >{contactoObj.funcion} — {contactoObj.centro_gestor}</span
-                >
-                {#if contactoObj.email}<span class="enlace-contact"
-                    >{contactoObj.email}</span
-                  >{/if}
-                {#if contactoObj.telefono}<span class="enlace-contact"
-                    >{contactoObj.telefono}</span
-                  >{/if}
-              {/if}
-            </div>
-          </div>
-          <!-- Fecha propuesta de solución habilitada al tener enlace -->
-          <div class="fecha-solucion-box">
-            <label class="fecha-solucion-label"
-              >Fecha propuesta de solución
-              <div class="fecha-solucion-row">
-                <input
-                  type="date"
-                  bind:value={fechaPropuestaSolucion}
-                  class="fecha-solucion-input"
-                />
-                <button
-                  class="fecha-solucion-btn"
-                  on:click={guardarFechaPropuestaSolucion}
-                  disabled={!fechaPropuestaSolucion ||
-                    fechaPropuestaSolucion ===
-                      (selectedReq.fecha_propuesta_solucion || "")}
-                  >Guardar</button
-                >
-              </div>
-              {#if selectedReq.fecha_propuesta_solucion}
-                <span class="fecha-solucion-saved"
-                  >Propuesta: {new Date(
-                    selectedReq.fecha_propuesta_solucion,
-                  ).toLocaleDateString("es-CO")}</span
-                >
-              {/if}
-            </label>
-          </div>
-        {:else}
-          <p class="panel-info-sm" style="margin-bottom: 0.4rem;">
-            Sin enlace asignado
-          </p>
-        {/if}
-        {#if loadingDirectorio}
-          <p class="panel-info-sm" style="color: #94a3b8;">
-            Cargando directorio de contactos...
-          </p>
-        {:else if contactosForSelectedReq.length > 0}
-          <div class="enlace-assign-form">
-            <select class="enlace-select" bind:value={enlaceSeleccionado}>
-              <option value="">— Asignar enlace —</option>
-              {#each Object.entries(contactosGrouped) as [cg, contactos]}
-                <optgroup label={cg}>
-                  {#each contactos as c}
-                    <option value={c.id}
-                      >{c.nombres} {c.apellidos} ({c.funcion})</option
-                    >
-                  {/each}
-                </optgroup>
-              {/each}
-            </select>
-            <button
-              class="enlace-assign-btn"
-              on:click={handleAsignarEnlace}
-              disabled={!enlaceSeleccionado}>Asignar</button
-            >
-          </div>
-        {:else}
-          <p class="panel-info-sm" style="color: #94a3b8;">
-            No hay contactos en el directorio para los organismos encargados de
-            este requerimiento
-          </p>
         {/if}
 
         <hr />
@@ -1133,7 +962,7 @@
                     on:click={() => { lightboxUrl = doc.url; lightboxName = doc.nombre; }}
                     type="button"
                   >
-                    <img src={doc.url} alt={doc.nombre} loading="lazy" />
+                    <img src={doc.url} alt={doc.nombre} loading="lazy" decoding="async" fetchpriority="low" />
                   </button>
                 {:else if doc.tipo.startsWith('video/') || doc.nombre.match(/\.(mp4|webm|mov)/i)}
                   <div class="media-video-card">
@@ -1361,6 +1190,8 @@
 <style>
   .view {
     min-height: 100vh;
+    min-height: -webkit-fill-available;
+    min-height: 100dvh;
     background: #f8f9fb;
     display: flex;
     flex-direction: column;
@@ -1461,6 +1292,7 @@
     gap: 0.5rem;
     min-width: max-content;
     height: calc(100vh - 120px);
+    height: calc(100dvh - 120px);
   }
   .kanban-column {
     width: 280px;
@@ -1606,15 +1438,6 @@
     padding: 2rem 0.5rem;
     color: #94a3b8;
     font-size: 0.75rem;
-  }
-  .kcard-enlace {
-    font-size: 0.58rem;
-    color: #475569;
-    font-weight: 500;
-    margin-top: 0.15rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   /* Detail Panel */
@@ -1943,71 +1766,6 @@
     text-align: center;
   }
 
-  /* Enlace section */
-  .enlace-assigned {
-    background: #f8fafb;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    padding: 0.6rem;
-    margin-bottom: 0.5rem;
-  }
-  .enlace-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-  }
-  .enlace-name {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: #1e293b;
-  }
-  .enlace-meta {
-    font-size: 0.72rem;
-    color: #475569;
-  }
-  .enlace-contact {
-    font-size: 0.7rem;
-    color: #64748b;
-  }
-  .enlace-assign-form {
-    display: flex;
-    gap: 0.4rem;
-    align-items: center;
-    margin-top: 0.4rem;
-  }
-  .enlace-select {
-    flex: 1;
-    padding: 0.4rem;
-    border: 1px solid #e2e8f0;
-    border-radius: 6px;
-    font-size: 0.78rem;
-    font-family: inherit;
-    outline: none;
-    background: white;
-  }
-  .enlace-select:focus {
-    border-color: #0d9488;
-    box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.15);
-  }
-  .enlace-assign-btn {
-    background: #1e293b;
-    color: white;
-    border: none;
-    padding: 0.4rem 0.75rem;
-    border-radius: 6px;
-    font-size: 0.78rem;
-    font-weight: 500;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  .enlace-assign-btn:hover:not(:disabled) {
-    background: #0f172a;
-  }
-  .enlace-assign-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
   /* Timeline */
   .timeline {
     display: flex;
@@ -2230,12 +1988,6 @@
     font-weight: 600;
     color: #475569;
   }
-  .td-enlace {
-    font-size: 0.72rem;
-    color: #475569;
-    font-weight: 500;
-    word-break: break-word;
-  }
   .td-encargado {
     font-size: 0.72rem;
     color: #64748b;
@@ -2388,61 +2140,6 @@
     color: #64748b;
     font-weight: 500;
     margin-top: 0.2rem;
-  }
-
-  /* Fecha propuesta solucion */
-  .fecha-solucion-box {
-    background: #f8f9fb;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    padding: 0.6rem;
-    margin: 0.5rem 0;
-  }
-  .fecha-solucion-label {
-    font-size: 0.72rem;
-    font-weight: 600;
-    color: #374151;
-    display: block;
-    margin-bottom: 0.35rem;
-  }
-  .fecha-solucion-row {
-    display: flex;
-    gap: 0.4rem;
-    align-items: center;
-  }
-  .fecha-solucion-input {
-    flex: 1;
-    padding: 0.35rem 0.5rem;
-    border: 1px solid #bbf7d0;
-    border-radius: 6px;
-    font-size: 0.78rem;
-    font-family: inherit;
-    outline: none;
-  }
-  .fecha-solucion-input:focus {
-    border-color: #94a3b8;
-  }
-  .fecha-solucion-btn {
-    background: #1e293b;
-    color: white;
-    border: none;
-    padding: 0.35rem 0.65rem;
-    border-radius: 6px;
-    font-size: 0.75rem;
-    font-weight: 500;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  .fecha-solucion-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-  .fecha-solucion-saved {
-    font-size: 0.7rem;
-    color: #475569;
-    font-weight: 500;
-    display: block;
-    margin-top: 0.3rem;
   }
 
   /* Orfeo section */
