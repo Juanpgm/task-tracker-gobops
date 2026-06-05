@@ -4,6 +4,7 @@
   import { CENTROS_GESTORES } from "../../data/mock-seguimiento";
   import type { Requerimiento } from "../../types/seguimiento";
   import Icon from "../ui/Icon.svelte";
+  import MapaRequerimientos from "./MapaRequerimientos.svelte";
 
   onMount(() => {
     seguimientoStore.loadRequerimientos();
@@ -298,6 +299,23 @@
         <span class="kpi-value">{conOrfeo}</span>
         <span class="kpi-label">Con No. Orfeo</span>
       </div>
+    </div>
+  </div>
+
+  <!-- ── Mapa de ubicaciones ── -->
+  <div class="chart-card chart-card-wide map-card">
+    <div class="map-card-header">
+      <h3 class="chart-title"><Icon name="map-pin" size={16} /> Ubicaciones de Requerimientos</h3>
+      <div class="map-legend-row">
+        {#each [["Nuevo","#6b7280"],["Radicado","#3b82f6"],["En Gestión","#f59e0b"],["Asignado","#8b5cf6"],["En Proceso","#f97316"],["Resuelto","#22c55e"],["Cancelado","#ef4444"]] as [label, color]}
+          <span class="map-legend-item">
+            <span class="map-legend-dot" style="background:{color}"></span>{label}
+          </span>
+        {/each}
+      </div>
+    </div>
+    <div class="map-body">
+      <MapaRequerimientos filteredReqs={filteredReqs} />
     </div>
   </div>
 
@@ -961,5 +979,53 @@
     color: #94a3b8;
     flex-wrap: wrap;
     gap: 0.3rem;
+  }
+
+  /* ── Map card ───────────────────────────────────────────────────────────*/
+  .map-card {
+    padding: 0;
+    overflow: hidden;
+  }
+  .map-card-header {
+    padding: 0.75rem 1rem 0.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .map-body {
+    height: 420px;
+  }
+  .map-legend-row {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+  }
+  .map-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.68rem;
+    color: #64748b;
+    font-weight: 500;
+  }
+  .map-legend-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 600px) {
+    .map-legend-row {
+      display: none;
+    }
+    .map-body {
+      height: 300px;
+    }
   }
 </style>
