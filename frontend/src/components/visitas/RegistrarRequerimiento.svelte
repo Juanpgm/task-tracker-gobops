@@ -14,6 +14,7 @@
   import Card from "../ui/Card.svelte";
   import Icon from "../ui/Icon.svelte";
   import LocationPicker from "../shared/LocationPicker.svelte";
+  import CasoRequerimientoSelector from "./CasoRequerimientoSelector.svelte";
 
   let submitting = false;
   let successMsg = "";
@@ -38,8 +39,11 @@
   let sol_telefono = "";
   let sol_centro_gestor = "";
 
-  // Organismos (comma-separated, will be serialized as JSON array)
-  let organismos_text = "";
+  // Organismos: managed by CasoRequerimientoSelector
+  let organismos_json = "[]";
+
+  // Key to force-reset the CasoRequerimientoSelector on successful submit
+  let selectorKey = 0;
 
   // Quick location reference
   let selectedComuna = "";
@@ -112,13 +116,6 @@
         coordinates: [parseFloat(longitud), parseFloat(latitud)],
       });
 
-      // Build organismos_encargados as JSON array string
-      const organismos = organismos_text
-        .split(",")
-        .map((o) => o.trim())
-        .filter(Boolean);
-      const organismosJson = JSON.stringify(organismos);
-
       const payload: RequerimientoPayload = {
         vid,
         datos_solicitante: datosSolicitante,
@@ -127,7 +124,7 @@
         direccion_requerimiento: direccion || undefined,
         observaciones: observaciones || "Sin observaciones",
         coords: coordsJson,
-        organismos_encargados: organismosJson,
+        organismos_encargados: organismos_json,
         nota_voz: notaVozFile,
       };
 
@@ -143,8 +140,9 @@
       sol_telefono = "";
       sol_centro_gestor = "";
       showSolicitanteSection = false;
-      organismos_text = "";
+      organismos_json = "[]";
       notaVozFile = null;
+      selectorKey += 1; // re-mount CasoRequerimientoSelector to clear selections
     } catch (err) {
       errorMsg = "Error al registrar el requerimiento. Intente de nuevo.";
       console.error(err);
@@ -188,14 +186,12 @@
           required
         />
 
-        <Textarea
-          id="requerimiento"
-          label="Descripción del Requerimiento"
-          placeholder="Describa el requerimiento..."
-          bind:value={requerimiento}
-          required
-          rows={4}
-        />
+        {#key selectorKey}
+          <CasoRequerimientoSelector
+            bind:requerimiento
+            bind:organismosJson={organismos_json}
+          />
+        {/key}
 
         <Textarea
           id="observaciones"
@@ -203,14 +199,6 @@
           placeholder="Observaciones adicionales..."
           bind:value={observaciones}
           rows={3}
-        />
-
-        <Textarea
-          id="organismos_encargados"
-          label="Organismos Encargados (separados por coma)"
-          placeholder="Ej: DAGMA, Secretaría de Obras, EMCALI"
-          bind:value={organismos_text}
-          rows={2}
         />
 
         <!-- Location reference (optional, for context) -->

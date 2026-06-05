@@ -14,6 +14,7 @@
   import Card from "../ui/Card.svelte";
   import Icon from "../ui/Icon.svelte";
   import LocationPicker from "../shared/LocationPicker.svelte";
+  import CasoRequerimientoSelector from "../visitas/CasoRequerimientoSelector.svelte";
 
   let visita: VisitaProgramada | null = null;
   let visitaReqs: Requerimiento[] = [];
@@ -42,6 +43,7 @@
 
   interface ReqDraft {
     descripcion: string;
+    organismos_json: string;
     direccion: string;
     observaciones: string;
     nota_voz: File | null;
@@ -64,6 +66,7 @@
   function createEmptyReq(): ReqDraft {
     return {
       descripcion: "",
+      organismos_json: "[]",
       direccion: "",
       observaciones: "",
       nota_voz: null,
@@ -284,7 +287,7 @@
     for (let i = 0; i < requerimientosDraft.length; i++) {
       const req = requerimientosDraft[i];
       if (!req.descripcion.trim()) {
-        errorMsg = `Requerimiento #${i + 1}: La descripción es obligatoria`;
+        errorMsg = `Requerimiento #${i + 1}: Seleccione al menos un caso en la descripción`;
         return;
       }
       if (!req.latitud || !req.longitud) {
@@ -345,8 +348,7 @@
           direccion_requerimiento: req.direccion || undefined,
           observaciones: req.observaciones || "N/A",
           coords,
-          // organismos_encargados se omite a propósito: el backend lo clasifica automáticamente
-          // con el SLM en base a `requerimiento`, `observaciones` y la transcripción del audio.
+          organismos_encargados: req.organismos_json,
           nota_voz: req.nota_voz,
           evidencias: req.evidencias.length > 0 ? req.evidencias : null,
         };
@@ -626,30 +628,10 @@
                 {/if}
               </div>
 
-              <!--
-                Centro(s) Gestor(es): se asignan automáticamente en el backend
-                a partir de la descripción + observaciones + transcripción del
-                audio (clasificador SLM local). Ya no se solicitan al usuario.
-              -->
-              <div class="cg-auto-notice">
-                <Icon name="info" size={14} />
-                <span>
-                  Los <strong>organismos encargados</strong> se asignarán
-                  automáticamente según la descripción del requerimiento.
-                </span>
-              </div>
-
-              <div class="field">
-                <label for="req-desc-{idx}"
-                  >Descripción del Requerimiento *</label
-                >
-                <textarea
-                  id="req-desc-{idx}"
-                  bind:value={req.descripcion}
-                  rows="3"
-                  placeholder="Describa la necesidad o petición del solicitante..."
-                ></textarea>
-              </div>
+              <CasoRequerimientoSelector
+                bind:requerimiento={req.descripcion}
+                bind:organismosJson={req.organismos_json}
+              />
 
               <!-- Ubicación: GPS automático + mapa Leaflet con marcador arrastrable + dirección por reverse geocoding -->
               <LocationPicker

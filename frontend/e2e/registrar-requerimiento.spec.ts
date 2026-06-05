@@ -1,30 +1,25 @@
 import { test, expect, Page, APIResponse } from '@playwright/test';
 
 /**
- * E2E: registrar un requerimiento SIN tipo_requerimiento y verificar que:
- *  - El backend responde 200 (la clasificación deriva tipo + acciones).
+ * E2E: registrar un requerimiento usando CasoRequerimientoSelector y verificar que:
+ *  - El selector multi-select (dropdown con searchbar) funciona correctamente.
  *  - El dropdown legacy "Tipo de Requerimiento" ya NO se renderiza.
+ *  - El backend responde 200 (con tipo + organismos_encargados).
  *  - El panel "Clasificación automática" aparece con tipo + organismos + acciones.
  *
  * Estrategia: usa la primera visita disponible en "Visitas Programadas".
- * Si no hay ninguna, intenta crearla rápidamente vía el flujo "+ Nueva visita"
- * (variante simple); si la creación tampoco es viable, el test se marca como skipped.
+ * Si no hay ninguna, el test se marca como skipped.
  */
 
 async function gotoVisitasProgramadas(page: Page) {
   await page.goto('/');
-  // En el Home hay una action-card con título "Visitas Programadas".
-  // Usamos role=button + nombre para seleccionar el card específicamente.
   await page
     .locator('button.action-card', { hasText: 'Visitas Programadas' })
     .first()
     .click();
-  // Cabecera de la vista visitas-programadas: existe el botón "+ Nueva visita".
   await expect(page.getByRole('button', { name: /Nueva visita/i })).toBeVisible({
     timeout: 20_000,
   });
-  // Esperar a que el listado termine de cargar: o aparece al menos un card,
-  // o aparece el empty-state con el botón "Programar Visita".
   await page.waitForFunction(
     () =>
       document.querySelectorAll('button[class*="action-card"], .visita-card').length >= 0 &&
@@ -35,7 +30,6 @@ async function gotoVisitasProgramadas(page: Page) {
 }
 
 async function abrirRegistrarRequerimientosDePrimeraVisita(page: Page) {
-  // Esperamos hasta 15s a que aparezca el botón "Registrar Requerimientos".
   const botonRegistrar = page.getByRole('button', { name: /Registrar Requerimientos/i }).first();
   try {
     await botonRegistrar.waitFor({ state: 'visible', timeout: 15_000 });
@@ -49,8 +43,40 @@ async function abrirRegistrarRequerimientosDePrimeraVisita(page: Page) {
   return true;
 }
 
-test.describe('Registrar requerimiento sin tipo (clasificación automática)', () => {
-  test('crea, clasifica y muestra panel de tipo + acciones', async ({ page }) => {
+/**
+ * Interacts with CasoRequerimientoSelector to pick a case via the searchable dropdown.
+ * @param searchTerm  Text to type in the searchbar (filters the list).
+ * @param caseLabel   Partial text of the list-item label to click.
+ */
+async function seleccionarCasoRequerimiento(page: Page, searchTerm: string, caseLabel: string) {
+  // Open the dropdown by clicking the .control combobox trigger.
+  const control = page.locator('.caso-selector .control').first();
+  await control.click();
+
+  // Wait for the search input to appear inside the dropdown panel.
+  const searchInput = page.locator('.caso-selector .search-input').first();
+  await searchInput.waitFor({ state: 'visible', timeout: 5_000 });
+
+  // Type in the search term to filter.
+  await searchInput.fill(searchTerm);
+
+  // Click the matching list-item.
+  const listItem = page
+    .locator('.caso-selector .list-item', { hasText: caseLabel })
+    .first();
+  await listItem.waitFor({ state: 'visible', timeout: 5_000 });
+  await listItem.click();
+
+  // Close the dropdown via "Listo" button.
+  const doneBtn = page.locator('.caso-selector .done-btn').first();
+  await doneBtn.click();
+
+  // Confirm a tag appears in the control.
+  await expect(page.locator('.caso-selector .tag').first()).toBeVisible({ timeout: 3_000 });
+}
+
+test.describe('Registrar requerimiento con CasoRequerimientoSelector', () => {
+  test('selecciona caso, envía al backend y muestra panel de clasificación', async ({ page }) => {
     test.setTimeout(120_000);
 
     await gotoVisitasProgramadas(page);
@@ -65,21 +91,26 @@ test.describe('Registrar requerimiento sin tipo (clasificación automática)', (
     await expect(page.locator('select[id^="req-tipo-"]')).toHaveCount(0);
     await expect(page.locator('label[for^="req-tipo-"]')).toHaveCount(0);
 
-    // Llenar la descripción con un texto que el clasificador deba
-    // reconocer como "Poda de árboles".
-    const descripcion =
-      '[E2E] Solicito poda normal del árbol del parque, las ramas están muy crecidas';
-    const descTextarea = page.locator('textarea[id^="req-desc-"]').first();
-    await descTextarea.fill(descripcion);
+    // El textarea libre de descripción ya NO debe existir.
+    await expect(page.locator('textarea[id^="req-desc-"]')).toHaveCount(0);
 
-    // Observaciones opcional — dejamos algo para enriquecer.
-    const obsTextarea = page.locator('textarea').nth(1);
+    // CasoRequerimientoSelector debe estar presente.
+    await expect(page.locator('.caso-selector')).toBeVisible({ timeout: 10_000 });
+
+    // Seleccionar un caso del catálogo usando el dropdown con searchbar.
+    await seleccionarCasoRequerimiento(page, 'poda', 'Poda normal');
+
+    // Los organismos del caso seleccionado deben aparecer debajo del dropdown.
+    await expect(page.locator('.organismos-section')).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('.org-row').first()).toBeVisible();
+
+    // Observaciones opcional.
+    const obsTextarea = page.locator('textarea').first();
     if (await obsTextarea.count()) {
-      await obsTextarea.first().fill('[E2E] Test automatizado de clasificación');
+      await obsTextarea.fill('[E2E] Test automatizado — CasoRequerimientoSelector');
     }
 
-    // Descartar el chip flotante de instalación PWA si está visible,
-    // ya que su posición fixed puede interceptar el click en Guardar.
+    // Descartar el chip flotante de instalación PWA si está visible.
     const pwaChip = page.locator('button[aria-label="Instalar app"]');
     if (await pwaChip.isVisible({ timeout: 1000 }).catch(() => false)) {
       const closeBtn = page.locator('.pwa-chip__close');
