@@ -137,6 +137,7 @@ export interface Requerimiento {
   documento_cancelacion_nombre?: string;
   created_at: string;
   updated_at: string;
+  isOffline?: boolean;
 }
 
 /* ============================================================

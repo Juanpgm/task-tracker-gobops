@@ -20,7 +20,9 @@
   import KanbanRequerimientos from "./components/seguimiento/KanbanRequerimientos.svelte";
   import ProgramarVisitaLibre from "./components/seguimiento/ProgramarVisitaLibre.svelte";
   import ListaRequerimientosVisita from "./components/seguimiento/ListaRequerimientosVisita.svelte";
+  import DetalleUPVisita from "./components/seguimiento/DetalleUPVisita.svelte";
   import PWAInstall from "./components/PWAInstall.svelte";
+  import SyncStatusBar from "./components/seguimiento/SyncStatusBar.svelte";
 
   let unsubscribeAuth: (() => void) | undefined;
   let showRegister = false;
@@ -82,11 +84,14 @@
     <Login on:register={handleRegister} on:forgot={handleForgotPassword} />
   {/if}
 {:else if $authStore.isAuthenticated}
+  <SyncStatusBar />
   {#if currentView === "home"}
     <Home />
     <!-- Seguimiento workflow -->
   {:else if currentView === "programar-visita"}
     <RegistrarVisita />
+  {:else if currentView === "programar-visita-detalle"}
+    <DetalleUPVisita />
   {:else if currentView === "programar-visita-libre"}
     <ProgramarVisitaLibre />
   {:else if currentView === "visitas-programadas"}

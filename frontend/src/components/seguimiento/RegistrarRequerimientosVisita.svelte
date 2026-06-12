@@ -3,12 +3,11 @@
   import { navigationStore } from "../../stores/navigationStore";
   import { seguimientoStore } from "../../stores/seguimientoStore";
   import { authStore } from "../../stores/authStore";
-  import { registrarRequerimiento } from "../../api/visitas";
   import type {
     VisitaProgramada,
     Requerimiento,
+    Solicitante,
   } from "../../types/seguimiento";
-  import type { RequerimientoPayload } from "../../types";
   import Button from "../ui/Button.svelte";
   import Alert from "../ui/Alert.svelte";
   import Card from "../ui/Card.svelte";
@@ -313,73 +312,68 @@
     try {
       let registrados = 0;
       const resultsAcc: ReqClassificationResult[] = [];
+      const hasSolicitanteData =
+        solNombre.trim() ||
+        solEmail.trim() ||
+        solTelefono.trim() ||
+        solDireccion.trim();
+
+      const solicitante: Solicitante = {
+        id: "",
+        nombre_completo: solNombre || "Sin nombre",
+        cedula: "",
+        telefono: solTelefono || "",
+        email: solEmail || "",
+        direccion: solDireccion || "",
+        barrio_vereda: "",
+        comuna_corregimiento: "",
+      };
+
       for (const req of requerimientosDraft) {
-        const hasSolicitanteData =
-          solNombre.trim() ||
-          solEmail.trim() ||
-          solTelefono.trim() ||
-          solDireccion.trim();
+        let centrosGestores: string[] = [];
+        try {
+          centrosGestores = JSON.parse(req.organismos_json || "[]");
+        } catch (e) {
+          console.error("Error parsing organismos_json:", e);
+        }
 
-        const datosSolicitante = JSON.stringify({
-          registrado_por: registradoPor,
-          personas:
-            showSolicitanteSection && hasSolicitanteData
-              ? [
-                  {
-                    nombre: solNombre || undefined,
-                    email: solEmail || undefined,
-                    telefono: solTelefono || undefined,
-                    direccion: solDireccion || undefined,
-                  },
-                ]
-              : [],
-        });
-
-        const coords = JSON.stringify({
-          type: "Point",
-          coordinates: [parseFloat(req.longitud), parseFloat(req.latitud)],
-        });
-
-        const payload: RequerimientoPayload = {
-          vid: visita!.id,
-          datos_solicitante: datosSolicitante,
-          // tipo_requerimiento se omite: el backend lo deriva del clasificador automático.
-          requerimiento: req.descripcion,
-          direccion_requerimiento: req.direccion || undefined,
-          observaciones: req.observaciones || "N/A",
-          coords,
-          organismos_encargados: req.organismos_json,
-          nota_voz: req.nota_voz,
-          evidencias: req.evidencias.length > 0 ? req.evidencias : null,
-        };
-
-        const result = await registrarRequerimiento(payload);
-        console.log(
-          "Requerimiento registrado:",
-          result.rid,
-          "tipo:",
-          result.tipo_requerimiento,
-          "organismos:",
-          result.organismos_encargados,
-          "origen:",
-          result.organismos_encargados_origen,
+        const result = await seguimientoStore.agregarRequerimiento(
+          visita!.id,
+          solicitante,
+          centrosGestores,
+          req.descripcion,
+          req.observaciones || "N/A",
+          req.direccion || "",
+          req.latitud,
+          req.longitud,
+          req.evidencias.length > 0 ? req.evidencias : null,
+          req.nota_voz,
+          "media"
         );
-        resultsAcc.push({
-          rid: result.rid,
-          tipo_requerimiento: result.tipo_requerimiento || "Otros",
-          tipo_requerimiento_origen: result.tipo_requerimiento_origen ?? null,
-          organismos_encargados: result.organismos_encargados ?? [],
-          acciones_por_organismo: (result.acciones_por_organismo ?? {}) as Record<string, string[]>,
-        });
+
+        const resAny = result as any;
+        if (resAny && resAny.isOffline) {
+          successMsg = "Requerimiento guardado localmente (Trabajando offline). Se sincronizará automáticamente al detectar conexión.";
+        } else if (resAny) {
+          resultsAcc.push({
+            rid: resAny.rid || resAny.id || "REQ-NUEVO",
+            tipo_requerimiento: resAny.tipo_requerimiento || "Otros",
+            tipo_requerimiento_origen: resAny.tipo_requerimiento_origen ?? null,
+            organismos_encargados: resAny.centros_gestores ?? [],
+            acciones_por_organismo: resAny.acciones_por_organismo ?? {},
+          });
+        }
         registrados++;
       }
-      lastResults = resultsAcc;
 
-      successMsg = solNombre.trim()
-        ? `${registrados} requerimiento(s) registrado(s) para ${solNombre} · por ${registradoPor}`
-        : `${registrados} requerimiento(s) registrado(s) · por ${registradoPor}`;
+      if (resultsAcc.length > 0) {
+        lastResults = resultsAcc;
+        successMsg = solNombre.trim()
+          ? `${registrados} requerimiento(s) registrado(s) para ${solNombre} · por ${registradoPor}`
+          : `${registrados} requerimiento(s) registrado(s) · por ${registradoPor}`;
+      }
 
-      // Reload requerimientos from API to refresh list
+      // Reload list from store
       seguimientoStore.loadRequerimientos();
 
       // Reset form

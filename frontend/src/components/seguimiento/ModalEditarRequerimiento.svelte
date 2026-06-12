@@ -166,7 +166,12 @@
 
       await seguimientoStore.editarRequerimiento(req.id, payload);
       
-      successMsg = "Requerimiento editado exitosamente.";
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        successMsg = "Cambios guardados localmente (Trabajando offline). Se sincronizarán automáticamente al detectar conexión.";
+      } else {
+        successMsg = "Requerimiento editado exitosamente.";
+      }
+
       setTimeout(() => {
         dispatch("save");
         show = false;

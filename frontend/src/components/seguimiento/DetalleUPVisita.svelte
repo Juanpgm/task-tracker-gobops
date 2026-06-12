@@ -35,7 +35,7 @@
         return;
       }
       const allUPs = await getUnidadesProyecto();
-      up = allUPs.find((u) => u.upid === upid) || null;
+      up = allUPs.find((u: any) => u.upid === upid) || null;
       if (!up) {
         errorMsg = `No se encontró la UP con ID: ${upid}`;
       }

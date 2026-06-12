@@ -157,12 +157,12 @@
         descripcion_visita:
           observaciones || `Visita en ${direccion || "ubicación GPS"}`,
         observaciones_visita: observaciones || "",
-        acompanantes: {
-          nombre_completo: primerColab?.nombre || "Sin acompañante",
-          telefono: primerColab?.telefono || "",
-          email: primerColab?.email || "",
-          centro_gestor: primerColab?.centro_gestor || "",
-        },
+        acompanantes: primerColab ? [{
+          nombre_completo: primerColab.nombre || "Sin acompañante",
+          telefono: primerColab.telefono || "",
+          email: primerColab.email || "",
+          centro_gestor: primerColab.centro_gestor || "",
+        }] : undefined,
         fecha_visita: `${d}/${m}/${y}`,
         hora_visita: horaInicio,
       };

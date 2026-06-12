@@ -9,6 +9,7 @@ export type AppView =
   | 'kanban'
   | 'lista-requerimientos-visita'
   | 'detalle-requerimiento'
+  | 'programar-visita-detalle'
   // legacy views
   | 'asistencia-delegado'
   | 'asistencia-comunidad'

@@ -22,7 +22,8 @@ export function detectPushSupport(): PushSupport {
   if (!('PushManager' in window)) return { ok: false, reason: 'no-push' };
   if (typeof Notification === 'undefined') return { ok: false, reason: 'no-notification' };
   // iOS Safari 16.4+ requires standalone (installed) PWA
-  if (isIOS() && iosVersion() >= 16.4 && !isStandalone()) {
+  const version = iosVersion();
+  if (isIOS() && version !== null && version >= 16.4 && !isStandalone()) {
     return { ok: false, reason: 'ios-needs-install' };
   }
   return { ok: true };
@@ -76,7 +77,7 @@ export async function subscribePush(): Promise<PushSubscription> {
     const vapid = await fetchVapidPublicKey();
     sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapid),
+      applicationServerKey: urlBase64ToUint8Array(vapid) as any,
     });
   }
 

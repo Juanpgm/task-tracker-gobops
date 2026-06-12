@@ -11,6 +11,7 @@ import type {
   VisitaProgramadaOut,
   CrearRequerimientoBody,
   RequerimientoOut,
+  UnidadProyecto,
 } from '../types';
 
 type ApiListResponse<T> = { success?: boolean; data?: T[] } | T[];
@@ -243,6 +244,11 @@ export async function getCentrosGestores(): Promise<unknown[]> {
   return apiClient.get<unknown[]>('/seguimiento/centros-gestores');
 }
 
+/** GET /init/unidades-proyecto — Obtener unidades de proyecto */
+export async function getUnidadesProyecto(): Promise<UnidadProyecto[]> {
+  return apiClient.get<UnidadProyecto[]>('/init/unidades-proyecto');
+}
+
 /* ============================================================
  *  GET /obtener-requerimientos
  *  Obtiene todos los requerimientos registrados (Artefacto de Captura)
@@ -269,6 +275,7 @@ export interface ObtenerRequerimientosItem {
   };
   organismos_encargados: string[];
   nota_voz_url: string | null;
+  transcripciones?: any[];
   documentos_s3: Array<{ filename?: string; s3_key?: string; content_type?: string; size?: number }> | Record<string, unknown> | null;
   documentos_con_enlaces: Array<{ filename?: string; s3_key?: string; s3_url?: string; content_type?: string; size?: number; url_visualizar?: string; url_presigned?: string; url_descarga?: string }> | Record<string, unknown> | null;
   total_documentos: number;

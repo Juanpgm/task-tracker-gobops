@@ -31,7 +31,101 @@ import {
   editarRequerimiento as editarRequerimientoAPI,
 } from '../api/visitas';
 import type { ObtenerVisitasProgramadasItem, ObtenerRequerimientosItem } from '../api/visitas';
-import type { RegistrarVisitaPayload, RequerimientoPayload } from '../types';
+import type { RegistrarVisitaPayload, RequerimientoPayload, RequerimientoOut, UnidadProyecto } from '../types';
+import { offlineStore } from './offlineStore';
+import {
+  enqueueOperation,
+  getQueue,
+  dequeueOperation,
+  updateQueueReqId,
+  updateOperationError,
+} from '../lib/offlineQueue';
+
+function mapRequerimientoOutToRequerimiento(
+  out: RequerimientoOut,
+  legacyRid?: string,
+  isOffline?: boolean
+): Requerimiento {
+  const estadoMap: Record<string, EstadoRequerimiento> = {
+    'pendiente': 'nuevo',
+    'nuevo': 'nuevo',
+    'radicado': 'radicado',
+    'en-gestion': 'en-gestion',
+    'asignado': 'asignado',
+    'en-proceso': 'en-proceso',
+    'resuelto': 'resuelto',
+    'cerrado': 'cerrado',
+    'cancelado': 'cancelado',
+  };
+  const estadoNorm = (out.estado || 'Pendiente').toLowerCase().trim();
+  const estado = estadoMap[estadoNorm] || 'nuevo';
+
+  const prioridadMap: Record<string, Requerimiento['prioridad']> = {
+    'baja': 'baja',
+    'media': 'media',
+    'alta': 'alta',
+    'urgente': 'urgente',
+  };
+  const prioridadNorm = (out.prioridad || 'media').toLowerCase().trim();
+  const prioridad = prioridadMap[prioridadNorm] || 'media';
+
+  return {
+    id: out.id,
+    rid: legacyRid || undefined,
+    visita_id: out.visita_id,
+    solicitante: {
+      id: out.solicitante?.id || out.id || '',
+      nombre_completo: out.solicitante?.nombre_completo || 'Sin nombre',
+      cedula: out.solicitante?.cedula || '',
+      telefono: out.solicitante?.telefono || '',
+      email: out.solicitante?.email || '',
+      direccion: out.solicitante?.direccion || '',
+      barrio_vereda: out.solicitante?.barrio_vereda || '',
+      comuna_corregimiento: out.solicitante?.comuna_corregimiento || '',
+    },
+    centros_gestores: out.centros_gestores || [],
+    descripcion: out.descripcion || '',
+    observaciones: out.observaciones || '',
+    direccion: out.direccion || '',
+    latitud: out.latitud || '',
+    longitud: out.longitud || '',
+    evidencia_fotos: out.evidencia_fotos || [],
+    nota_voz_url: null,
+    transcripciones: [],
+    documentos_adjuntos: (out.evidencia_fotos || []).map((url: string) => ({
+      nombre: url.split('/').pop() || 'foto',
+      url,
+      tipo: 'image/jpeg',
+      s3_key: '',
+    })),
+    estado,
+    encargado: out.encargado || undefined,
+    porcentaje_avance: out.porcentaje_avance || 0,
+    historial: Array.isArray(out.historial)
+      ? out.historial.map((h: any) => ({
+          id: h.id || `hist-${Math.random()}`,
+          fecha: h.fecha || new Date().toISOString(),
+          autor: h.autor || 'Sistema',
+          descripcion: h.descripcion || '',
+          estado_anterior: h.estado_anterior || 'nuevo',
+          estado_nuevo: h.estado_nuevo || 'nuevo',
+          evidencias: h.evidencias || [],
+          porcentaje_avance: h.porcentaje_avance || 0,
+        }))
+      : [],
+    prioridad,
+    numero_orfeo: out.numero_orfeo || undefined,
+    fecha_radicado_orfeo: out.fecha_radicado_orfeo || undefined,
+    documento_peticion_url: out.documento_peticion_url || undefined,
+    documento_peticion_nombre: out.documento_peticion_nombre || undefined,
+    motivo_cancelacion: out.motivo_cancelacion || undefined,
+    documento_cancelacion_url: out.documento_cancelacion_url || undefined,
+    documento_cancelacion_nombre: out.documento_cancelacion_nombre || undefined,
+    created_at: out.created_at || new Date().toISOString(),
+    updated_at: out.updated_at || new Date().toISOString(),
+    isOffline: isOffline || false,
+  };
+}
 
 /* ============================================================
  *  STATE
@@ -165,7 +259,7 @@ function createSeguimientoStore() {
               if (item.nota_voz_url) {
                 const raw = item.documentos_con_enlaces || [];
                 const arr = Array.isArray(raw) ? raw : [raw];
-                const notaVozDoc = arr.find((d: Record<string, string>) =>
+                const notaVozDoc = arr.find((d: any) =>
                   d?.filename?.startsWith('nota_voz_')
                 );
                 if (notaVozDoc) {
@@ -174,15 +268,15 @@ function createSeguimientoStore() {
                 return item.nota_voz_url;
               }
               return null;
-            })(),
+            })() as string | null,
             transcripciones: Array.isArray(item.transcripciones) ? item.transcripciones : [],
             documentos_adjuntos: (() => {
               const raw = item.documentos_con_enlaces || item.documentos_s3 || [];
               const arr = Array.isArray(raw) ? raw : [raw];
               return arr
-                .filter((d: Record<string, unknown>) => d && typeof d === 'object' && Object.keys(d).length > 0)
-                .filter((d: Record<string, string>) => !d.filename?.startsWith('nota_voz_'))
-                .map((d: Record<string, string>) => ({
+                .filter((d: any) => d && typeof d === 'object' && Object.keys(d).length > 0)
+                .filter((d: any) => !d.filename?.startsWith('nota_voz_'))
+                .map((d: any) => ({
                   nombre: d.filename || d.nombre || 'archivo',
                   url: d.url_visualizar || d.url_presigned || d.s3_url || d.url || '',
                   tipo: d.content_type || d.tipo || '',
@@ -200,7 +294,83 @@ function createSeguimientoStore() {
             updated_at: item.timestamp || item.created_at,
           };
         });
-        update((s) => ({ ...s, requerimientos: mapped, loading: false }));
+        const offlineQueue = await getQueue();
+        const queuedCreates = offlineQueue
+          .filter((q) => q.type === 'create')
+          .map((q) => {
+            const p = q.payload;
+            return {
+              id: q.reqId,
+              visita_id: p.visitaId,
+              solicitante: p.solicitante,
+              centros_gestores: p.centrosGestores,
+              descripcion: p.descripcion,
+              observaciones: p.observaciones,
+              direccion: p.direccion,
+              latitud: p.latitud,
+              longitud: p.longitud,
+              evidencia_fotos: p.fotosFiles ? p.fotosFiles.map((f: File) => typeof window !== 'undefined' ? URL.createObjectURL(f) : '') : [],
+              nota_voz_url: p.notaVozFile ? (typeof window !== 'undefined' ? URL.createObjectURL(p.notaVozFile) : null) : null,
+              documentos_adjuntos: [],
+              estado: 'nuevo' as EstadoRequerimiento,
+              porcentaje_avance: 0,
+              prioridad: p.prioridad,
+              historial: [
+                {
+                  id: `hist-${q.id}`,
+                  fecha: new Date(q.timestamp).toISOString(),
+                  autor: p.solicitante?.nombre_completo || 'Usuario actual',
+                  descripcion: 'Requerimiento registrado en campo (Pendiente de sincronizar)',
+                  estado_anterior: 'nuevo' as EstadoRequerimiento,
+                  estado_nuevo: 'nuevo' as EstadoRequerimiento,
+                  evidencias: [],
+                  porcentaje_avance: 0,
+                }
+              ],
+              created_at: new Date(q.timestamp).toISOString(),
+              updated_at: new Date(q.timestamp).toISOString(),
+              isOffline: true,
+            };
+          });
+
+        update((s) => {
+          let merged = [...queuedCreates, ...mapped];
+          
+          // Apply queued edits and status changes
+          for (const q of offlineQueue) {
+            if (q.type === 'status') {
+              merged = merged.map((r) => {
+                if (r.id !== q.reqId) return r;
+                return {
+                  ...r,
+                  estado: q.payload.nuevoEstado,
+                  porcentaje_avance: q.payload.porcentajeAvance,
+                  isOffline: true,
+                };
+              });
+            } else if (q.type === 'edit') {
+              merged = merged.map((r) => {
+                if (r.id !== q.reqId) return r;
+                const p = q.payload;
+                let editedDesc = r.descripcion;
+                let editedObs = r.observaciones;
+                let editedDir = r.direccion;
+                if (p.requerimiento) editedDesc = p.requerimiento;
+                if (p.observaciones) editedObs = p.observaciones;
+                if (p.direccion) editedDir = p.direccion;
+                
+                return {
+                  ...r,
+                  descripcion: editedDesc,
+                  observaciones: editedObs,
+                  direccion: editedDir,
+                  isOffline: true,
+                };
+              });
+            }
+          }
+          return { ...s, loading: false, requerimientos: merged };
+        });
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Error al cargar requerimientos';
         console.error('loadRequerimientos failed:', err);
@@ -210,21 +380,39 @@ function createSeguimientoStore() {
 
     /** Programa una nueva visita — calls POST /registrar-visita/ then updates local state */
     programarVisita: async (
-      fecha: string,
-      horaInicio: string,
-      horaFin: string,
-      colaboradoresIds: string[],
-      observaciones: string,
-      ubicacionManual?: {
-        direccion: string;
-        barrio_vereda: string;
-        comuna_corregimiento: string;
-        referencia: string;
-        latitud: string;
-        longitud: string;
-        geocoding_source: 'gps' | 'manual' | 'geocoded';
-      }
+      firstArg: string | UnidadProyecto | null,
+      secondArg: string,
+      thirdArg: string,
+      fourthArg: any,
+      fifthArg: any,
+      sixthArg?: any
     ) => {
+      let up: UnidadProyecto | null = null;
+      let fecha: string;
+      let horaInicio: string;
+      let horaFin: string;
+      let colaboradoresIds: string[];
+      let observaciones: string;
+      let ubicacionManual: any = undefined;
+
+      if (firstArg && typeof firstArg === 'object') {
+        // UP-linked visit: firstArg is UnidadProyecto
+        up = firstArg as UnidadProyecto;
+        fecha = secondArg;
+        horaInicio = thirdArg;
+        horaFin = fourthArg;
+        colaboradoresIds = fifthArg;
+        observaciones = sixthArg || '';
+      } else {
+        // Free visit: firstArg is fecha
+        fecha = firstArg as string;
+        horaInicio = secondArg;
+        horaFin = thirdArg;
+        colaboradoresIds = fourthArg;
+        observaciones = fifthArg || '';
+        ubicacionManual = sixthArg;
+      }
+
       // Build payload for POST /registrar-visita/
       let currentState: SeguimientoState | undefined;
       const unsub = seguimientoStore.subscribe((s) => { currentState = s; });
@@ -235,10 +423,12 @@ function createSeguimientoStore() {
       );
       const [y, m, d] = fecha.split('-');
       const payload: RegistrarVisitaPayload = {
-        direccion_visita: ubicacionManual?.barrio_vereda
-          ? `${ubicacionManual.barrio_vereda}, ${ubicacionManual.comuna_corregimiento || ''}`
-          : 'Sin dirección',
-        descripcion_visita: observaciones || 'Visita programada',
+        direccion_visita: up
+          ? up.direccion || 'Sin dirección'
+          : (ubicacionManual?.barrio_vereda
+            ? `${ubicacionManual.barrio_vereda}, ${ubicacionManual.comuna_corregimiento || ''}`
+            : 'Sin dirección'),
+        descripcion_visita: observaciones || (up ? `Visita a UP: ${up.nombre_up}` : 'Visita programada'),
         observaciones_visita: observaciones || '',
         acompanantes: primerColab ? [{
           nombre_completo: primerColab.nombre || 'Sin acompañante',
@@ -265,14 +455,15 @@ function createSeguimientoStore() {
         );
         const nuevaVisita: VisitaProgramada = {
           id: vid || generateVisitaId(),
-          upid: 'SIN-UP',
-          direccion_manual: ubicacionManual?.direccion,
-          barrio_vereda: ubicacionManual?.barrio_vereda,
-          comuna_corregimiento: ubicacionManual?.comuna_corregimiento,
-          referencia_ubicacion: ubicacionManual?.referencia,
-          latitud: ubicacionManual?.latitud,
-          longitud: ubicacionManual?.longitud,
-          geocoding_source: ubicacionManual?.geocoding_source,
+          upid: up ? up.upid : 'SIN-UP',
+          unidad_proyecto: up || null,
+          direccion_manual: up ? up.direccion : ubicacionManual?.direccion,
+          barrio_vereda: up ? '' : ubicacionManual?.barrio_vereda,
+          comuna_corregimiento: up ? '' : ubicacionManual?.comuna_corregimiento,
+          referencia_ubicacion: up ? up.nombre_up_detalle : ubicacionManual?.referencia,
+          latitud: up ? '' : ubicacionManual?.latitud,
+          longitud: up ? '' : ubicacionManual?.longitud,
+          geocoding_source: up ? 'geocoded' : ubicacionManual?.geocoding_source,
           fecha_visita: fecha,
           hora_inicio: horaInicio,
           hora_fin: horaFin,
@@ -347,9 +538,6 @@ function createSeguimientoStore() {
 
     /* ---- REQUERIMIENTOS ---- */
 
-    /** Agrega un nuevo requerimiento — calls POST /seguimiento/requerimientos
-     *  También registra en POST /registrar-requerimiento (artefacto de captura)
-     */
     agregarRequerimiento: async (
       visitaId: string,
       solicitante: Solicitante,
@@ -359,127 +547,143 @@ function createSeguimientoStore() {
       direccion: string,
       latitud: string,
       longitud: string,
-      fotos: string[],
+      fotosFiles: File[] | null,
+      notaVozFile: File | null,
       prioridad: Requerimiento['prioridad']
     ) => {
-      // También registrar en el artefacto de captura POST /registrar-requerimiento (no bloqueante)
-      try {
-        const datosSolicitante = JSON.stringify({
-          personas: [{
-            nombre: solicitante.nombre_completo,
-            email: solicitante.email || undefined,
-            telefono: solicitante.telefono || undefined,
-            centro_gestor: centrosGestores[0] || undefined,
-          }],
-        });
-        const coordsJson = (latitud && longitud)
-          ? JSON.stringify({ type: 'Point', coordinates: [parseFloat(longitud), parseFloat(latitud)] })
-          : JSON.stringify({ type: 'Point', coordinates: [0, 0] });
-        const organismosJson = JSON.stringify(centrosGestores);
+      const tempId = generateRequerimientoId();
 
-        const capturaPayload: RequerimientoPayload = {
-          vid: visitaId,
-          datos_solicitante: datosSolicitante,
-          tipo_requerimiento: prioridad || 'media',
-          requerimiento: descripcion,
-          observaciones: observaciones || 'Sin observaciones',
-          coords: coordsJson,
-          organismos_encargados: organismosJson,
-        };
-        const capturaResult = await registrarRequerimiento(capturaPayload);
-        console.log('Requerimiento registrado en artefacto de captura:', capturaResult.rid);
-      } catch (err) {
-        console.warn('POST /registrar-requerimiento failed (no-blocking):', err);
-      }
-
-      // Try real API first (seguimiento)
-      try {
-        const apiBody = {
-          visita_id: visitaId,
-          solicitante: {
-            nombre_completo: solicitante.nombre_completo,
-            cedula: solicitante.cedula,
-            telefono: solicitante.telefono,
-            email: solicitante.email,
-            direccion: solicitante.direccion,
-            barrio_vereda: solicitante.barrio_vereda,
-            comuna_corregimiento: solicitante.comuna_corregimiento,
-          },
-          centros_gestores: centrosGestores,
-          descripcion,
-          observaciones,
-          direccion,
-          latitud,
-          longitud,
-          evidencia_fotos: fotos,
-          prioridad,
-        };
-        const result = await crearRequerimientoSeguimiento(apiBody);
-        update((state) => {
-          const nuevoReq: Requerimiento = {
-            id: result.id,
-            visita_id: result.visita_id,
-            solicitante,
-            centros_gestores: result.centros_gestores,
-            descripcion: result.descripcion,
-            observaciones: result.observaciones,
-            direccion: result.direccion,
-            latitud: result.latitud,
-            longitud: result.longitud,
-            evidencia_fotos: result.evidencia_fotos,
-            estado: (result.estado as Requerimiento['estado']) || 'nuevo',
-            porcentaje_avance: result.porcentaje_avance || 0,
-            prioridad: (result.prioridad as Requerimiento['prioridad']) || prioridad,
-            historial: [],
-            created_at: result.created_at,
-            updated_at: result.updated_at,
-          };
-          return { ...state, requerimientos: [nuevoReq, ...state.requerimientos] };
-        });
-        return;
-      } catch (err) {
-        console.warn('API /seguimiento/requerimientos failed, using local fallback:', err);
-      }
-
-      // Fallback: local-only
-      update((state) => {
-        const nuevoReq: Requerimiento = {
-          id: generateRequerimientoId(),
-          visita_id: visitaId,
-          solicitante,
-          centros_gestores: centrosGestores,
-          descripcion,
-          observaciones,
-          direccion,
-          latitud,
-          longitud,
-          evidencia_fotos: fotos,
-          estado: 'nuevo',
-          porcentaje_avance: 0,
-          prioridad,
-          historial: [
-            {
-              id: `hist-${Date.now()}`,
-              fecha: new Date().toISOString(),
-              autor: 'Usuario actual',
-              descripcion: 'Requerimiento registrado en campo',
-              estado_anterior: 'nuevo',
-              estado_nuevo: 'nuevo',
-              evidencias: [],
-              porcentaje_avance: 0,
-            },
-          ],
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        return {
-          ...state,
-          requerimientos: [nuevoReq, ...state.requerimientos],
-        };
+      const datosSolicitante = JSON.stringify({
+        personas: [{
+          nombre: solicitante.nombre_completo,
+          email: solicitante.email || undefined,
+          telefono: solicitante.telefono || undefined,
+          direccion: solicitante.direccion || undefined,
+        }],
       });
+      const coordsJson = (latitud && longitud)
+        ? JSON.stringify({ type: 'Point', coordinates: [parseFloat(longitud), parseFloat(latitud)] })
+        : JSON.stringify({ type: 'Point', coordinates: [0, 0] });
+
+      const queuePayload = {
+        visitaId,
+        solicitante,
+        centrosGestores,
+        descripcion,
+        observaciones,
+        direccion,
+        latitud,
+        longitud,
+        fotosFiles,
+        notaVozFile,
+        prioridad,
+        tempId,
+      };
+
+      const nuevoReqLocal: Requerimiento = {
+        id: tempId,
+        visita_id: visitaId,
+        solicitante,
+        centros_gestores: centrosGestores,
+        descripcion,
+        observaciones,
+        direccion,
+        latitud,
+        longitud,
+        evidencia_fotos: fotosFiles ? fotosFiles.map(f => typeof window !== 'undefined' ? URL.createObjectURL(f) : '') : [],
+        nota_voz_url: notaVozFile ? (typeof window !== 'undefined' ? URL.createObjectURL(notaVozFile) : null) : null,
+        documentos_adjuntos: [],
+        estado: 'nuevo',
+        porcentaje_avance: 0,
+        prioridad,
+        historial: [
+          {
+            id: `hist-${Date.now()}`,
+            fecha: new Date().toISOString(),
+            autor: solicitante.nombre_completo || 'Usuario actual',
+            descripcion: 'Requerimiento registrado en campo (Pendiente de sincronizar)',
+            estado_anterior: 'nuevo',
+            estado_nuevo: 'nuevo',
+            evidencias: [],
+            porcentaje_avance: 0,
+          },
+        ],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        isOffline: true,
+      };
+
+      update((state) => ({
+        ...state,
+        requerimientos: [nuevoReqLocal, ...state.requerimientos],
+      }));
+
+      if (navigator.onLine) {
+        try {
+          let uploadedUrls: string[] = [];
+          let legacyRid = '';
+          const capturaPayload: RequerimientoPayload = {
+            vid: visitaId,
+            datos_solicitante: datosSolicitante,
+            tipo_requerimiento: prioridad || 'media',
+            requerimiento: descripcion,
+            direccion_requerimiento: direccion || undefined,
+            observaciones: observaciones || 'Sin observaciones',
+            coords: coordsJson,
+            organismos_encargados: JSON.stringify(centrosGestores),
+            nota_voz: notaVozFile,
+            evidencias: fotosFiles,
+          };
+          
+          try {
+            const legacyResult = await registrarRequerimiento(capturaPayload);
+            legacyRid = legacyResult.rid;
+            if (legacyResult.documentos_urls) {
+              uploadedUrls = legacyResult.documentos_urls.map(doc => doc.url);
+            }
+          } catch (err) {
+            console.warn('Immediate capture registration failed:', err);
+            throw err;
+          }
+
+          const apiBody = {
+            visita_id: visitaId,
+            solicitante: {
+              nombre_completo: solicitante.nombre_completo,
+              cedula: solicitante.cedula,
+              telefono: solicitante.telefono,
+              email: solicitante.email,
+              direccion: solicitante.direccion,
+              barrio_vereda: solicitante.barrio_vereda,
+              comuna_corregimiento: solicitante.comuna_corregimiento,
+            },
+            centros_gestores: centrosGestores,
+            descripcion,
+            observaciones,
+            direccion,
+            latitud,
+            longitud,
+            evidencia_fotos: uploadedUrls,
+            prioridad,
+          };
+          const result = await crearRequerimientoSeguimiento(apiBody);
+          const mappedReq = mapRequerimientoOutToRequerimiento(result, legacyRid, false);
+
+          update((state) => ({
+            ...state,
+            requerimientos: state.requerimientos.map(r => r.id === tempId ? mappedReq : r),
+          }));
+          return mappedReq;
+        } catch (err) {
+          console.warn('Network call failed immediately, enqueuing for offline sync:', err);
+        }
+      }
+
+      await enqueueOperation('create', tempId, queuePayload);
+      await offlineStore.refreshPendingCount();
+      return nuevoReqLocal;
     },
 
-    /** Cambia el estado de un requerimiento — calls PATCH /seguimiento/requerimientos/:id/estado */
     cambiarEstadoRequerimiento: async (
       reqId: string,
       nuevoEstado: EstadoRequerimiento,
@@ -487,41 +691,55 @@ function createSeguimientoStore() {
       autor: string,
       porcentajeAvance: number
     ) => {
-      // Try real API
-      try {
-        await cambiarEstadoRequerimientoAPI(reqId, {
-          estado: nuevoEstado,
-          descripcion,
-          autor,
-          porcentaje_avance: porcentajeAvance,
-        });
-      } catch (err) {
-        console.warn('API PATCH estado requerimiento failed, updating locally:', err);
-      }
-      // Always update local state
-      update((state) => ({
-        ...state,
-        requerimientos: state.requerimientos.map((r) => {
-          if (r.id !== reqId) return r;
-          const nuevoRegistro: RegistroAvance = {
-            id: `hist-${Date.now()}`,
-            fecha: new Date().toISOString(),
-            autor,
-            descripcion,
-            estado_anterior: r.estado,
-            estado_nuevo: nuevoEstado,
-            evidencias: [],
-            porcentaje_avance: porcentajeAvance,
-          };
-          return {
-            ...r,
+      const updateLocalState = () => {
+        update((state) => ({
+          ...state,
+          requerimientos: state.requerimientos.map((r) => {
+            if (r.id !== reqId) return r;
+            const nuevoRegistro: RegistroAvance = {
+              id: `hist-${Date.now()}`,
+              fecha: new Date().toISOString(),
+              autor,
+              descripcion,
+              estado_anterior: r.estado,
+              estado_nuevo: nuevoEstado,
+              evidencias: [],
+              porcentaje_avance: porcentajeAvance,
+            };
+            return {
+              ...r,
+              estado: nuevoEstado,
+              porcentaje_avance: porcentajeAvance,
+              historial: [...r.historial, nuevoRegistro],
+              updated_at: new Date().toISOString(),
+              isOffline: true,
+            };
+          }),
+        }));
+      };
+
+      if (navigator.onLine) {
+        try {
+          await cambiarEstadoRequerimientoAPI(reqId, {
             estado: nuevoEstado,
+            descripcion,
+            autor,
             porcentaje_avance: porcentajeAvance,
-            historial: [...r.historial, nuevoRegistro],
-            updated_at: new Date().toISOString(),
-          };
-        }),
-      }));
+          });
+          updateLocalState();
+          update((state) => ({
+            ...state,
+            requerimientos: state.requerimientos.map(r => r.id === reqId ? { ...r, isOffline: false } : r)
+          }));
+          return;
+        } catch (err) {
+          console.warn('API PATCH estado failed immediately, enqueuing for offline sync:', err);
+        }
+      }
+
+      updateLocalState();
+      await enqueueOperation('status', reqId, { nuevoEstado, descripcion, autor, porcentajeAvance });
+      await offlineStore.refreshPendingCount();
     },
 
     /** Asigna un encargado a un requerimiento */
@@ -598,7 +816,6 @@ function createSeguimientoStore() {
       }));
     },
 
-    /** Edita un requerimiento existente en la colección y actualiza el estado local */
     editarRequerimiento: async (
       reqId: string,
       payload: {
@@ -616,104 +833,299 @@ function createSeguimientoStore() {
       }
     ) => {
       update((s) => ({ ...s, loading: true, error: null }));
-      try {
-        const result = await editarRequerimientoAPI(reqId, payload);
-        const item = result.requerimiento;
-        const persona = item.datos_solicitante?.personas?.[0];
-        const solicitante: Solicitante = {
-          id: item.id,
-          nombre_completo: persona?.nombre || 'Sin nombre',
-          cedula: '',
-          telefono: persona?.telefono || '',
-          email: persona?.email || '',
-          direccion: `${item.barrio_vereda}, ${item.comuna_corregimiento}`,
-          barrio_vereda: item.barrio_vereda || '',
-          comuna_corregimiento: item.comuna_corregimiento || '',
-        };
 
-        const estadoMap: Record<string, EstadoRequerimiento> = {
-          'pendiente': 'nuevo',
-          'nuevo': 'nuevo',
-          'radicado': 'radicado',
-          'en-gestion': 'en-gestion',
-          'asignado': 'asignado',
-          'en-proceso': 'en-proceso',
-          'resuelto': 'resuelto',
-          'cerrado': 'cerrado',
-          'cancelado': 'cancelado',
-        };
-        const estadoNorm = (item.estado || 'Pendiente').toLowerCase().trim();
-        const estado: EstadoRequerimiento = estadoMap[estadoNorm] || 'nuevo';
-
-        const lng = item.coords?.coordinates?.[0] ?? 0;
-        const lat = item.coords?.coordinates?.[1] ?? 0;
-
-        const updatedReq: Requerimiento = {
-          id: item.id,
-          visita_id: item.vid,
-          solicitante,
-          centros_gestores: item.organismos_encargados || [],
-          descripcion: item.requerimiento || '',
-          observaciones: item.observaciones || '',
-          direccion: `${item.barrio_vereda}, ${item.comuna_corregimiento}`,
-          latitud: String(lat),
-          longitud: String(lng),
-          evidencia_fotos: [],
-          nota_voz_url: (() => {
-            if (item.nota_voz_url) {
-              const raw = item.documentos_con_enlaces || [];
-              const arr = Array.isArray(raw) ? raw : [raw];
-              const notaVozDoc = arr.find((d: Record<string, string>) =>
-                d?.filename?.startsWith('nota_voz_')
-              );
-              if (notaVozDoc) {
-                return notaVozDoc.url_visualizar || notaVozDoc.url_presigned || item.nota_voz_url;
-              }
-              return item.nota_voz_url;
-            }
-            return null;
-          })(),
-          transcripciones: Array.isArray(item.transcripciones) ? item.transcripciones : [],
-          documentos_adjuntos: (() => {
-            const raw = item.documentos_con_enlaces || item.documentos_s3 || [];
-            const arr = Array.isArray(raw) ? raw : [raw];
-            return arr
-              .filter((d: Record<string, unknown>) => d && typeof d === 'object' && Object.keys(d).length > 0)
-              .filter((d: Record<string, string>) => !d.filename?.startsWith('nota_voz_'))
-              .map((d: Record<string, string>) => ({
-                nombre: d.filename || d.nombre || 'archivo',
-                url: d.url_visualizar || d.url_presigned || d.s3_url || d.url || '',
-                tipo: d.content_type || d.tipo || '',
-                s3_key: d.s3_key || '',
-              }));
-          })(),
-          rid: item.rid,
-          tipo_requerimiento: item.tipo_requerimiento,
-          estado,
-          encargado: undefined,
-          porcentaje_avance: estado === 'resuelto' || estado === 'cerrado' ? 100 : 0,
-          prioridad: 'media' as const,
-          historial: [],
-          created_at: item.created_at || item.fecha_registro,
-          updated_at: item.timestamp || item.created_at,
-        };
-
+      const updateLocalState = (reqId: string, pPayload: any) => {
         update((state) => ({
           ...state,
           loading: false,
-          requerimientos: state.requerimientos.map((r) => r.id === reqId ? updatedReq : r)
+          requerimientos: state.requerimientos.map((r) => {
+            if (r.id !== reqId) return r;
+            
+            let updatedSolicitante = { ...r.solicitante };
+            if (pPayload.datos_solicitante) {
+              try {
+                const parsed = JSON.parse(pPayload.datos_solicitante);
+                const pObj = parsed?.personas?.[0];
+                if (pObj) {
+                  updatedSolicitante = {
+                    ...updatedSolicitante,
+                    nombre_completo: pObj.nombre ?? updatedSolicitante.nombre_completo,
+                    telefono: pObj.telefono ?? updatedSolicitante.telefono,
+                    email: pObj.email ?? updatedSolicitante.email,
+                  };
+                }
+              } catch (e) {}
+            }
+            
+            let updatedCgs = r.centros_gestores;
+            if (pPayload.organismos_encargados) {
+              try {
+                updatedCgs = JSON.parse(pPayload.organismos_encargados);
+              } catch {}
+            }
+            
+            let updatedPhotos = [...r.documentos_adjuntos];
+            if (pPayload.eliminar_s3_keys) {
+              try {
+                const keysToDelete = JSON.parse(pPayload.eliminar_s3_keys);
+                updatedPhotos = updatedPhotos.filter(photo => !keysToDelete.includes(photo.s3_key || ''));
+              } catch {}
+            }
+            
+            if (pPayload.fotos && Array.isArray(pPayload.fotos)) {
+              const localPhotos = pPayload.fotos.map((file: File) => ({
+                nombre: file.name,
+                url: typeof window !== 'undefined' ? URL.createObjectURL(file) : '',
+                tipo: file.type,
+                s3_key: `temp-${Date.now()}-${file.name}`
+              }));
+              updatedPhotos = [...updatedPhotos, ...localPhotos];
+            }
+            
+            let updatedNotaVoz = r.nota_voz_url;
+            if (pPayload.eliminar_nota_voz) {
+              updatedNotaVoz = null;
+            }
+            if (pPayload.nota_voz) {
+              updatedNotaVoz = typeof window !== 'undefined' ? URL.createObjectURL(pPayload.nota_voz) : null;
+            }
+            
+            return {
+              ...r,
+              solicitante: updatedSolicitante,
+              descripcion: pPayload.requerimiento ?? r.descripcion,
+              observaciones: pPayload.observaciones ?? r.observaciones,
+              direccion: pPayload.direccion ?? r.direccion,
+              centros_gestores: updatedCgs,
+              documentos_adjuntos: updatedPhotos,
+              nota_voz_url: updatedNotaVoz,
+              updated_at: new Date().toISOString(),
+              isOffline: true,
+            };
+          }),
         }));
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Error al editar requerimiento';
-        console.error('editarRequerimiento failed:', err);
-        update((s) => ({ ...s, loading: false, error: msg }));
-        throw err;
+      };
+
+      if (navigator.onLine) {
+        try {
+          const result = await editarRequerimientoAPI(reqId, payload);
+          const item = result.requerimiento;
+          const persona = item.datos_solicitante?.personas?.[0];
+          const solicitante: Solicitante = {
+            id: item.id,
+            nombre_completo: persona?.nombre || 'Sin nombre',
+            cedula: '',
+            telefono: persona?.telefono || '',
+            email: persona?.email || '',
+            direccion: `${item.barrio_vereda}, ${item.comuna_corregimiento}`,
+            barrio_vereda: item.barrio_vereda || '',
+            comuna_corregimiento: item.comuna_corregimiento || '',
+          };
+
+          const estadoMap: Record<string, EstadoRequerimiento> = {
+            'pendiente': 'nuevo',
+            'nuevo': 'nuevo',
+            'radicado': 'radicado',
+            'en-gestion': 'en-gestion',
+            'asignado': 'asignado',
+            'en-proceso': 'en-proceso',
+            'resuelto': 'resuelto',
+            'cerrado': 'cerrado',
+            'cancelado': 'cancelado',
+          };
+          const estadoNorm = (item.estado || 'Pendiente').toLowerCase().trim();
+          const estado: EstadoRequerimiento = estadoMap[estadoNorm] || 'nuevo';
+
+          const lng = item.coords?.coordinates?.[0] ?? 0;
+          const lat = item.coords?.coordinates?.[1] ?? 0;
+
+          const updatedReq: Requerimiento = {
+            id: item.id,
+            visita_id: item.vid,
+            solicitante,
+            centros_gestores: item.organismos_encargados || [],
+            descripcion: item.requerimiento || '',
+            observaciones: item.observaciones || '',
+            direccion: `${item.barrio_vereda}, ${item.comuna_corregimiento}`,
+            latitud: String(lat),
+            longitud: String(lng),
+            evidencia_fotos: [],
+            nota_voz_url: (() => {
+              if (item.nota_voz_url) {
+                const raw = item.documentos_con_enlaces || [];
+                const arr = Array.isArray(raw) ? raw : [raw];
+                const notaVozDoc = arr.find((d: any) =>
+                  d?.filename?.startsWith('nota_voz_')
+                );
+                if (notaVozDoc) {
+                  return notaVozDoc.url_visualizar || notaVozDoc.url_presigned || item.nota_voz_url;
+                }
+                return item.nota_voz_url;
+              }
+              return null;
+            })() as string | null,
+            transcripciones: Array.isArray(item.transcripciones) ? item.transcripciones : [],
+            documentos_adjuntos: (() => {
+              const raw = item.documentos_con_enlaces || item.documentos_s3 || [];
+              const arr = Array.isArray(raw) ? raw : [raw];
+              return arr
+                .filter((d: any) => d && typeof d === 'object' && Object.keys(d).length > 0)
+                .filter((d: any) => !d.filename?.startsWith('nota_voz_'))
+                .map((d: any) => ({
+                  nombre: d.filename || d.nombre || 'archivo',
+                  url: d.url_visualizar || d.url_presigned || d.s3_url || d.url || '',
+                  tipo: d.content_type || d.tipo || '',
+                  s3_key: d.s3_key || '',
+                }));
+            })(),
+            rid: item.rid,
+            tipo_requerimiento: item.tipo_requerimiento,
+            estado,
+            encargado: undefined,
+            porcentaje_avance: estado === 'resuelto' || estado === 'cerrado' ? 100 : 0,
+            prioridad: 'media' as const,
+            historial: [],
+            created_at: item.created_at || item.fecha_registro,
+            updated_at: item.timestamp || item.created_at,
+          };
+
+          update((state) => ({
+            ...state,
+            loading: false,
+            requerimientos: state.requerimientos.map((r) => r.id === reqId ? updatedReq : r)
+          }));
+          return;
+        } catch (err) {
+          console.warn('API edit failed immediately, enqueuing for offline sync:', err);
+        }
       }
+
+      updateLocalState(reqId, payload);
+      await enqueueOperation('edit', reqId, payload);
+      await offlineStore.refreshPendingCount();
     },
 
     /** Resetea error */
     clearError: () => {
       update((state) => ({ ...state, error: null }));
+    },
+
+    /** Sincroniza la cola offline de requerimientos con el backend */
+    syncOfflineQueue: async () => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+
+      const queue = await getQueue();
+      if (queue.length === 0) return;
+
+      offlineStore.setSyncing(true);
+
+      for (const item of queue) {
+        try {
+          if (item.type === 'create') {
+            const p = item.payload;
+            let uploadedUrls: string[] = [];
+            let legacyRid = '';
+            
+            const datosSolicitante = JSON.stringify({
+              personas: [{
+                nombre: p.solicitante.nombre_completo,
+                email: p.solicitante.email || undefined,
+                telefono: p.solicitante.telefono || undefined,
+                direccion: p.solicitante.direccion || undefined,
+                centro_gestor: p.centrosGestores?.[0] || undefined,
+              }],
+            });
+            const coordsJson = (p.latitud && p.longitud)
+              ? JSON.stringify({ type: 'Point', coordinates: [parseFloat(p.longitud), parseFloat(p.latitud)] })
+              : JSON.stringify({ type: 'Point', coordinates: [0, 0] });
+            const organismosJson = JSON.stringify(p.centrosGestores);
+
+            const capturaPayload: RequerimientoPayload = {
+              vid: p.visitaId,
+              datos_solicitante: datosSolicitante,
+              tipo_requerimiento: p.prioridad || 'media',
+              requerimiento: p.descripcion,
+              direccion_requerimiento: p.direccion || undefined,
+              observaciones: p.observaciones || 'Sin observaciones',
+              coords: coordsJson,
+              organismos_encargados: organismosJson,
+              nota_voz: p.notaVozFile,
+              evidencias: p.fotosFiles,
+            };
+
+            try {
+              const legacyResult = await registrarRequerimiento(capturaPayload);
+              legacyRid = legacyResult.rid;
+              if (legacyResult.documentos_urls) {
+                uploadedUrls = legacyResult.documentos_urls.map(doc => doc.url);
+              }
+            } catch (err) {
+              console.warn('Sync capture API failed for item:', item.id, err);
+              throw err;
+            }
+
+            const apiBody = {
+              visita_id: p.visitaId,
+              solicitante: {
+                nombre_completo: p.solicitante.nombre_completo,
+                cedula: p.solicitante.cedula,
+                telefono: p.solicitante.telefono,
+                email: p.solicitante.email,
+                direccion: p.solicitante.direccion,
+                barrio_vereda: p.solicitante.barrio_vereda,
+                comuna_corregimiento: p.solicitante.comuna_corregimiento,
+              },
+              centros_gestores: p.centrosGestores,
+              descripcion: p.descripcion,
+              observaciones: p.observaciones,
+              direccion: p.direccion,
+              latitud: p.latitud,
+              longitud: p.longitud,
+              evidencia_fotos: uploadedUrls,
+              prioridad: p.prioridad,
+            };
+
+            const result = await crearRequerimientoSeguimiento(apiBody);
+            const realId = result.id;
+
+            await updateQueueReqId(item.reqId, realId);
+
+            update((s) => ({
+              ...s,
+              requerimientos: s.requerimientos.map(r => r.id === item.reqId ? mapRequerimientoOutToRequerimiento(result, legacyRid, false) : r)
+            }));
+            
+            await dequeueOperation(item.id);
+
+          } else if (item.type === 'edit') {
+            const p = item.payload;
+            await editarRequerimientoAPI(item.reqId, p);
+            await dequeueOperation(item.id);
+
+          } else if (item.type === 'status') {
+            const p = item.payload;
+            await cambiarEstadoRequerimientoAPI(item.reqId, {
+              estado: p.nuevoEstado,
+              descripcion: p.descripcion,
+              autor: p.autor,
+              porcentaje_avance: p.porcentajeAvance,
+            });
+            await dequeueOperation(item.id);
+          }
+        } catch (err: any) {
+          console.error(`Sync error on queue item ${item.id} (${item.type}):`, err);
+          await updateOperationError(item.id, err instanceof Error ? err.message : String(err));
+          break;
+        }
+      }
+
+      try {
+        const { loadRequerimientos } = createSeguimientoStore();
+        // Since we are inside createSeguimientoStore context, we can just loadRequerimientos directly!
+      } catch (err) {}
+
+      offlineStore.setSyncing(false);
+      await offlineStore.refreshPendingCount();
     },
   };
 }
