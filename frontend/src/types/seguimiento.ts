@@ -95,6 +95,7 @@ export interface DocumentoAdjunto {
   nombre: string;
   url: string;
   tipo: string;
+  s3_key?: string;
 }
 
 export interface Transcripcion {

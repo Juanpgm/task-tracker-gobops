@@ -287,3 +287,43 @@ export async function obtenerRequerimientos(): Promise<ObtenerRequerimientosItem
   const res = await apiClient.get<ObtenerRequerimientosResponse>('/obtener-requerimientos');
   return res.requerimientos || [];
 }
+
+/** PATCH /editar-requerimiento/:id — Editar requerimiento */
+export async function editarRequerimiento(
+  reqId: string,
+  payload: {
+    datos_solicitante?: string;
+    tipo_requerimiento?: string;
+    requerimiento?: string;
+    observaciones?: string;
+    coords?: string;
+    direccion?: string;
+    organismos_encargados?: string;
+    eliminar_s3_keys?: string;
+    eliminar_nota_voz?: boolean;
+    nota_voz?: File | null;
+    fotos?: File[] | null;
+  }
+): Promise<{ success: boolean; id: string; message: string; requerimiento: ObtenerRequerimientosItem }> {
+  const formData = new FormData();
+  if (payload.datos_solicitante !== undefined) formData.append('datos_solicitante', payload.datos_solicitante);
+  if (payload.tipo_requerimiento !== undefined) formData.append('tipo_requerimiento', payload.tipo_requerimiento);
+  if (payload.requerimiento !== undefined) formData.append('requerimiento', payload.requerimiento);
+  if (payload.observaciones !== undefined) formData.append('observaciones', payload.observaciones);
+  if (payload.coords !== undefined) formData.append('coords', payload.coords);
+  if (payload.direccion !== undefined) formData.append('direccion', payload.direccion);
+  if (payload.organismos_encargados !== undefined) formData.append('organismos_encargados', payload.organismos_encargados);
+  if (payload.eliminar_s3_keys !== undefined) formData.append('eliminar_s3_keys', payload.eliminar_s3_keys);
+  if (payload.eliminar_nota_voz !== undefined) formData.append('eliminar_nota_voz', String(payload.eliminar_nota_voz));
+  if (payload.nota_voz) formData.append('nota_voz', payload.nota_voz);
+  if (payload.fotos && payload.fotos.length > 0) {
+    for (const file of payload.fotos) {
+      formData.append('fotos', file);
+    }
+  }
+
+  return uploadApiClient.patchForm<{ success: boolean; id: string; message: string; requerimiento: ObtenerRequerimientosItem }>(
+    `/editar-requerimiento/${encodeURIComponent(reqId)}`,
+    formData
+  );
+}

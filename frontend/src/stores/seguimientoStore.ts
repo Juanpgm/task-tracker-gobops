@@ -28,6 +28,7 @@ import {
   registrarVisita,
   registrarRequerimiento,
   obtenerRequerimientos,
+  editarRequerimiento as editarRequerimientoAPI,
 } from '../api/visitas';
 import type { ObtenerVisitasProgramadasItem, ObtenerRequerimientosItem } from '../api/visitas';
 import type { RegistrarVisitaPayload, RequerimientoPayload } from '../types';
@@ -185,6 +186,7 @@ function createSeguimientoStore() {
                   nombre: d.filename || d.nombre || 'archivo',
                   url: d.url_visualizar || d.url_presigned || d.s3_url || d.url || '',
                   tipo: d.content_type || d.tipo || '',
+                  s3_key: d.s3_key || '',
                 }));
             })(),
             rid: item.rid,
@@ -594,6 +596,119 @@ function createSeguimientoStore() {
           };
         }),
       }));
+    },
+
+    /** Edita un requerimiento existente en la colección y actualiza el estado local */
+    editarRequerimiento: async (
+      reqId: string,
+      payload: {
+        datos_solicitante?: string;
+        tipo_requerimiento?: string;
+        requerimiento?: string;
+        observaciones?: string;
+        coords?: string;
+        direccion?: string;
+        organismos_encargados?: string;
+        eliminar_s3_keys?: string;
+        eliminar_nota_voz?: boolean;
+        nota_voz?: File | null;
+        fotos?: File[] | null;
+      }
+    ) => {
+      update((s) => ({ ...s, loading: true, error: null }));
+      try {
+        const result = await editarRequerimientoAPI(reqId, payload);
+        const item = result.requerimiento;
+        const persona = item.datos_solicitante?.personas?.[0];
+        const solicitante: Solicitante = {
+          id: item.id,
+          nombre_completo: persona?.nombre || 'Sin nombre',
+          cedula: '',
+          telefono: persona?.telefono || '',
+          email: persona?.email || '',
+          direccion: `${item.barrio_vereda}, ${item.comuna_corregimiento}`,
+          barrio_vereda: item.barrio_vereda || '',
+          comuna_corregimiento: item.comuna_corregimiento || '',
+        };
+
+        const estadoMap: Record<string, EstadoRequerimiento> = {
+          'pendiente': 'nuevo',
+          'nuevo': 'nuevo',
+          'radicado': 'radicado',
+          'en-gestion': 'en-gestion',
+          'asignado': 'asignado',
+          'en-proceso': 'en-proceso',
+          'resuelto': 'resuelto',
+          'cerrado': 'cerrado',
+          'cancelado': 'cancelado',
+        };
+        const estadoNorm = (item.estado || 'Pendiente').toLowerCase().trim();
+        const estado: EstadoRequerimiento = estadoMap[estadoNorm] || 'nuevo';
+
+        const lng = item.coords?.coordinates?.[0] ?? 0;
+        const lat = item.coords?.coordinates?.[1] ?? 0;
+
+        const updatedReq: Requerimiento = {
+          id: item.id,
+          visita_id: item.vid,
+          solicitante,
+          centros_gestores: item.organismos_encargados || [],
+          descripcion: item.requerimiento || '',
+          observaciones: item.observaciones || '',
+          direccion: `${item.barrio_vereda}, ${item.comuna_corregimiento}`,
+          latitud: String(lat),
+          longitud: String(lng),
+          evidencia_fotos: [],
+          nota_voz_url: (() => {
+            if (item.nota_voz_url) {
+              const raw = item.documentos_con_enlaces || [];
+              const arr = Array.isArray(raw) ? raw : [raw];
+              const notaVozDoc = arr.find((d: Record<string, string>) =>
+                d?.filename?.startsWith('nota_voz_')
+              );
+              if (notaVozDoc) {
+                return notaVozDoc.url_visualizar || notaVozDoc.url_presigned || item.nota_voz_url;
+              }
+              return item.nota_voz_url;
+            }
+            return null;
+          })(),
+          transcripciones: Array.isArray(item.transcripciones) ? item.transcripciones : [],
+          documentos_adjuntos: (() => {
+            const raw = item.documentos_con_enlaces || item.documentos_s3 || [];
+            const arr = Array.isArray(raw) ? raw : [raw];
+            return arr
+              .filter((d: Record<string, unknown>) => d && typeof d === 'object' && Object.keys(d).length > 0)
+              .filter((d: Record<string, string>) => !d.filename?.startsWith('nota_voz_'))
+              .map((d: Record<string, string>) => ({
+                nombre: d.filename || d.nombre || 'archivo',
+                url: d.url_visualizar || d.url_presigned || d.s3_url || d.url || '',
+                tipo: d.content_type || d.tipo || '',
+                s3_key: d.s3_key || '',
+              }));
+          })(),
+          rid: item.rid,
+          tipo_requerimiento: item.tipo_requerimiento,
+          estado,
+          encargado: undefined,
+          porcentaje_avance: estado === 'resuelto' || estado === 'cerrado' ? 100 : 0,
+          prioridad: 'media' as const,
+          historial: [],
+          created_at: item.created_at || item.fecha_registro,
+          updated_at: item.timestamp || item.created_at,
+        };
+
+        update((state) => ({
+          ...state,
+          loading: false,
+          requerimientos: state.requerimientos.map((r) => r.id === reqId ? updatedReq : r)
+        }));
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Error al editar requerimiento';
+        console.error('editarRequerimiento failed:', err);
+        update((s) => ({ ...s, loading: false, error: msg }));
+        throw err;
+      }
     },
 
     /** Resetea error */

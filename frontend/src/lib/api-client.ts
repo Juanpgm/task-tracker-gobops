@@ -69,6 +69,19 @@ class ApiClient {
     return response.json();
   }
 
+  async patchForm<T>(path: string, formData: FormData): Promise<T> {
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method: 'PATCH',
+      headers: this.getHeaders(false),
+      body: formData,
+    });
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`PATCH ${path} failed (${response.status}): ${errorBody}`);
+    }
+    return response.json();
+  }
+
   async postUrlEncoded<T>(path: string, data: Record<string, string>): Promise<T> {
     const response = await fetch(`${this.baseUrl}${path}`, {
       method: 'POST',

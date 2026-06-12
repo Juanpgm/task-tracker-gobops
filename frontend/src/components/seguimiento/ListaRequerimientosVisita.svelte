@@ -6,6 +6,15 @@
   import type { VisitaProgramada } from "../../types/seguimiento";
   import Button from "../ui/Button.svelte";
   import Icon from "../ui/Icon.svelte";
+  import ModalEditarRequerimiento from "./ModalEditarRequerimiento.svelte";
+
+  let showEditModal = false;
+  let selectedReqToEdit: Requerimiento | null = null;
+
+  function openEditModal(req: Requerimiento) {
+    selectedReqToEdit = req;
+    showEditModal = true;
+  }
 
   let visita: VisitaProgramada | null = null;
   let loading = true;
@@ -372,6 +381,9 @@
 
               <!-- Quick actions -->
               <div class="detail-actions">
+                <Button size="sm" variant="secondary" on:click={() => openEditModal(req)}>
+                  <span class="action-content"><Icon name="edit" size={14} /> Editar</span>
+                </Button>
                 <Button size="sm" variant="secondary" on:click={() => navigationStore.navigate("kanban", { visitaId })}>
                   <span class="action-content"><Icon name="eye" size={14} /> Ver en Kanban</span>
                 </Button>
@@ -406,6 +418,16 @@
       {/if}
     </div>
   </div>
+{/if}
+
+{#if showEditModal && selectedReqToEdit}
+  <ModalEditarRequerimiento
+    bind:show={showEditModal}
+    req={selectedReqToEdit}
+    on:save={() => {
+      seguimientoStore.loadRequerimientos();
+    }}
+  />
 {/if}
 
 <style>

@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { VitePWA } from 'vite-plugin-pwa';
 import https from 'https';
@@ -49,7 +49,9 @@ function s3AudioProxy() {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  return {
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __BUILD_DATE__: JSON.stringify(new Date().toISOString().split('T')[0]),
@@ -107,7 +109,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api/auth': {
-        target: 'https://web-production-79739.up.railway.app',
+        target: env.VITE_AUTH_API_TARGET || 'https://web-production-79739.up.railway.app',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/auth/, ''),
         secure: false
@@ -133,5 +135,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
+    exclude: ['node_modules', 'dist', '.idea', '.git', '.cache', 'e2e/**/*'],
   }
+  };
 });
