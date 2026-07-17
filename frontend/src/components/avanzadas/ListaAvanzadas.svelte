@@ -19,7 +19,7 @@
   });
 
   function irANuevaAvanzada() {
-    navigationStore.navigate("registrar-avanzada");
+    navigationStore.navigate("programar-avanzada");
   }
 
   function verDetalle(clientId: string) {

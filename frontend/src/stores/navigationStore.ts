@@ -2,11 +2,10 @@ import { writable } from 'svelte/store';
 
 export type AppView =
   | 'home'
-  | 'programar-visita'
+  | 'programar-avanzada'
   | 'kanban'
   // Avanzadas — captura simple de una sola pantalla (offline-first)
   | 'avanzadas'
-  | 'registrar-avanzada'
   | 'detalle-avanzada'
   | 'reportes';
 
@@ -18,10 +17,9 @@ export type AppView =
  */
 export const ALL_APP_VIEWS: readonly AppView[] = [
   'home',
-  'programar-visita',
+  'programar-avanzada',
   'kanban',
   'avanzadas',
-  'registrar-avanzada',
   'detalle-avanzada',
   'reportes',
 ];

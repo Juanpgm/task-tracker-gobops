@@ -16,10 +16,10 @@ describe("navigationStore", () => {
 
   it("navigate() pushes the current view onto the history stack", () => {
     navigationStore.navigate("avanzadas");
-    navigationStore.navigate("registrar-avanzada");
+    navigationStore.navigate("programar-avanzada");
 
     const state = svelteGet(navigationStore);
-    expect(state.view).toBe("registrar-avanzada");
+    expect(state.view).toBe("programar-avanzada");
     expect(state.history).toEqual([
       { view: "home", params: {} },
       { view: "avanzadas", params: {} },
@@ -34,7 +34,7 @@ describe("navigationStore", () => {
   it("back() pops to the actual previous view, restoring its params", () => {
     navigationStore.navigate("avanzadas");
     navigationStore.navigate("detalle-avanzada", { client_id: "a1" });
-    navigationStore.navigate("registrar-avanzada");
+    navigationStore.navigate("programar-avanzada");
 
     navigationStore.back();
     let state = svelteGet(navigationStore);
@@ -62,7 +62,7 @@ describe("navigationStore", () => {
 
   it("goHome() clears the history stack", () => {
     navigationStore.navigate("avanzadas");
-    navigationStore.navigate("registrar-avanzada");
+    navigationStore.navigate("programar-avanzada");
 
     navigationStore.goHome();
     const state = svelteGet(navigationStore);

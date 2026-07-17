@@ -9,12 +9,17 @@
 import { describe, it, expect } from "vitest";
 import { ALL_APP_VIEWS } from "../stores/navigationStore";
 import { viewComponents } from "./viewRegistry";
+import RegistrarAvanzada from "../components/avanzadas/RegistrarAvanzada.svelte";
 
 describe("viewRegistry", () => {
   it("has a defined component for every valid AppView", () => {
     for (const view of ALL_APP_VIEWS) {
       expect(viewComponents[view]).toBeDefined();
     }
+  });
+
+  it("maps 'programar-avanzada' to the RegistrarAvanzada component, consolidating the legacy programar-visita/registrar-avanzada split", () => {
+    expect(viewComponents["programar-avanzada"]).toBe(RegistrarAvanzada);
   });
 
   it("has no extra keys that aren't valid AppViews", () => {

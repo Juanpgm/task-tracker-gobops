@@ -193,16 +193,16 @@ describe("ListaAvanzadas", () => {
     expect(screen.getByText("Pendiente de sincronizar")).toBeInTheDocument();
   });
 
-  it("'+ Nueva avanzada' navigates to registrar-avanzada", async () => {
+  it("'+ Nueva avanzada' navigates to programar-avanzada", async () => {
     render(ListaAvanzadas);
     await fireEvent.click(screen.getByText("+ Nueva avanzada"));
-    expect(navigationStoreMocks.navigate).toHaveBeenCalledWith("registrar-avanzada");
+    expect(navigationStoreMocks.navigate).toHaveBeenCalledWith("programar-avanzada");
   });
 
-  it("'Registrar Avanzada' button in the empty state also navigates to registrar-avanzada", async () => {
+  it("'Registrar Avanzada' button in the empty state also navigates to programar-avanzada", async () => {
     render(ListaAvanzadas);
     await fireEvent.click(screen.getByRole("button", { name: "Registrar Avanzada" }));
-    expect(navigationStoreMocks.navigate).toHaveBeenCalledWith("registrar-avanzada");
+    expect(navigationStoreMocks.navigate).toHaveBeenCalledWith("programar-avanzada");
   });
 
   describe("stale-while-revalidate", () => {

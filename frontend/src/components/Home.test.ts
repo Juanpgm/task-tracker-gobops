@@ -45,7 +45,7 @@ describe("Home", () => {
     render(Home);
 
     const captura = screen.getByText("Captura").closest(".action-group")!;
-    expect(captura).toHaveTextContent("Programar Visita");
+    expect(captura).toHaveTextContent("Programar Avanzada");
     expect(captura).toHaveTextContent("Avanzadas");
 
     const gestion = screen.getByText("Gestión y análisis").closest(".action-group")!;
@@ -63,6 +63,12 @@ describe("Home", () => {
     render(Home);
     await fireEvent.click(screen.getByText("Avanzadas").closest("button")!);
     expect(navigationMocks.navigate).toHaveBeenCalledWith("avanzadas");
+  });
+
+  it("navigates to programar-avanzada when the Programar Avanzada card is clicked", async () => {
+    render(Home);
+    await fireEvent.click(screen.getByText("Programar Avanzada").closest("button")!);
+    expect(navigationMocks.navigate).toHaveBeenCalledWith("programar-avanzada");
   });
 
   it("renders all 4 actions across both groups, none dropped by the regrouping", () => {

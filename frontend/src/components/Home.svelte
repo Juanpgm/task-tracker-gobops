@@ -39,8 +39,8 @@
       heading: 'Captura',
       actions: [
         {
-          id: 'programar-visita',
-          title: 'Programar Visita',
+          id: 'programar-avanzada',
+          title: 'Programar Avanzada',
           description: 'Buscar UP y programar una visita con colaboradores',
           icon: 'calendar',
         },
