@@ -80,7 +80,7 @@ export default defineConfig(({ mode }) => {
       ],
       manifest: {
         id: '/?source=pwa',
-        name: 'Task Tracker GobOps',
+        name: 'GobOps — Seguimiento de Requerimientos',
         short_name: 'GobOps',
         description: 'Sistema de gestión de visitas y requerimientos del grupo operativo',
         theme_color: '#2563eb',
@@ -105,6 +105,19 @@ export default defineConfig(({ mode }) => {
       }
     })
   ],
+  // Vitest runs the module graph through Node's default resolution
+  // conditions, NOT the "browser" condition — but Svelte's package.json
+  // exports map picks a different runtime per condition: with "browser" it
+  // resolves to src/runtime/index.js (the real DOM runtime); without it,
+  // it silently falls back to src/runtime/ssr.js, where onMount/onDestroy/
+  // afterUpdate etc. are no-ops (SSR never "mounts"). Without this, any
+  // component test relying on onMount (e.g. a component that loads its
+  // data on mount) would silently never fire it, with no error — the
+  // component still renders, so the failure mode is a passing-looking test
+  // that only catches missing async data loads.
+  resolve: {
+    conditions: process.env.VITEST ? ['browser'] : undefined,
+  },
   server: {
     port: 5173,
     proxy: {

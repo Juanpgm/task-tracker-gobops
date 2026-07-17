@@ -25,51 +25,49 @@
     title: string;
     description: string;
     icon: string;
-    color: string;
   }
 
-  const actions: ActionCard[] = [
+  interface ActionGroup {
+    heading: string;
+    actions: ActionCard[];
+  }
+
+  // Grouped by what the user is doing, not by an arbitrary card color — the
+  // icon carries each action's identity, not a random hue per card.
+  const actionGroups: ActionGroup[] = [
     {
-      id: 'programar-visita',
-      title: 'Programar Visita',
-      description: 'Buscar UP y programar una visita con colaboradores',
-      icon: 'calendar',
-      color: '#2563eb',
+      heading: 'Captura',
+      actions: [
+        {
+          id: 'programar-visita',
+          title: 'Programar Visita',
+          description: 'Buscar UP y programar una visita con colaboradores',
+          icon: 'calendar',
+        },
+        {
+          id: 'avanzadas',
+          title: 'Avanzadas',
+          description: 'Registrar avanzada de estrategia y requerimientos',
+          icon: 'flag',
+        },
+      ],
     },
     {
-      id: 'visitas-programadas',
-      title: 'Visitas Programadas',
-      description: 'Ver visitas activas e iniciar registros',
-      icon: 'clipboard-list',
-      color: '#7c3aed',
-    },
-    {
-      id: 'kanban',
-      title: 'Gestión Requerimientos',
-      description: 'Tablero Kanban de estados y seguimiento',
-      icon: 'bar-chart',
-      color: '#0891b2',
-    },
-    {
-      id: 'asistencia-delegado',
-      title: 'Asistencia Delegado',
-      description: 'Registrar asistencia de delegados al evento',
-      icon: 'user',
-      color: '#d97706',
-    },
-    {
-      id: 'asistencia-comunidad',
-      title: 'Asistencia Comunidad',
-      description: 'Registrar asistencia de la comunidad',
-      icon: 'users',
-      color: '#16a34a',
-    },
-    {
-      id: 'reportes',
-      title: 'Reportes',
-      description: 'Consultar y gestionar reportes del grupo operativo',
-      icon: 'trending-up',
-      color: '#64748b',
+      heading: 'Gestión y análisis',
+      actions: [
+        {
+          id: 'kanban',
+          title: 'Gestión Requerimientos',
+          description: 'Tablero Kanban de estados y seguimiento',
+          icon: 'bar-chart',
+        },
+        {
+          id: 'reportes',
+          title: 'Reportes',
+          description: 'Consultar y gestionar reportes del grupo operativo',
+          icon: 'trending-up',
+        },
+      ],
     },
   ];
 </script>
@@ -79,8 +77,8 @@
   <header class="header">
     <div class="header-content">
       <div class="header-left">
-        <h1 class="header-title">Seguimiento de Requerimientos</h1>
-        <span class="header-subtitle">Alcaldía de Santiago de Cali</span>
+        <h1 class="header-title">GobOps</h1>
+        <span class="header-subtitle">Seguimiento de Requerimientos</span>
       </div>
       <div class="header-right">
         <div class="user-info">
@@ -118,27 +116,32 @@
       <p class="welcome-text">Seleccione una acción para comenzar</p>
     </section>
 
-    <section class="actions-grid">
-      {#each actions as action}
-        <button
-          class="action-card"
-          on:click={() => navigationStore.navigate(action.id)}
-        >
-          <Card padding="md">
-            <div class="action-inner">
-              <span class="action-icon" style="background:{action.color}12; color:{action.color}">
-                <Icon name={action.icon} size={22} />
-              </span>
-              <div class="action-text">
-                <h3 class="action-title">{action.title}</h3>
-                <p class="action-desc">{action.description}</p>
-              </div>
-              <span class="action-arrow"><Icon name="chevron-right" size={18} /></span>
-            </div>
-          </Card>
-        </button>
-      {/each}
-    </section>
+    {#each actionGroups as group}
+      <section class="action-group">
+        <h2 class="group-heading">{group.heading}</h2>
+        <div class="actions-grid">
+          {#each group.actions as action}
+            <button
+              class="action-card"
+              on:click={() => navigationStore.navigate(action.id)}
+            >
+              <Card padding="md">
+                <div class="action-inner">
+                  <span class="action-icon">
+                    <Icon name={action.icon} size={22} />
+                  </span>
+                  <div class="action-text">
+                    <h3 class="action-title">{action.title}</h3>
+                    <p class="action-desc">{action.description}</p>
+                  </div>
+                  <span class="action-arrow"><Icon name="chevron-right" size={18} /></span>
+                </div>
+              </Card>
+            </button>
+          {/each}
+        </div>
+      </section>
+    {/each}
   </main>
 
   <ChangePassword bind:show={showChangePassword} />
@@ -149,7 +152,6 @@
   .home {
     min-height: 100vh;
     min-height: -webkit-fill-available;
-    min-height: 100dvh;
     min-height: 100dvh;
     background: var(--bg);
   }
@@ -230,6 +232,22 @@
     margin-top: 0.25rem;
   }
 
+  /* Action groups */
+  .action-group {
+    margin-bottom: var(--space-lg);
+  }
+  .action-group:last-child {
+    margin-bottom: 0;
+  }
+  .group-heading {
+    font-size: var(--fs-sm);
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: var(--space-sm);
+  }
+
   /* Action Cards */
   .actions-grid {
     display: flex;
@@ -249,6 +267,8 @@
     align-items: center;
     gap: var(--space-md);
   }
+  /* Restrained treatment: brand blue + neutral. The icon carries each
+     action's identity — not a random per-card hue. */
   .action-icon {
     flex-shrink: 0;
     width: 44px;
@@ -258,6 +278,8 @@
     align-items: center;
     justify-content: center;
     font-size: 1.25rem;
+    background: var(--primary-light);
+    color: var(--primary);
   }
   .action-text {
     flex: 1;
@@ -286,7 +308,9 @@
     .user-info { display: none; }
   }
 
-  /* Info / settings button */
+  /* Info / settings button. The visible box stays a compact 32px square;
+     the tappable hit area is expanded to --tap-min via a pseudo-element so
+     the glyph doesn't visually inflate on a dense header row. */
   .info-btn {
     position: relative;
     background: transparent;
@@ -302,14 +326,19 @@
     transition: background 0.15s, color 0.15s, border-color 0.15s;
     flex-shrink: 0;
   }
+  .info-btn::before {
+    content: '';
+    position: absolute;
+    inset: calc((32px - var(--tap-min)) / 2);
+  }
   .info-btn:hover {
     background: var(--bg);
     color: var(--primary);
     border-color: var(--primary);
   }
   .info-btn--update {
-    border-color: #f59e0b;
-    color: #d97706;
+    border-color: var(--warning);
+    color: var(--warning);
   }
   .info-update-dot {
     position: absolute;
@@ -318,7 +347,7 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: #f59e0b;
+    background: var(--warning);
     border: 1.5px solid var(--surface);
     animation: info-pulse 2s infinite;
   }

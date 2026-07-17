@@ -62,34 +62,6 @@ export interface Reporte {
   [key: string]: unknown;
 }
 
-/** Payload para POST /registrar-asistencia-delegado */
-export interface AsistenciaDelegadoPayload {
-  vid: string;
-  id_acompanante: string;
-  nombre_completo: string;
-  rol: string;
-  nombre_centro_gestor: string;
-  telefono: string;
-  email: string;
-  latitud: string;
-  longitud: string;
-}
-
-/** Payload para POST /registrar-asistencia-comunidad */
-export interface AsistenciaComunidadPayload {
-  vid: string;
-  id_asistente_comunidad: string;
-  nombre_completo: string;
-  rol_comunidad: string;
-  direccion: string;
-  barrio_vereda: string;
-  comuna_corregimiento: string;
-  telefono: string;
-  email: string;
-  latitud: string;
-  longitud: string;
-}
-
 /** Payload para POST /registrar-requerimiento (multipart/form-data) */
 export interface RequerimientoPayload {
   vid: string;
