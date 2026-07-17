@@ -53,7 +53,7 @@ describe("api/visitas", () => {
       expect(options.method).toBe("POST");
       expect(options.body).toBeInstanceOf(FormData);
       const form = options.body as FormData;
-      expect(form.get("client_id")).toBe("vid-1");
+      expect(form.get("requerimiento_id")).toBe("vid-1");
       expect(form.getAll("archivos")).toEqual([foto]);
       expect(options.headers["Content-Type"]).toBeUndefined();
       expect(options.headers.Authorization).toBe("Bearer test-token");

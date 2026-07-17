@@ -163,7 +163,7 @@ export async function subirEvidenciasSeguimiento(
   payload: SubirEvidenciasSeguimientoPayload
 ): Promise<EvidenciaSeguimientoUpload[]> {
   const formData = new FormData();
-  formData.append('client_id', payload.visita_id);
+  formData.append('requerimiento_id', payload.visita_id);
 
   if (payload.fotos && payload.fotos.length > 0) {
     for (const file of payload.fotos) {
