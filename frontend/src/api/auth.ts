@@ -14,6 +14,32 @@ import type {
 let loginInProgress = false;
 
 /**
+ * Refresca el ID token de Firebase y lo sincroniza en los tres clientes HTTP.
+ * Se registra en cada ApiClient como su `onUnauthorized` handler: la PWA
+ * queda abierta horas en el campo, así que el token (válido ~1h) expira a
+ * mitad de sesión con frecuencia — sin este refresh reactivo, la primera
+ * petición fresca tras la expiración (p. ej. "Crear PDF", a diferencia de
+ * una vista con datos ya cacheados) fallaba con 401 aunque el usuario
+ * siguiera logueado.
+ */
+async function refrescarTokenYSincronizar(): Promise<string | null> {
+  if (!auth || !auth.currentUser) return null;
+  try {
+    const idToken = await getIdToken(auth.currentUser, true);
+    apiClient.setToken(idToken);
+    projectApiClient.setToken(idToken);
+    uploadApiClient.setToken(idToken);
+    return idToken;
+  } catch {
+    return null;
+  }
+}
+
+apiClient.setUnauthorizedHandler(refrescarTokenYSincronizar);
+projectApiClient.setUnauthorizedHandler(refrescarTokenYSincronizar);
+uploadApiClient.setUnauthorizedHandler(refrescarTokenYSincronizar);
+
+/**
  * Inicia sesión con email y contraseña usando Firebase,
  * luego valida la sesión contra el backend enviando el ID token al endpoint /auth/login.
  * Implementa la lógica completa de "Administración y Control de Accesos" de la API.
