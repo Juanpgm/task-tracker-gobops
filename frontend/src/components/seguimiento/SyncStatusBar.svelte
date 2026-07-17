@@ -134,7 +134,7 @@
   }
 
   .sync-btn {
-    background: var(--primary, #2563eb);
+    background: var(--primary, var(--primary));
     color: white;
     border: none;
     border-radius: 4px;
@@ -148,7 +148,7 @@
   }
 
   .sync-btn:hover {
-    background: var(--primary-hover, #1d4ed8);
+    background: var(--primary-hover, var(--primary-dark));
     transform: translateY(-1px);
   }
 

@@ -17,9 +17,20 @@
   export let defaultLng: number = -76.532;
   // Alto del mapa.
   export let height: string = "280px";
+  // Mensaje de validación externo (p.ej. "Defina la ubicación...").
+  export let error: string = "";
 
   const dispatch = createEventDispatcher<{
-    change: { latitud: string; longitud: string; direccion: string };
+    change: {
+      latitud: string;
+      longitud: string;
+      direccion: string;
+      // Comuna/barrio en texto libre tal como los devuelve la
+      // geocodificación inversa (Nominatim/Google) — sin normalizar contra
+      // el catálogo interno. El consumidor decide cómo (o si) los usa.
+      comunaGeo?: string;
+      barrioGeo?: string;
+    };
   }>();
 
   let mapEl: HTMLDivElement;
@@ -35,8 +46,21 @@
   let manualErr = "";
   let geocodeTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // Comuna/barrio en texto libre de la última geocodificación inversa
+  // exitosa — reenviados en el evento "change" para que el formulario
+  // padre pueda intentar preseleccionar sus propios dropdowns de
+  // comuna/barrio (ver RegistrarAvanzada.svelte).
+  let geoComuna = "";
+  let geoBarrio = "";
+
   function emitChange() {
-    dispatch("change", { latitud, longitud, direccion });
+    dispatch("change", {
+      latitud,
+      longitud,
+      direccion,
+      comunaGeo: geoComuna || undefined,
+      barrioGeo: geoBarrio || undefined,
+    });
   }
 
   function scheduleReverseGeocode(lat: number, lng: number) {
@@ -51,12 +75,18 @@
       const r = await reverseGeocodeWithFallback(lat, lng);
       if (r && r.direccion_formateada) {
         direccion = r.direccion_formateada;
+        geoComuna = r.comuna || "";
+        geoBarrio = r.barrio || "";
       } else {
         direccion = "";
+        geoComuna = "";
+        geoBarrio = "";
         geocodeError = "No se pudo detectar dirección automáticamente.";
       }
     } catch (err) {
       direccion = "";
+      geoComuna = "";
+      geoBarrio = "";
       geocodeError =
         err instanceof Error ? err.message : "Error obteniendo dirección.";
     } finally {
@@ -270,6 +300,10 @@
       <small class="lp-address-error">{geocodeError}</small>
     {/if}
   </div>
+
+  {#if error}
+    <span class="lp-error-text">{error}</span>
+  {/if}
 </div>
 
 {#if showManualModal}
@@ -385,11 +419,11 @@
   }
   .lp-status--info {
     background: #eff6ff;
-    color: #1e40af;
+    color: var(--primary-darker);
   }
   .lp-status--warn {
-    background: #fef3c7;
-    color: #92400e;
+    background: var(--warning-light);
+    color: var(--warning-ink);
   }
   .lp-map {
     width: 100%;
@@ -454,6 +488,10 @@
     color: #b45309;
     font-size: 0.75rem;
   }
+  .lp-error-text {
+    font-size: var(--fs-md, 0.8125rem);
+    color: var(--error, #dc2626);
+  }
   @keyframes lp-spin {
     to {
       transform: rotate(360deg);
@@ -516,8 +554,8 @@
     font-family: inherit;
   }
   .lp-modal-error {
-    background: #fee2e2;
-    color: #991b1b;
+    background: var(--error-light);
+    color: var(--error-ink);
     padding: 0.45rem 0.6rem;
     border-radius: 6px;
     font-size: 0.8125rem;

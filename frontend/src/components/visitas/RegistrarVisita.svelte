@@ -12,6 +12,7 @@
   import Textarea from "../ui/Textarea.svelte";
   import Alert from "../ui/Alert.svelte";
   import Card from "../ui/Card.svelte";
+  import ViewHeader from "../ui/ViewHeader.svelte";
 
   let submitting = false;
   let successMsg = "";
@@ -94,8 +95,8 @@
       hora_visita = "";
       geoInfo = null;
       direccionEditada = false;
-      // Navegar a Visitas Programadas
-      navigationStore.navigate("visitas-programadas");
+      // Volver al inicio tras registrar la visita
+      navigationStore.navigate("home");
     } catch (err) {
       errorMsg = "Error al registrar la visita. Intente de nuevo.";
       console.error(err);
@@ -106,12 +107,7 @@
 </script>
 
 <div class="view">
-  <header class="view-header">
-    <button class="back-btn" on:click={() => navigationStore.goHome()}
-      >← Volver</button
-    >
-    <h2 class="view-title">Programar Visita</h2>
-  </header>
+  <ViewHeader title="Programar Visita" />
 
   <main class="view-body container">
     {#if successMsg}
@@ -227,37 +223,7 @@
     min-height: 100vh;
     min-height: -webkit-fill-available;
     min-height: 100dvh;
-    min-height: 100dvh;
     background: var(--bg);
-  }
-  .view-header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: var(--space-md);
-    display: flex;
-    align-items: center;
-    gap: var(--space-md);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-  .back-btn {
-    background: none;
-    border: none;
-    color: var(--primary);
-    font-size: 0.9375rem;
-    font-weight: 600;
-    cursor: pointer;
-    padding: 0;
-    font-family: inherit;
-  }
-  .back-btn:hover {
-    text-decoration: underline;
-  }
-  .view-title {
-    font-size: 1.125rem;
-    font-weight: 700;
-    color: var(--text);
   }
   .view-body {
     padding-top: var(--space-lg);

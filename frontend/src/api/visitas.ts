@@ -3,8 +3,6 @@ import type {
   RegistrarVisitaPayload,
   VisitaResponse,
   Reporte,
-  AsistenciaDelegadoPayload,
-  AsistenciaComunidadPayload,
   RequerimientoPayload,
   RequerimientoResponse,
   ProgramarVisitaBody,
@@ -90,50 +88,6 @@ export async function eliminarReporte(reporteId: number): Promise<unknown> {
   return apiClient.delete('/grupo-operativo/eliminar-reporte', {
     reporte_id: reporteId.toString(),
   });
-}
-
-/* ============================================================
- *  POST /registrar-asistencia-delegado
- *  Registra asistencia de un delegado (application/x-www-form-urlencoded)
- * ============================================================ */
-export async function registrarAsistenciaDelegado(
-  payload: AsistenciaDelegadoPayload
-): Promise<unknown> {
-  const data: Record<string, string> = {
-    vid: payload.vid,
-    id_acompanante: payload.id_acompanante,
-    nombre_completo: payload.nombre_completo,
-    rol: payload.rol,
-    nombre_centro_gestor: payload.nombre_centro_gestor,
-    telefono: payload.telefono,
-    email: payload.email,
-    latitud: payload.latitud,
-    longitud: payload.longitud,
-  };
-  return apiClient.postUrlEncoded('/registrar-asistencia-delegado', data);
-}
-
-/* ============================================================
- *  POST /registrar-asistencia-comunidad
- *  Registra asistencia de la comunidad (application/x-www-form-urlencoded)
- * ============================================================ */
-export async function registrarAsistenciaComunidad(
-  payload: AsistenciaComunidadPayload
-): Promise<unknown> {
-  const data: Record<string, string> = {
-    vid: payload.vid,
-    id_asistente_comunidad: payload.id_asistente_comunidad,
-    nombre_completo: payload.nombre_completo,
-    rol_comunidad: payload.rol_comunidad,
-    direccion: payload.direccion,
-    barrio_vereda: payload.barrio_vereda,
-    comuna_corregimiento: payload.comuna_corregimiento,
-    telefono: payload.telefono,
-    email: payload.email,
-    latitud: payload.latitud,
-    longitud: payload.longitud,
-  };
-  return apiClient.postUrlEncoded('/registrar-asistencia-comunidad', data);
 }
 
 /* ============================================================

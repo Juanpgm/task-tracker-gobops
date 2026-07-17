@@ -30,9 +30,14 @@ function createOfflineStore() {
   if (typeof window !== 'undefined') {
     window.addEventListener('online', async () => {
       update((s) => ({ ...s, isOnline: true }));
-      // Trigger auto-sync when coming back online
+      // Trigger auto-sync when coming back online (both queues share the
+      // same IndexedDB store — see lib/offlineQueue.ts QueueItem['type']).
       const { seguimientoStore } = await import('./seguimientoStore');
-      await seguimientoStore.syncOfflineQueue();
+      const { avanzadasStore } = await import('./avanzadasStore');
+      await Promise.all([
+        seguimientoStore.syncOfflineQueue(),
+        avanzadasStore.syncOfflineQueue(),
+      ]);
     });
 
     window.addEventListener('offline', () => {
@@ -56,7 +61,11 @@ function createOfflineStore() {
       update((s) => ({ ...s, isSyncing: true }));
       try {
         const { seguimientoStore } = await import('./seguimientoStore');
-        await seguimientoStore.syncOfflineQueue();
+        const { avanzadasStore } = await import('./avanzadasStore');
+        await Promise.all([
+          seguimientoStore.syncOfflineQueue(),
+          avanzadasStore.syncOfflineQueue(),
+        ]);
       } catch (err) {
         console.error('Manual sync failed:', err);
       } finally {
