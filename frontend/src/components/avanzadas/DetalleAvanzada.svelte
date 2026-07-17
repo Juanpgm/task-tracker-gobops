@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { navigationStore } from "../../stores/navigationStore";
   import { avanzadasStore } from "../../stores/avanzadasStore";
+  import { descargarReporteAvanzadaPdf } from "../../api/avanzadas";
   import { formatDate } from "../../lib/format-date";
   import { toDisplayableImageUrl, toOriginalUrl } from "../../lib/media-urls";
   import type { RequerimientoAvanzada } from "../../types/avanzadas";
@@ -26,6 +27,23 @@
 
   function reintentar() {
     avanzadasStore.loadAvanzadaDetalle(clientId);
+  }
+
+  /* ---- Crear PDF ---- */
+  let generandoPdf = false;
+  let errorPdf = "";
+
+  async function crearPdf() {
+    if (generandoPdf) return;
+    generandoPdf = true;
+    errorPdf = "";
+    try {
+      await descargarReporteAvanzadaPdf(clientId);
+    } catch (e) {
+      errorPdf = "No se pudo generar el PDF. Intenta de nuevo.";
+    } finally {
+      generandoPdf = false;
+    }
   }
 
   /** Parses a "lat, lng" string into a Google Maps link, or null if unusable. */
@@ -144,12 +162,26 @@
             <Icon name="calendar" size={13} />
             {formatDate(detalle.fecha)}
           </span>
-          {#if detalle.informe_url}
-            <a class="informe-link" href={toOriginalUrl(detalle.informe_url)} target="_blank" rel="noopener">
-              Ver informe ↗
-            </a>
-          {/if}
+          <div class="summary-top-actions">
+            {#if detalle.informe_url}
+              <a class="informe-link" href={toOriginalUrl(detalle.informe_url)} target="_blank" rel="noopener">
+                Ver informe ↗
+              </a>
+            {/if}
+            <button
+              type="button"
+              class="crear-pdf-btn"
+              on:click={crearPdf}
+              disabled={generandoPdf}
+            >
+              <Icon name={generandoPdf ? "clock" : "file-text"} size={14} />
+              {generandoPdf ? "Generando…" : "Crear PDF"}
+            </button>
+          </div>
         </div>
+        {#if errorPdf}
+          <p class="pdf-error">{errorPdf}</p>
+        {/if}
 
         <dl class="summary-grid">
           <div class="summary-item">
@@ -447,6 +479,39 @@
     text-decoration: none;
   }
   .informe-link:hover { text-decoration: underline; }
+
+  .summary-top-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .crear-pdf-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: var(--surface-alt);
+    color: var(--text-body);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 0.3rem 0.65rem;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .crear-pdf-btn:hover:not(:disabled) {
+    border-color: var(--border-strong);
+    background: var(--surface);
+  }
+  .crear-pdf-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+  .pdf-error {
+    color: var(--error);
+    font-size: var(--fs-sm);
+    margin: 0.4rem 0 0;
+  }
 
   .summary-grid {
     display: grid;

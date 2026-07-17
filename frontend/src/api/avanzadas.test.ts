@@ -10,6 +10,7 @@ import {
   crearAvanzada,
   listarAvanzadas,
   getAvanzada,
+  descargarReporteAvanzadaPdf,
 } from "./avanzadas";
 import { apiClient, uploadApiClient } from "../lib/api-client";
 
@@ -159,6 +160,53 @@ describe("api/avanzadas", () => {
       expect(result).toEqual(detail);
       const [url] = (global.fetch as any).mock.calls[0];
       expect(url).toContain("/avanzadas/abc-123");
+    });
+  });
+
+  describe("descargarReporteAvanzadaPdf", () => {
+    if (!("createObjectURL" in URL)) {
+      // jsdom doesn't implement the Blob URL API — stub it for this test file.
+      (URL as any).createObjectURL = () => "";
+      (URL as any).revokeObjectURL = () => {};
+    }
+
+    it("GETs /avanzadas/{client_id}/reporte-pdf with Bearer auth and triggers a browser download", async () => {
+      const blob = new Blob(["%PDF-1.4"], { type: "application/pdf" });
+      (global.fetch as any) = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        blob: async () => blob,
+        text: async () => "",
+      });
+      const createObjectURLSpy = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:fake-pdf-url");
+      const revokeObjectURLSpy = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+      const realCreateElement = document.createElement.bind(document);
+      const clickSpy = vi.fn();
+      const createElementSpy = vi.spyOn(document, "createElement").mockImplementation((tag: any) => {
+        const el = realCreateElement(tag);
+        if (tag === "a") el.click = clickSpy;
+        return el;
+      });
+
+      await descargarReporteAvanzadaPdf("abc-123");
+
+      const [url, options] = (global.fetch as any).mock.calls[0];
+      expect(url).toContain("/avanzadas/abc-123/reporte-pdf");
+      expect(options.headers.Authorization).toBe("Bearer test-token");
+      expect(createObjectURLSpy).toHaveBeenCalledWith(blob);
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+      expect(revokeObjectURLSpy).toHaveBeenCalledWith("blob:fake-pdf-url");
+
+      createElementSpy.mockRestore();
+    });
+
+    it("throws when the backend responds with a non-ok status", async () => {
+      (global.fetch as any) = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => "boom",
+      });
+      await expect(descargarReporteAvanzadaPdf("abc-123")).rejects.toThrow();
     });
   });
 });

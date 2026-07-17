@@ -83,6 +83,14 @@ vi.mock("../../stores/navigationStore", () => ({
   },
 }));
 
+const avanzadasApiMocks = vi.hoisted(() => ({
+  descargarReporteAvanzadaPdf: vi.fn(),
+}));
+
+vi.mock("../../api/avanzadas", () => ({
+  descargarReporteAvanzadaPdf: avanzadasApiMocks.descargarReporteAvanzadaPdf,
+}));
+
 import DetalleAvanzada from "./DetalleAvanzada.svelte";
 
 function setStoreState(patch: Partial<ReturnType<typeof avanzadasStoreState.store.get>>) {
@@ -226,6 +234,26 @@ describe("DetalleAvanzada", () => {
       setStoreState({ detalle: { "client-1": detalle({ isOffline: true }) } });
       render(DetalleAvanzada);
       expect(screen.getByText(/Pendiente de sincronizar/)).toBeInTheDocument();
+    });
+
+    it("clicking 'Crear PDF' downloads the avanzada report", async () => {
+      setStoreState({ detalle: { "client-1": detalle() } });
+      avanzadasApiMocks.descargarReporteAvanzadaPdf.mockResolvedValue(undefined);
+      render(DetalleAvanzada);
+
+      await fireEvent.click(screen.getByRole("button", { name: /crear pdf/i }));
+
+      expect(avanzadasApiMocks.descargarReporteAvanzadaPdf).toHaveBeenCalledWith("client-1");
+    });
+
+    it("shows an inline error if the PDF download fails", async () => {
+      setStoreState({ detalle: { "client-1": detalle() } });
+      avanzadasApiMocks.descargarReporteAvanzadaPdf.mockRejectedValue(new Error("network"));
+      render(DetalleAvanzada);
+
+      await fireEvent.click(screen.getByRole("button", { name: /crear pdf/i }));
+
+      expect(await screen.findByText(/no se pudo generar el pdf/i)).toBeInTheDocument();
     });
   });
 

@@ -98,6 +98,19 @@ class ApiClient {
     return response.json();
   }
 
+  /** GET that returns the raw response body as a Blob (file downloads, e.g. PDF reports). */
+  async getBlob(path: string): Promise<Blob> {
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method: 'GET',
+      headers: this.getHeaders(),
+    });
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`GET ${path} failed (${response.status}): ${errorBody}`);
+    }
+    return response.blob();
+  }
+
   async delete<T>(path: string, params?: Record<string, string>): Promise<T> {
     let url = `${this.baseUrl}${path}`;
     if (params) {

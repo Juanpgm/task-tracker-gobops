@@ -92,3 +92,21 @@ export async function listarAvanzadas(limit = 100): Promise<ListarAvanzadasItem[
 export async function getAvanzada(clientId: string): Promise<Avanzada> {
   return apiClient.get<Avanzada>(`/avanzadas/${encodeURIComponent(clientId)}`);
 }
+
+/* ============================================================
+ *  GET /avanzadas/{client_id}/reporte-pdf
+ *  Descarga el informe PDF de la avanzada (reportes tipo informe de campo,
+ *  con requerimientos por entidad y mapa de recorrido) y dispara la
+ *  descarga en el navegador.
+ * ============================================================ */
+export async function descargarReporteAvanzadaPdf(clientId: string): Promise<void> {
+  const blob = await apiClient.getBlob(`/avanzadas/${encodeURIComponent(clientId)}/reporte-pdf`);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `informe-avanzada-${clientId}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}

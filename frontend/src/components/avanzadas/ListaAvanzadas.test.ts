@@ -57,6 +57,10 @@ const navigationStoreMocks = vi.hoisted(() => ({
   goHome: vi.fn(),
 }));
 
+const avanzadasApiMocks = vi.hoisted(() => ({
+  descargarReporteAvanzadaPdf: vi.fn(),
+}));
+
 vi.mock("../../stores/avanzadasStore", () => ({
   avanzadasStore: {
     subscribe: avanzadasStoreState.store.subscribe,
@@ -70,6 +74,10 @@ vi.mock("../../stores/navigationStore", () => ({
     navigate: navigationStoreMocks.navigate,
     goHome: navigationStoreMocks.goHome,
   },
+}));
+
+vi.mock("../../api/avanzadas", () => ({
+  descargarReporteAvanzadaPdf: avanzadasApiMocks.descargarReporteAvanzadaPdf,
 }));
 
 import ListaAvanzadas from "./ListaAvanzadas.svelte";
@@ -185,6 +193,27 @@ describe("ListaAvanzadas", () => {
     expect(card).toHaveAttribute("type", "button");
     card.focus();
     expect(card).toHaveFocus();
+  });
+
+  it("clicking 'Crear PDF' downloads the report without navigating to the detail view", async () => {
+    setStoreState({ avanzadas: [avanzada({ client_id: "a1" })] });
+    avanzadasApiMocks.descargarReporteAvanzadaPdf.mockResolvedValue(undefined);
+    render(ListaAvanzadas);
+
+    await fireEvent.click(screen.getByRole("button", { name: /crear pdf/i }));
+
+    expect(avanzadasApiMocks.descargarReporteAvanzadaPdf).toHaveBeenCalledWith("a1");
+    expect(navigationStoreMocks.navigate).not.toHaveBeenCalled();
+  });
+
+  it("shows an inline error if the PDF download fails", async () => {
+    setStoreState({ avanzadas: [avanzada({ client_id: "a1" })] });
+    avanzadasApiMocks.descargarReporteAvanzadaPdf.mockRejectedValue(new Error("network"));
+    render(ListaAvanzadas);
+
+    await fireEvent.click(screen.getByRole("button", { name: /crear pdf/i }));
+
+    expect(await screen.findByText(/no se pudo generar el pdf/i)).toBeInTheDocument();
   });
 
   it("shows a pending-sync badge for offline items", () => {

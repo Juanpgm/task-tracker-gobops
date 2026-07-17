@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { navigationStore } from "../../stores/navigationStore";
   import { avanzadasStore } from "../../stores/avanzadasStore";
+  import { descargarReporteAvanzadaPdf } from "../../api/avanzadas";
   import { formatDate } from "../../lib/format-date";
   import Button from "../ui/Button.svelte";
   import Icon from "../ui/Icon.svelte";
@@ -24,6 +25,23 @@
 
   function verDetalle(clientId: string) {
     navigationStore.navigate("detalle-avanzada", { client_id: clientId });
+  }
+
+  /* ---- Crear PDF (por tarjeta) ---- */
+  let generandoPdfId: string | null = null;
+  let errorPdfId: string | null = null;
+
+  async function crearPdf(clientId: string) {
+    if (generandoPdfId) return;
+    generandoPdfId = clientId;
+    errorPdfId = null;
+    try {
+      await descargarReporteAvanzadaPdf(clientId);
+    } catch (e) {
+      errorPdfId = clientId;
+    } finally {
+      generandoPdfId = null;
+    }
   }
 
   /* ---- Filter bar (client-side, instant — data is already loaded) ---- */
@@ -165,36 +183,51 @@
       {:else}
         <div class="list">
           {#each avanzadasFiltradas as avanzada (avanzada.client_id)}
-            <button
-              type="button"
-              class="avanzada-card"
-              class:offline={avanzada.isOffline}
-              on:click={() => verDetalle(avanzada.client_id)}
-            >
-              <div class="card-top-row">
-                <span class="date-chip">
-                  <Icon name="calendar" size={13} />
-                  {formatDate(avanzada.fecha)}
-                </span>
-                {#if avanzada.isOffline}
-                  <span class="offline-badge">Pendiente de sincronizar</span>
-                {/if}
+            <div class="avanzada-card" class:offline={avanzada.isOffline}>
+              <button
+                type="button"
+                class="avanzada-card-btn"
+                on:click={() => verDetalle(avanzada.client_id)}
+              >
+                <div class="card-top-row">
+                  <span class="date-chip">
+                    <Icon name="calendar" size={13} />
+                    {formatDate(avanzada.fecha)}
+                  </span>
+                  {#if avanzada.isOffline}
+                    <span class="offline-badge">Pendiente de sincronizar</span>
+                  {/if}
+                </div>
+                <h3 class="card-title">{avanzada.nombre_avanzada}</h3>
+                <p class="card-location">
+                  <Icon name="map-pin" size={14} />
+                  {avanzada.barrio}, {avanzada.comuna}
+                </p>
+                <div class="card-stats">
+                  <span class="stat-pill">
+                    <Icon name="flag" size={13} /> {avanzada.estrategia}
+                  </span>
+                  <span class="stat-pill stat-pill--warning">
+                    <Icon name="clipboard-list" size={13} />
+                    {avanzada.requerimientos_count ?? avanzada.requerimientos?.length ?? 0} requerimiento{(avanzada.requerimientos_count ?? avanzada.requerimientos?.length ?? 0) !== 1 ? "s" : ""}
+                  </span>
+                </div>
+              </button>
+              <div class="card-actions">
+                <button
+                  type="button"
+                  class="crear-pdf-btn"
+                  disabled={generandoPdfId !== null}
+                  on:click={() => crearPdf(avanzada.client_id)}
+                >
+                  <Icon name={generandoPdfId === avanzada.client_id ? "clock" : "file-text"} size={13} />
+                  {generandoPdfId === avanzada.client_id ? "Generando…" : "Crear PDF"}
+                </button>
               </div>
-              <h3 class="card-title">{avanzada.nombre_avanzada}</h3>
-              <p class="card-location">
-                <Icon name="map-pin" size={14} />
-                {avanzada.barrio}, {avanzada.comuna}
-              </p>
-              <div class="card-stats">
-                <span class="stat-pill">
-                  <Icon name="flag" size={13} /> {avanzada.estrategia}
-                </span>
-                <span class="stat-pill stat-pill--warning">
-                  <Icon name="clipboard-list" size={13} />
-                  {avanzada.requerimientos_count ?? avanzada.requerimientos?.length ?? 0} requerimiento{(avanzada.requerimientos_count ?? avanzada.requerimientos?.length ?? 0) !== 1 ? "s" : ""}
-                </span>
-              </div>
-            </button>
+              {#if errorPdfId === avanzada.client_id}
+                <p class="pdf-error">No se pudo generar el PDF. Intenta de nuevo.</p>
+              {/if}
+            </div>
           {/each}
         </div>
       {/if}
@@ -383,25 +416,31 @@
     border: 1px solid var(--border);
     padding: 1rem 1.15rem;
     box-shadow: var(--shadow-sm);
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-    text-align: left;
-    font-family: inherit;
-    cursor: pointer;
     transition: box-shadow 0.15s, border-color 0.15s;
   }
   .avanzada-card:hover {
     border-color: var(--border-strong);
     box-shadow: var(--shadow-md);
   }
-  .avanzada-card:focus-visible {
-    outline: 2px solid var(--primary);
-    outline-offset: 2px;
-  }
   .avanzada-card.offline {
     border-color: #fcd34d;
     background: #fffbeb;
+  }
+  .avanzada-card-btn {
+    width: 100%;
+    background: none;
+    border: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    text-align: left;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .avanzada-card-btn:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
   }
   .card-top-row {
     display: flex;
@@ -458,6 +497,37 @@
     background: var(--surface-alt);
     padding: 0.22rem 0.6rem;
     border-radius: 20px;
+  }
+  .card-actions {
+    margin-top: 0.4rem;
+    display: flex;
+  }
+  .crear-pdf-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: var(--surface-alt);
+    color: var(--text-body);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 0.3rem 0.65rem;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .crear-pdf-btn:hover:not(:disabled) {
+    border-color: var(--border-strong);
+    background: var(--surface);
+  }
+  .crear-pdf-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+  .pdf-error {
+    color: var(--error);
+    font-size: var(--fs-sm);
+    margin: 0.4rem 0 0;
   }
   .stat-pill--warning {
     background: var(--warning-light);
