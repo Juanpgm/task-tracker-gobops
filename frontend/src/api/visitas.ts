@@ -136,6 +136,48 @@ export async function registrarRequerimiento(
  *  Requieren Bearer token (apiClient ya lo maneja)
  * ============================================================ */
 
+/**
+ * POST /seguimiento/evidencias — multipart/form-data
+ * Sube fotos/nota de voz de un requerimiento de seguimiento a S3
+ * (unifica el módulo Seguimiento con app/utils/s3_storage.py, ver
+ * design.md "Interfaces / Contracts"). Reemplaza a registrarRequerimiento()
+ * como origen de las URLs de evidencia — ya no crea un doc legacy.
+ * Usa uploadApiClient (igual que crearAvanzada/crearRequerimientosJornada)
+ * para evitar que el proxy de Vercel corrompa el body multipart.
+ */
+export interface SubirEvidenciasSeguimientoPayload {
+  visita_id: string;
+  fotos?: File[];
+  nota_voz?: File | null;
+}
+
+export interface EvidenciaSeguimientoUpload {
+  s3_url: string;
+  s3_key: string;
+  filename: string;
+  content_type: string;
+  size: number;
+}
+
+export async function subirEvidenciasSeguimiento(
+  payload: SubirEvidenciasSeguimientoPayload
+): Promise<EvidenciaSeguimientoUpload[]> {
+  const formData = new FormData();
+  formData.append('requerimiento_id', payload.visita_id);
+
+  if (payload.fotos && payload.fotos.length > 0) {
+    for (const file of payload.fotos) {
+      formData.append('archivos', file);
+    }
+  }
+
+  if (payload.nota_voz) {
+    formData.append('archivos', payload.nota_voz);
+  }
+
+  return uploadApiClient.postForm<EvidenciaSeguimientoUpload[]>('/seguimiento/evidencias', formData);
+}
+
 /** GET /seguimiento/visitas — Listar visitas programadas */
 export async function getVisitasProgramadas(
   params?: { estado?: string; upid?: string }

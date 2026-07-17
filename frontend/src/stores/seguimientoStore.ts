@@ -25,12 +25,12 @@ import {
   getRequerimientosSeguimiento,
   getColaboradores,
   registrarVisita,
-  registrarRequerimiento,
+  subirEvidenciasSeguimiento,
   obtenerRequerimientos,
   editarRequerimiento as editarRequerimientoAPI,
 } from '../api/visitas';
 import type { ObtenerVisitasProgramadasItem, ObtenerRequerimientosItem } from '../api/visitas';
-import type { RegistrarVisitaPayload, RequerimientoPayload, RequerimientoOut, UnidadProyecto } from '../types';
+import type { RegistrarVisitaPayload, RequerimientoOut, UnidadProyecto } from '../types';
 import { offlineStore } from './offlineStore';
 import {
   enqueueOperation,
@@ -877,41 +877,14 @@ function createSeguimientoStore() {
           if (item.type === 'create') {
             const p = item.payload;
             let uploadedUrls: string[] = [];
-            let legacyRid = '';
-            
-            const datosSolicitante = JSON.stringify({
-              personas: [{
-                nombre: p.solicitante.nombre_completo,
-                email: p.solicitante.email || undefined,
-                telefono: p.solicitante.telefono || undefined,
-                direccion: p.solicitante.direccion || undefined,
-                centro_gestor: p.centrosGestores?.[0] || undefined,
-              }],
-            });
-            const coordsJson = (p.latitud && p.longitud)
-              ? JSON.stringify({ type: 'Point', coordinates: [parseFloat(p.longitud), parseFloat(p.latitud)] })
-              : JSON.stringify({ type: 'Point', coordinates: [0, 0] });
-            const organismosJson = JSON.stringify(p.centrosGestores);
-
-            const capturaPayload: RequerimientoPayload = {
-              vid: p.visitaId,
-              datos_solicitante: datosSolicitante,
-              tipo_requerimiento: p.prioridad || 'media',
-              requerimiento: p.descripcion,
-              direccion_requerimiento: p.direccion || undefined,
-              observaciones: p.observaciones || 'Sin observaciones',
-              coords: coordsJson,
-              organismos_encargados: organismosJson,
-              nota_voz: p.notaVozFile,
-              evidencias: p.fotosFiles,
-            };
 
             try {
-              const legacyResult = await registrarRequerimiento(capturaPayload);
-              legacyRid = legacyResult.rid;
-              if (legacyResult.documentos_urls) {
-                uploadedUrls = legacyResult.documentos_urls.map(doc => doc.url);
-              }
+              const evidencias = await subirEvidenciasSeguimiento({
+                visita_id: p.visitaId,
+                fotos: p.fotosFiles,
+                nota_voz: p.notaVozFile,
+              });
+              uploadedUrls = evidencias.map((doc) => doc.s3_url);
             } catch (err) {
               console.warn('Sync capture API failed for item:', item.id, err);
               throw err;
@@ -945,7 +918,7 @@ function createSeguimientoStore() {
 
             update((s) => ({
               ...s,
-              requerimientos: s.requerimientos.map(r => r.id === item.reqId ? mapRequerimientoOutToRequerimiento(result, legacyRid, false) : r)
+              requerimientos: s.requerimientos.map(r => r.id === item.reqId ? mapRequerimientoOutToRequerimiento(result, undefined, false) : r)
             }));
             
             await dequeueOperation(item.id);

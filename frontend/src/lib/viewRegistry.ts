@@ -1,7 +1,6 @@
 import type { ComponentType } from 'svelte';
 import type { AppView } from '../stores/navigationStore';
 import Home from '../components/Home.svelte';
-import RegistrarVisita from '../components/visitas/RegistrarVisita.svelte';
 import KanbanRequerimientos from '../components/seguimiento/KanbanRequerimientos.svelte';
 import ListaAvanzadas from '../components/avanzadas/ListaAvanzadas.svelte';
 import RegistrarAvanzada from '../components/avanzadas/RegistrarAvanzada.svelte';
@@ -18,10 +17,9 @@ import Reportes from '../components/visitas/Reportes.svelte';
  */
 export const viewComponents: Record<AppView, ComponentType> = {
   home: Home,
-  'programar-visita': RegistrarVisita,
+  'programar-avanzada': RegistrarAvanzada,
   kanban: KanbanRequerimientos,
   avanzadas: ListaAvanzadas,
-  'registrar-avanzada': RegistrarAvanzada,
   'detalle-avanzada': DetalleAvanzada,
   reportes: Reportes,
 };
