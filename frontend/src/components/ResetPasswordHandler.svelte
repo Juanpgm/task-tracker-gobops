@@ -188,7 +188,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #2563eb 0%, #1e40af 50%, #1d4ed8 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-darker) 50%, var(--primary-dark) 100%);
     padding: var(--space-md);
   }
   .reset-card {

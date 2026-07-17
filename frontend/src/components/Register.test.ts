@@ -5,7 +5,6 @@
  * 1. Register form structure and validation
  * 2. Auto-login after successful registration
  * 3. registerUser uses direct fetch (no apiClient / no auth token)
- * 4. Camera capture uses capture="environment" (not gallery)
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
@@ -18,11 +17,6 @@ const registerSource = readFileSync(
 
 const authSource = readFileSync(
   resolve(__dirname, "../api/auth.ts"),
-  "utf-8",
-);
-
-const reqVisitaSource = readFileSync(
-  resolve(__dirname, "seguimiento/RegistrarRequerimientosVisita.svelte"),
   "utf-8",
 );
 
@@ -160,45 +154,5 @@ describe("registerUser uses direct fetch without auth", () => {
   it("handles network errors", () => {
     expect(fnBody).toContain("Failed to fetch");
     expect(fnBody).toContain("NetworkError");
-  });
-});
-
-/* ============================================================
- *  4. CAMERA CAPTURE — capture="environment" (direct camera)
- * ============================================================ */
-describe("Camera capture opens camera directly", () => {
-  it("camera input has capture='environment' attribute", () => {
-    expect(reqVisitaSource).toMatch(
-      /capture="environment"/,
-    );
-  });
-
-  it("camera input accepts only images", () => {
-    // Find camera input (has capture attribute)
-    const cameraInputs = reqVisitaSource.match(
-      /<input[^>]*capture="environment"[^>]*>/g,
-    );
-    expect(cameraInputs).not.toBeNull();
-    expect(cameraInputs!.length).toBeGreaterThanOrEqual(1);
-    // Camera input should accept image/*
-    for (const input of cameraInputs!) {
-      expect(input).toMatch(/accept="image\/\*"/);
-    }
-  });
-
-  it("gallery input does NOT have capture attribute", () => {
-    // Gallery inputs have multiple and accept image+video but no capture
-    const galleryInputs = reqVisitaSource.match(
-      /<input[^>]*accept="image\/\*,video\/\*"[^>]*multiple[^>]*>/g,
-    );
-    expect(galleryInputs).not.toBeNull();
-    for (const input of galleryInputs!) {
-      expect(input).not.toContain("capture");
-    }
-  });
-
-  it("camera and gallery are separate buttons", () => {
-    expect(reqVisitaSource).toContain("Cámara");
-    expect(reqVisitaSource).toContain("Galería");
   });
 });

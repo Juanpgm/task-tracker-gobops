@@ -141,8 +141,8 @@
     padding: 0.625rem 0.875rem;
     border-radius: 999px;
     border: 1px solid rgba(255, 255, 255, 0.18);
-    background: var(--primary, #2563eb);
-    color: #fff;
+    background: var(--primary, var(--primary));
+    color: var(--surface);
     font: 600 0.875rem/1 var(--font-sans, system-ui);
     cursor: pointer;
     box-shadow: 0 8px 24px rgba(37, 99, 235, 0.35);
@@ -181,7 +181,7 @@
   .ios-guide {
     width: 100%;
     max-width: 460px;
-    background: #fff;
+    background: var(--surface);
     border-radius: 1rem;
     padding: 1.25rem 1.25rem 1rem;
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
@@ -189,7 +189,7 @@
   .ios-guide h3 {
     margin: 0 0 0.75rem;
     font-size: 1.05rem;
-    color: #1e293b;
+    color: var(--text);
   }
   .ios-guide ol {
     margin: 0 0 0.75rem 1.1rem;
@@ -201,11 +201,11 @@
   .ios-guide ol li { margin-bottom: 0.4rem; }
   .ios-guide ol svg {
     vertical-align: -3px;
-    color: #2563eb;
+    color: var(--primary);
   }
   .ios-guide__hint {
     margin: 0 0 0.75rem;
-    color: #64748b;
+    color: var(--text-secondary);
     font-size: 0.82rem;
     line-height: 1.5;
   }
@@ -217,10 +217,10 @@
     padding: 0.55rem 1.1rem;
     border-radius: 0.5rem;
     border: 0;
-    background: #2563eb;
-    color: #fff;
+    background: var(--primary);
+    color: var(--surface);
     font: 600 0.9rem/1 var(--font-sans, system-ui);
     cursor: pointer;
   }
-  .ios-guide__actions button:hover { background: #1d4ed8; }
+  .ios-guide__actions button:hover { background: var(--primary-dark); }
 </style>

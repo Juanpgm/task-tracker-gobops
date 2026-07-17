@@ -65,8 +65,8 @@
           />
         </svg>
       </div>
-      <h1 class="login-title">Task Tracker GobOps</h1>
-      <p class="login-subtitle">Sistema de gestión de visitas</p>
+      <h1 class="login-title">GobOps</h1>
+      <p class="login-subtitle">Seguimiento de Requerimientos</p>
     </div>
 
     {#if errorMsg}
@@ -129,11 +129,10 @@
     min-height: 100vh;
     min-height: -webkit-fill-available;
     min-height: 100dvh;
-    min-height: 100dvh;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #2563eb 0%, #1e40af 50%, #1d4ed8 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-darker) 50%, var(--primary-dark) 100%);
     padding: var(--space-md);
   }
   .login-card {

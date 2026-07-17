@@ -292,7 +292,7 @@
           <button class="ios-guide__close" on:click={() => (showIOSGuide = false)} aria-label="Cerrar guía">
             <Icon name="x" size={14} />
           </button>
-          <h3 class="section-title" style="color:#1d4ed8">Instalar en iPhone / iPad</h3>
+          <h3 class="section-title" style="color:var(--primary-dark)">Instalar en iPhone / iPad</h3>
           <ol class="guide-steps">
             <li>
               Abre esta página en <strong>Safari</strong> (no Chrome ni Firefox)
@@ -390,7 +390,7 @@
     font-size: 0.6875rem;
     font-weight: 600;
     background: var(--primary);
-    color: #fff;
+    color: var(--surface);
     border-radius: 999px;
     padding: 0 7px;
     line-height: 1.6;
@@ -411,7 +411,10 @@
     50%       { opacity: 0.6; transform: scale(0.85); }
   }
 
+  /* Visible box stays a compact 32px square; the tappable hit area is
+     expanded to --tap-min via a pseudo-element. */
   .close-btn {
+    position: relative;
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -423,6 +426,11 @@
     color: var(--text-muted);
     cursor: pointer;
     transition: background 0.15s;
+  }
+  .close-btn::before {
+    content: '';
+    position: absolute;
+    inset: calc((32px - var(--tap-min)) / 2);
   }
   .close-btn:hover { background: var(--border); }
 
@@ -498,8 +506,8 @@
     border-radius: 999px;
     padding: 1px 8px;
   }
-  .env-badge.prod { background: #dcfce7; color: #166534; }
-  .env-badge.dev  { background: #fef3c7; color: #92400e; }
+  .env-badge.prod { background: var(--success-light); color: var(--success-ink); }
+  .env-badge.dev  { background: var(--warning-light); color: var(--warning-ink); }
 
   .status-badge {
     font-size: 0.6875rem;
@@ -507,8 +515,8 @@
     border-radius: 999px;
     padding: 1px 8px;
   }
-  .status-badge.warning { background: #fef3c7; color: #92400e; }
-  .status-badge.success { background: #dcfce7; color: #166534; }
+  .status-badge.warning { background: var(--warning-light); color: var(--warning-ink); }
+  .status-badge.success { background: var(--success-light); color: var(--success-ink); }
   .status-badge.neutral { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border); }
 
   /* Action list */
@@ -538,7 +546,7 @@
     border-color: #f59e0b;
     background: #fffbeb;
   }
-  .action-highlighted:hover { background: #fef3c7 !important; }
+  .action-highlighted:hover { background: var(--warning-light) !important; }
 
   .action-icon-wrap {
     width: 36px;
@@ -604,7 +612,7 @@
   }
 
   .ios-guide .section-title {
-    color: #1d4ed8;
+    color: var(--primary-dark);
   }
 
   .ios-guide__close {
@@ -620,14 +628,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #1d4ed8;
+    color: var(--primary-dark);
     padding: 0;
   }
   .ios-guide__close:hover { background: rgba(30, 64, 175, 0.2); }
 
   .ios-hint {
     font-size: 0.75rem;
-    color: #1e40af;
+    color: var(--primary-darker);
     line-height: 1.5;
     margin: 0;
     padding-top: var(--space-xs);
@@ -653,7 +661,7 @@
   }
 
   .install-card--done {
-    border-color: #16a34a;
+    border-color: var(--success);
     background: #f0fdf4;
   }
 
@@ -688,7 +696,7 @@
 
   .install-card__icon--green {
     background: #f0fdf4;
-    color: #16a34a;
+    color: var(--success);
     border-color: #bbf7d0;
   }
 
@@ -742,7 +750,7 @@
 
   .install-btn--primary {
     background: var(--primary);
-    color: #fff;
+    color: var(--surface);
   }
   .install-btn--primary:hover { opacity: 0.88; }
 
@@ -783,7 +791,7 @@
     width: 18px;
     height: 18px;
     vertical-align: middle;
-    color: #2563eb;
+    color: var(--primary);
     flex-shrink: 0;
   }
 

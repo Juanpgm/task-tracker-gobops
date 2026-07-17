@@ -101,7 +101,7 @@
         </svg>
       </div>
       <h1 class="register-title">Crear Cuenta</h1>
-      <p class="register-subtitle">Task Tracker GobOps</p>
+      <p class="register-subtitle">GobOps</p>
     </div>
 
     {#if errorMsg}
@@ -183,11 +183,10 @@
     min-height: 100vh;
     min-height: -webkit-fill-available;
     min-height: 100dvh;
-    min-height: 100dvh;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #2563eb 0%, #1e40af 50%, #1d4ed8 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-darker) 50%, var(--primary-dark) 100%);
     padding: var(--space-md);
   }
   .register-card {
