@@ -467,9 +467,49 @@ export function getComunasCorregimientos(): Array<{ value: string; label: string
 export function getBarriosVeredas(comunaCorregimiento: string): Array<{ value: string; label: string }> {
   const cc = CALI_GEOPOLITICA.find(item => item.nombre === comunaCorregimiento);
   if (!cc) return [];
-  
+
   return cc.barrios_veredas.map(bv => ({
     value: bv.nombre,
     label: bv.nombre
   }));
+}
+
+function normalizar(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * Intenta emparejar un nombre de comuna/corregimiento en texto libre (por
+ * ejemplo, proveniente de geocodificación inversa) con el catálogo interno.
+ * Devuelve el `value` exacto del catálogo si encuentra una coincidencia
+ * razonable, o null si no hay ninguna — nunca inventa un valor.
+ */
+export function matchComuna(rawComuna: string | undefined | null): string | null {
+  if (!rawComuna || !rawComuna.trim()) return null;
+  const norm = normalizar(rawComuna);
+  const match = CALI_GEOPOLITICA.find((cc) => {
+    const n = normalizar(cc.nombre);
+    return norm === n || norm.includes(n) || n.includes(norm);
+  });
+  return match ? match.nombre : null;
+}
+
+/**
+ * Igual que matchComuna, pero para barrios/veredas dentro de una comuna o
+ * corregimiento ya determinado.
+ */
+export function matchBarrio(rawBarrio: string | undefined | null, comunaCorregimiento: string): string | null {
+  if (!rawBarrio || !rawBarrio.trim() || !comunaCorregimiento) return null;
+  const cc = CALI_GEOPOLITICA.find((item) => item.nombre === comunaCorregimiento);
+  if (!cc) return null;
+  const norm = normalizar(rawBarrio);
+  const match = cc.barrios_veredas.find((bv) => {
+    const n = normalizar(bv.nombre);
+    return norm === n || norm.includes(n) || n.includes(norm);
+  });
+  return match ? match.nombre : null;
 }

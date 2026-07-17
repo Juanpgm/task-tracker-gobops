@@ -1,0 +1,679 @@
+/**
+ * Behavioral tests for RegistrarAvanzada.svelte.
+ *
+ * Replaces the previous structural (readFileSync + source-matching) test
+ * file. These tests render the real component with @testing-library/svelte
+ * and drive it like a user would — mocking the store layer (avanzadasStore,
+ * navigationStore) and the LocationPicker child (a Leaflet map + GPS
+ * component that is out of scope here; see __test-stubs__/LocationPickerStub
+ * for why it's stubbed instead of rendered for real). data/avanzadas-catalogo
+ * and data/cali-geopolitica are real static data — no need to mock those.
+ */
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import "@testing-library/jest-dom/vitest";
+import { render, screen, fireEvent, cleanup } from "@testing-library/svelte";
+
+/**
+ * This machine's Node runtime defines a global `localStorage` backed by
+ * `--localstorage-file` (invalid/unset here), which shadows jsdom's real
+ * implementation with a near-empty stub (no setItem/getItem/etc). That's an
+ * environment quirk, not something this suite should depend on — so tests
+ * that exercise the draft-autosave feature install a real in-memory
+ * Storage-compatible stand-in instead.
+ */
+class MemoryStorage {
+  private store = new Map<string, string>();
+  getItem(key: string): string | null {
+    return this.store.has(key) ? this.store.get(key)! : null;
+  }
+  setItem(key: string, value: string): void {
+    this.store.set(key, String(value));
+  }
+  removeItem(key: string): void {
+    this.store.delete(key);
+  }
+  clear(): void {
+    this.store.clear();
+  }
+  key(index: number): string | null {
+    return Array.from(this.store.keys())[index] ?? null;
+  }
+  get length(): number {
+    return this.store.size;
+  }
+}
+
+const avanzadasStoreState = vi.hoisted(() => {
+  function createMockStore(initial: any) {
+    let value = initial;
+    const subscribers = new Set<(v: any) => void>();
+    return {
+      subscribe(fn: (v: any) => void) {
+        subscribers.add(fn);
+        fn(value);
+        return () => subscribers.delete(fn);
+      },
+      set(v: any) {
+        value = v;
+        subscribers.forEach((fn) => fn(value));
+      },
+      get: () => value,
+    };
+  }
+  return {
+    store: createMockStore({
+      catalogos: {
+        estrategias: ["En Un 2x3", "Plan de Choque"],
+        equipo: ["Ana Maria Carabali", "Jorge Leonardo Campaz"],
+        dependencias: ["DAGMA - Departamento Administrativo de Gestión del Medio Ambiente", "UAESP - Unidad Administrativa Especial de Servicios Públicos Municipales"],
+        categorias: {
+          DAGMA: ["Poda de árboles (autorización)", "Otro — DAGMA"],
+          UAESP: ["Otro — UAESP"],
+        },
+      },
+      catalogosLoaded: false,
+      catalogosError: null,
+      catalogosFetchedAt: null,
+      avanzadas: [],
+      loading: false,
+      error: null,
+      revalidating: false,
+      revalidateError: null,
+      lastFetchedAt: null,
+      detalle: {},
+      detalleLoading: {},
+      detalleError: {},
+    }),
+    loadCatalogos: vi.fn(),
+    crearAvanzada: vi.fn(),
+  };
+});
+
+const navigationStoreMocks = vi.hoisted(() => ({
+  navigate: vi.fn(),
+}));
+
+vi.mock("../../stores/avanzadasStore", () => ({
+  avanzadasStore: {
+    subscribe: avanzadasStoreState.store.subscribe,
+    loadCatalogos: avanzadasStoreState.loadCatalogos,
+    crearAvanzada: avanzadasStoreState.crearAvanzada,
+  },
+}));
+
+vi.mock("../../stores/navigationStore", () => ({
+  navigationStore: {
+    subscribe: vi.fn(),
+    navigate: navigationStoreMocks.navigate,
+  },
+}));
+
+vi.mock("../shared/LocationPicker.svelte", async () => {
+  return await import("./__test-stubs__/LocationPickerStub.svelte");
+});
+
+import RegistrarAvanzada from "./RegistrarAvanzada.svelte";
+
+async function openSection(name: string) {
+  const header = screen.getByText(name, { selector: ".section-title" }).closest("button")!;
+  await fireEvent.click(header);
+}
+
+async function fillMinimumValidForm() {
+  await fireEvent.input(screen.getByLabelText(/Nombre de la avanzada/), { target: { value: "Avanzada de prueba" } });
+  await fireEvent.change(screen.getByLabelText(/^Estrategia/), { target: { value: "En Un 2x3" } });
+  await fireEvent.change(screen.getByLabelText(/^Comuna/), { target: { value: "Comuna 1" } });
+  await fireEvent.change(screen.getByLabelText(/^Barrio/), { target: { value: "Salomia" } });
+  await fireEvent.click(screen.getByText("Set fake location"));
+
+  await openSection("Encargados");
+  await fireEvent.click(screen.getByText("Ana Maria Carabali"));
+
+  await openSection("Requerimientos");
+  await fireEvent.input(screen.getByLabelText(/^Entidad/), { target: { value: "DAGMA" } });
+  await fireEvent.input(screen.getByLabelText(/^Requerimiento/), { target: { value: "Poda urgente" } });
+  await fireEvent.input(screen.getByLabelText(/^Ubicación/), { target: { value: "Frente al parque" } });
+}
+
+describe("RegistrarAvanzada", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    avanzadasStoreState.store.set({
+      catalogos: {
+        estrategias: ["En Un 2x3", "Plan de Choque"],
+        equipo: ["Ana Maria Carabali", "Jorge Leonardo Campaz"],
+        dependencias: ["DAGMA - Departamento Administrativo de Gestión del Medio Ambiente", "UAESP - Unidad Administrativa Especial de Servicios Públicos Municipales"],
+        categorias: {
+          DAGMA: ["Poda de árboles (autorización)", "Otro — DAGMA"],
+          UAESP: ["Otro — UAESP"],
+        },
+      },
+      catalogosLoaded: false,
+      catalogosError: null,
+      catalogosFetchedAt: null,
+      avanzadas: [],
+      loading: false,
+      error: null,
+      revalidating: false,
+      revalidateError: null,
+      lastFetchedAt: null,
+      detalle: {},
+      detalleLoading: {},
+      detalleError: {},
+    });
+    avanzadasStoreState.crearAvanzada.mockResolvedValue({ isOffline: false, client_id: "new-id" });
+    if (!("createObjectURL" in URL)) {
+      // @ts-expect-error jsdom doesn't implement this
+      URL.createObjectURL = () => "";
+    }
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:fake-preview-url");
+    vi.stubGlobal("localStorage", new MemoryStorage());
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it("loads catalogos on mount", () => {
+    render(RegistrarAvanzada);
+    expect(avanzadasStoreState.loadCatalogos).toHaveBeenCalledTimes(1);
+  });
+
+  describe("validation", () => {
+    it("blocks submit and shows a message when the nombre is empty", async () => {
+      render(RegistrarAvanzada);
+      await fireEvent.click(screen.getByText("Guardar Avanzada"));
+
+      expect(screen.getByText("Ingrese el nombre de la avanzada.")).toBeInTheDocument();
+      expect(avanzadasStoreState.crearAvanzada).not.toHaveBeenCalled();
+    });
+
+    it("blocks submit and shows the direccion-specific message when lat/lng are set but direccion is empty", async () => {
+      render(RegistrarAvanzada);
+      await fireEvent.input(screen.getByLabelText(/Nombre de la avanzada/), { target: { value: "Avanzada X" } });
+      await fireEvent.change(screen.getByLabelText(/^Estrategia/), { target: { value: "En Un 2x3" } });
+      await fireEvent.change(screen.getByLabelText(/^Comuna/), { target: { value: "Comuna 1" } });
+      await fireEvent.change(screen.getByLabelText(/^Barrio/), { target: { value: "Salomia" } });
+      await fireEvent.click(screen.getByText("Set fake coordinates without direccion"));
+
+      await openSection("Encargados");
+      await fireEvent.click(screen.getByText("Ana Maria Carabali"));
+
+      await fireEvent.click(screen.getByText("Guardar Avanzada"));
+
+      expect(screen.getByText("La dirección es obligatoria")).toBeInTheDocument();
+      expect(avanzadasStoreState.crearAvanzada).not.toHaveBeenCalled();
+    });
+
+    it("blocks submit when no encargado is selected", async () => {
+      render(RegistrarAvanzada);
+      await fireEvent.input(screen.getByLabelText(/Nombre de la avanzada/), { target: { value: "Avanzada X" } });
+      await fireEvent.change(screen.getByLabelText(/^Estrategia/), { target: { value: "En Un 2x3" } });
+      await fireEvent.change(screen.getByLabelText(/^Comuna/), { target: { value: "Comuna 1" } });
+      await fireEvent.change(screen.getByLabelText(/^Barrio/), { target: { value: "Salomia" } });
+      await fireEvent.click(screen.getByText("Set fake location"));
+
+      await fireEvent.click(screen.getByText("Guardar Avanzada"));
+
+      expect(screen.getByText("Seleccione al menos un encargado de la avanzada.")).toBeInTheDocument();
+      expect(avanzadasStoreState.crearAvanzada).not.toHaveBeenCalled();
+    });
+
+    it("blocks submit when a requerimiento is missing its required fields", async () => {
+      render(RegistrarAvanzada);
+      await fireEvent.input(screen.getByLabelText(/Nombre de la avanzada/), { target: { value: "Avanzada X" } });
+      await fireEvent.change(screen.getByLabelText(/^Estrategia/), { target: { value: "En Un 2x3" } });
+      await fireEvent.change(screen.getByLabelText(/^Comuna/), { target: { value: "Comuna 1" } });
+      await fireEvent.change(screen.getByLabelText(/^Barrio/), { target: { value: "Salomia" } });
+      await fireEvent.click(screen.getByText("Set fake location"));
+      await openSection("Encargados");
+      await fireEvent.click(screen.getByText("Ana Maria Carabali"));
+
+      // Requerimientos section left untouched: entidad/requerimiento/ubicacion all empty.
+      await fireEvent.click(screen.getByText("Guardar Avanzada"));
+
+      expect(screen.getByText("Requerimiento #1: la entidad es obligatoria.")).toBeInTheDocument();
+      expect(avanzadasStoreState.crearAvanzada).not.toHaveBeenCalled();
+    });
+
+    it("passes validation with a fully filled minimal form and opens the confirmation modal", async () => {
+      render(RegistrarAvanzada);
+      await fillMinimumValidForm();
+      await fireEvent.click(screen.getByText("Guardar Avanzada"));
+
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(screen.getByText("Confirmar registro")).toBeInTheDocument();
+      expect(avanzadasStoreState.crearAvanzada).not.toHaveBeenCalled(); // not yet — confirmation pending
+    });
+  });
+
+  describe("submission", () => {
+    it("calls avanzadasStore.crearAvanzada after confirming, and shows the online success message", async () => {
+      avanzadasStoreState.crearAvanzada.mockResolvedValue({ isOffline: false, client_id: "new-id" });
+      render(RegistrarAvanzada);
+      await fillMinimumValidForm();
+      await fireEvent.click(screen.getByText("Guardar Avanzada"));
+      await fireEvent.click(screen.getByText("Confirmar y guardar"));
+
+      expect(avanzadasStoreState.crearAvanzada).toHaveBeenCalledTimes(1);
+      const [datos] = avanzadasStoreState.crearAvanzada.mock.calls[0];
+      expect(datos.nombre_avanzada).toBe("Avanzada de prueba");
+      expect(datos.encargados).toEqual(["Ana Maria Carabali"]);
+      expect(datos.requerimientos).toHaveLength(1);
+      expect(datos.requerimientos[0]).toMatchObject({ entidad: "DAGMA", requerimiento: "Poda urgente", ubicacion: "Frente al parque" });
+
+      expect(screen.getByText("Avanzada registrada correctamente.")).toBeInTheDocument();
+    });
+
+    it("shows offline feedback (distinct from the online success message) when crearAvanzada resolves isOffline: true", async () => {
+      avanzadasStoreState.crearAvanzada.mockResolvedValue({ isOffline: true, client_id: "queued-id" });
+      render(RegistrarAvanzada);
+      await fillMinimumValidForm();
+      await fireEvent.click(screen.getByText("Guardar Avanzada"));
+      await fireEvent.click(screen.getByText("Confirmar y guardar"));
+
+      expect(screen.getByText(/guardada localmente/)).toBeInTheDocument();
+      expect(screen.queryByText("Avanzada registrada correctamente.")).not.toBeInTheDocument();
+    });
+
+    it("'Cancelar' in the confirmation modal closes it without submitting", async () => {
+      render(RegistrarAvanzada);
+      await fillMinimumValidForm();
+      await fireEvent.click(screen.getByText("Guardar Avanzada"));
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+      await fireEvent.click(screen.getByText("Cancelar"));
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(avanzadasStoreState.crearAvanzada).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("entidad -> categoria", () => {
+    it("populates the categoria select options from the catalog when entidad changes", async () => {
+      render(RegistrarAvanzada);
+      await openSection("Requerimientos");
+
+      const categoriaSelect = screen.getByLabelText(/^Categoría/) as HTMLSelectElement;
+      expect(categoriaSelect).toBeDisabled(); // no entidad yet
+
+      const entidadInput = screen.getByLabelText(/^Entidad/);
+      await fireEvent.input(entidadInput, { target: { value: "DAGMA" } });
+      await fireEvent.change(entidadInput); // entidad uses on:change to trigger handleEntidadChange
+
+      expect(categoriaSelect).not.toBeDisabled();
+      const optionTexts = Array.from(categoriaSelect.options).map((o) => o.textContent);
+      expect(optionTexts).toContain("Poda de árboles (autorización)");
+      expect(optionTexts).toContain("Otro — DAGMA");
+    });
+
+    it("resets the previously chosen categoria when entidad changes again", async () => {
+      render(RegistrarAvanzada);
+      await openSection("Requerimientos");
+
+      const entidadInput = screen.getByLabelText(/^Entidad/);
+      await fireEvent.input(entidadInput, { target: { value: "DAGMA" } });
+      await fireEvent.change(entidadInput);
+
+      const categoriaSelect = screen.getByLabelText(/^Categoría/) as HTMLSelectElement;
+      await fireEvent.change(categoriaSelect, { target: { value: "Otro — DAGMA" } });
+      expect(categoriaSelect.value).toBe("Otro — DAGMA");
+
+      await fireEvent.input(entidadInput, { target: { value: "UAESP" } });
+      await fireEvent.change(entidadInput);
+
+      expect(categoriaSelect.value).toBe("");
+    });
+
+    it("shows '-- Sin categorías predefinidas --' plus the 'agregar nueva' option for an entidad with no known categories", async () => {
+      render(RegistrarAvanzada);
+      await openSection("Requerimientos");
+
+      const entidadInput = screen.getByLabelText(/^Entidad/);
+      await fireEvent.input(entidadInput, { target: { value: "Entidad Desconocida" } });
+      await fireEvent.change(entidadInput);
+
+      const categoriaSelect = screen.getByLabelText(/^Categoría/) as HTMLSelectElement;
+      expect(categoriaSelect).not.toBeDisabled();
+      const optionTexts = Array.from(categoriaSelect.options).map((o) => o.textContent);
+      expect(optionTexts).toContain("-- Sin categorías predefinidas --");
+      expect(optionTexts).toContain("+ Agregar nueva categoría...");
+    });
+
+    it("choosing '+ Agregar nueva categoría...' reveals the free-text input, which is absent beforehand", async () => {
+      render(RegistrarAvanzada);
+      await openSection("Requerimientos");
+
+      const entidadInput = screen.getByLabelText(/^Entidad/);
+      await fireEvent.input(entidadInput, { target: { value: "DAGMA" } });
+      await fireEvent.change(entidadInput);
+
+      expect(screen.queryByPlaceholderText("Escribe la nueva categoría...")).not.toBeInTheDocument();
+
+      const categoriaSelect = screen.getByLabelText(/^Categoría/) as HTMLSelectElement;
+      await fireEvent.change(categoriaSelect, { target: { value: "__personalizada__" } });
+
+      expect(screen.getByPlaceholderText("Escribe la nueva categoría...")).toBeInTheDocument();
+    });
+  });
+
+  describe("repeatable rows", () => {
+    it("adding an asistente increases the rendered row count; removing it decreases it back", async () => {
+      render(RegistrarAvanzada);
+      await openSection("Asistencia");
+
+      expect(screen.queryAllByText(/^Asistente #/)).toHaveLength(0);
+
+      await fireEvent.click(screen.getByText("Agregar asistente"));
+      expect(screen.getAllByText(/^Asistente #/)).toHaveLength(1);
+
+      await fireEvent.click(screen.getByText("Agregar asistente"));
+      expect(screen.getAllByText(/^Asistente #/)).toHaveLength(2);
+
+      await fireEvent.click(screen.getAllByText("Quitar")[0]);
+      expect(screen.getAllByText(/^Asistente #/)).toHaveLength(1);
+    });
+
+    it("starts with exactly 1 requerimiento row; its Eliminar button is always present but refuses to remove the last card", async () => {
+      render(RegistrarAvanzada);
+      await openSection("Requerimientos");
+      expect(screen.getByText("Requerimiento #1")).toBeInTheDocument();
+      expect(screen.queryByText("Requerimiento #2")).not.toBeInTheDocument();
+      expect(screen.getByText("Eliminar")).toBeInTheDocument();
+
+      await fireEvent.click(screen.getByText("Eliminar"));
+
+      expect(screen.getByText("Debe haber al menos un requerimiento.")).toBeInTheDocument();
+      expect(screen.getByText("Requerimiento #1")).toBeInTheDocument();
+    });
+
+    it("adding a requerimiento increases the rendered row count and section badge; removing it decreases it back to 1 (Eliminar stays visible on the sole remaining card)", async () => {
+      render(RegistrarAvanzada);
+      await openSection("Requerimientos");
+
+      await fireEvent.click(screen.getByText("Agregar otro requerimiento"));
+      expect(screen.getByText("Requerimiento #2")).toBeInTheDocument();
+      expect(screen.getAllByText("Eliminar")).toHaveLength(2);
+
+      await fireEvent.click(screen.getAllByText("Eliminar")[0]);
+      expect(screen.queryByText("Requerimiento #2")).not.toBeInTheDocument();
+      expect(screen.getAllByText("Eliminar")).toHaveLength(1);
+    });
+
+    it("removing a middle requerimiento renumbers the remaining cards contiguously and preserves their data", async () => {
+      render(RegistrarAvanzada);
+      await openSection("Requerimientos");
+
+      await fireEvent.click(screen.getByText("Agregar otro requerimiento"));
+      await fireEvent.click(screen.getByText("Agregar otro requerimiento"));
+
+      const entidadInputs = screen.getAllByLabelText(/^Entidad/);
+      await fireEvent.input(entidadInputs[0], { target: { value: "Entidad A" } });
+      await fireEvent.input(entidadInputs[1], { target: { value: "Entidad B" } });
+      await fireEvent.input(entidadInputs[2], { target: { value: "Entidad C" } });
+
+      await fireEvent.click(screen.getAllByText("Eliminar")[1]); // remove the middle card ("Entidad B")
+
+      expect(screen.getByText("Requerimiento #1")).toBeInTheDocument();
+      expect(screen.getByText("Requerimiento #2")).toBeInTheDocument();
+      expect(screen.queryByText("Requerimiento #3")).not.toBeInTheDocument();
+
+      const remaining = screen.getAllByLabelText(/^Entidad/) as HTMLInputElement[];
+      expect(remaining.map((i) => i.value)).toEqual(["Entidad A", "Entidad C"]);
+    });
+  });
+
+  describe("datos section extras", () => {
+    it("comuna is required before barrio can be chosen (barrio select is disabled until a comuna is set)", async () => {
+      render(RegistrarAvanzada);
+      const barrioSelect = screen.getByLabelText(/^Barrio/) as HTMLSelectElement;
+      expect(barrioSelect).toBeDisabled();
+
+      await fireEvent.change(screen.getByLabelText(/^Comuna/), { target: { value: "Comuna 1" } });
+      expect(barrioSelect).not.toBeDisabled();
+    });
+
+    it("'Otra estrategia...' reveals a free-text field and disables the catalog select", async () => {
+      render(RegistrarAvanzada);
+      const estrategiaSelect = screen.getByLabelText(/^Estrategia/) as HTMLSelectElement;
+      expect(screen.queryByPlaceholderText("Nombre de la estrategia")).not.toBeInTheDocument();
+
+      await fireEvent.click(screen.getByLabelText("Otra estrategia..."));
+
+      expect(estrategiaSelect).toBeDisabled();
+      expect(screen.getByPlaceholderText("Nombre de la estrategia")).toBeInTheDocument();
+    });
+  });
+
+  describe("encargados section extras", () => {
+    it("supports adding a free-text encargado not present in the equipo catalog", async () => {
+      render(RegistrarAvanzada);
+      await openSection("Encargados");
+
+      const freeInput = screen.getByPlaceholderText("Agregar otro encargado...");
+      await fireEvent.input(freeInput, { target: { value: "Invitado Externo" } });
+      await fireEvent.click(screen.getByText("Agregar"));
+
+      expect(screen.getByText("Invitado Externo")).toBeInTheDocument();
+    });
+  });
+
+  describe("categoria personalizada", () => {
+    it("'+ Agregar nueva categoría...' reveals a free-text field saved as categoria_personalizada", async () => {
+      avanzadasStoreState.crearAvanzada.mockResolvedValue({ isOffline: false, client_id: "new-id" });
+      render(RegistrarAvanzada);
+      await fillMinimumValidForm();
+
+      const categoriaSelect = screen.getByLabelText(/^Categoría/) as HTMLSelectElement;
+      await fireEvent.change(categoriaSelect, { target: { value: "__personalizada__" } });
+
+      const customInput = screen.getByPlaceholderText("Escribe la nueva categoría...");
+      await fireEvent.input(customInput, { target: { value: "Categoría inventada" } });
+
+      await fireEvent.click(screen.getByText("Guardar Avanzada"));
+      await fireEvent.click(screen.getByText("Confirmar y guardar"));
+
+      const [datos] = avanzadasStoreState.crearAvanzada.mock.calls[0];
+      expect(datos.requerimientos[0].categoria).toBe("Categoría inventada");
+      expect(datos.requerimientos[0].categoria_personalizada).toBe("Categoría inventada");
+    });
+  });
+
+  describe("photo cap per requerimiento", () => {
+    function makeFiles(count: number): File[] {
+      return Array.from({ length: count }, (_, i) => new File(["x"], `foto-${i}.jpg`, { type: "image/jpeg" }));
+    }
+
+    it("accepts up to MAX_FOTOS_POR_REQUERIMIENTO (5) photos and renders a thumbnail per photo", async () => {
+      render(RegistrarAvanzada);
+      await openSection("Requerimientos");
+
+      const galeriaInput = screen.getByText("Galería").closest("label")!.querySelector('input[type="file"]')!;
+      await fireEvent.change(galeriaInput, { target: { files: makeFiles(5) } });
+
+      expect(document.querySelectorAll(".foto-thumb")).toHaveLength(5);
+      expect(screen.queryByText(/máximo 5 fotos permitidas/)).not.toBeInTheDocument();
+    });
+
+    it("rejects a batch that would exceed the 5-photo cap and shows the error, without adding any of them", async () => {
+      render(RegistrarAvanzada);
+      await openSection("Requerimientos");
+
+      const galeriaInput = screen.getByText("Galería").closest("label")!.querySelector('input[type="file"]')!;
+      await fireEvent.change(galeriaInput, { target: { files: makeFiles(6) } });
+
+      expect(screen.getByText("Requerimiento #1: máximo 5 fotos permitidas")).toBeInTheDocument();
+      expect(document.querySelectorAll(".foto-thumb")).toHaveLength(0);
+    });
+
+    it("deleting a thumbnail removes just that photo", async () => {
+      render(RegistrarAvanzada);
+      await openSection("Requerimientos");
+
+      const galeriaInput = screen.getByText("Galería").closest("label")!.querySelector('input[type="file"]')!;
+      await fireEvent.change(galeriaInput, { target: { files: makeFiles(3) } });
+      expect(document.querySelectorAll(".foto-thumb")).toHaveLength(3);
+
+      const deleteButtons = document.querySelectorAll(".foto-del");
+      await fireEvent.click(deleteButtons[0]);
+
+      expect(document.querySelectorAll(".foto-thumb")).toHaveLength(2);
+    });
+  });
+
+  describe("inline collect-all validation", () => {
+    it("surfaces multiple field errors from a single submit attempt instead of one at a time", async () => {
+      render(RegistrarAvanzada);
+      await fireEvent.click(screen.getByText("Guardar Avanzada"));
+
+      // Both errors are visible from the FIRST submit — no need to resubmit
+      // per fixed field.
+      expect(screen.getByText("Ingrese el nombre de la avanzada.")).toBeInTheDocument();
+      expect(screen.getByText("Seleccione o ingrese la estrategia.")).toBeInTheDocument();
+      expect(screen.getByText("Seleccione la comuna.")).toBeInTheDocument();
+      expect(avanzadasStoreState.crearAvanzada).not.toHaveBeenCalled();
+    });
+
+    it("auto-opens a collapsed section that has a validation error", async () => {
+      render(RegistrarAvanzada);
+      await fillMinimumValidForm();
+      // Requerimientos section is left open by fillMinimumValidForm; blank
+      // its entidad, then collapse the section before submitting.
+      await fireEvent.input(screen.getByLabelText(/^Entidad/), { target: { value: "" } });
+      await openSection("Requerimientos"); // collapses it (was open)
+
+      await fireEvent.click(screen.getByText("Guardar Avanzada"));
+
+      expect(screen.getByText("Requerimiento #1: la entidad es obligatoria.")).toBeInTheDocument();
+    });
+  });
+
+  describe("asistente nombre — honest required asterisk", () => {
+    it("blocks submit when an asistente row is left without a nombre, instead of silently dropping it", async () => {
+      render(RegistrarAvanzada);
+      await fillMinimumValidForm();
+
+      await openSection("Asistencia");
+      await fireEvent.click(screen.getByText("Agregar asistente"));
+      // Nombre left empty; fill a different field to prove partial rows still block.
+      await fireEvent.input(screen.getByLabelText(/^Organismo/), { target: { value: "Alcaldía" } });
+
+      await fireEvent.click(screen.getByText("Guardar Avanzada"));
+
+      expect(screen.getByText("El nombre es obligatorio.")).toBeInTheDocument();
+      expect(avanzadasStoreState.crearAvanzada).not.toHaveBeenCalled();
+    });
+
+    it("allows submit once every asistente row has a nombre", async () => {
+      render(RegistrarAvanzada);
+      await fillMinimumValidForm();
+
+      await openSection("Asistencia");
+      await fireEvent.click(screen.getByText("Agregar asistente"));
+      await fireEvent.input(document.getElementById("asist-nombre-0") as HTMLInputElement, { target: { value: "Carlos Pérez" } });
+
+      await fireEvent.click(screen.getByText("Guardar Avanzada"));
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(screen.queryByText("El nombre es obligatorio.")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("comuna/barrio autofill from reverse-geocoded GPS", () => {
+    it("pre-fills comuna and barrio from the LocationPicker's geocode match when the user hasn't picked their own", async () => {
+      render(RegistrarAvanzada);
+
+      await fireEvent.click(screen.getByText("Set fake location with geo match"));
+
+      // LocationPickerStub dispatches comunaGeo: "comuna 3", barrioGeo: "peñón",
+      // which should resolve to the catalog's "Comuna 3" / "El Peñón".
+      expect((screen.getByLabelText(/^Comuna/) as HTMLSelectElement).value).toBe("Comuna 3");
+      expect((screen.getByLabelText(/^Barrio/) as HTMLSelectElement).value).toBe("El Peñón");
+    });
+
+    it("never overrides a comuna the user already picked manually", async () => {
+      render(RegistrarAvanzada);
+
+      await fireEvent.change(screen.getByLabelText(/^Comuna/), { target: { value: "Comuna 1" } });
+      await fireEvent.click(screen.getByText("Set fake location with geo match"));
+
+      expect((screen.getByLabelText(/^Comuna/) as HTMLSelectElement).value).toBe("Comuna 1");
+    });
+  });
+
+  describe("draft autosave", () => {
+    it("autosaves typed data to localStorage after a debounce, and restores it on next mount", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const { unmount } = render(RegistrarAvanzada);
+        await fireEvent.input(screen.getByLabelText(/Nombre de la avanzada/), { target: { value: "Borrador de prueba" } });
+
+        await vi.advanceTimersByTimeAsync(700);
+        expect(localStorage.getItem("catatrack:draft:registrar-avanzada")).toContain("Borrador de prueba");
+
+        unmount();
+        cleanup();
+
+        render(RegistrarAvanzada);
+        expect(screen.getByText("Se restauró un borrador guardado automáticamente.")).toBeInTheDocument();
+        expect((screen.getByLabelText(/Nombre de la avanzada/) as HTMLInputElement).value).toBe("Borrador de prueba");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("restores a saved requerimiento's fields into the new card UI", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const { unmount } = render(RegistrarAvanzada);
+        await openSection("Requerimientos");
+        await fireEvent.input(screen.getByLabelText(/^Entidad/), { target: { value: "DAGMA" } });
+        await fireEvent.input(screen.getByLabelText(/^Requerimiento/), { target: { value: "Poda urgente" } });
+        await fireEvent.input(screen.getByLabelText(/^Ubicación/), { target: { value: "Frente al parque" } });
+
+        await vi.advanceTimersByTimeAsync(700);
+        expect(localStorage.getItem("catatrack:draft:registrar-avanzada")).toContain("Poda urgente");
+
+        unmount();
+        cleanup();
+
+        render(RegistrarAvanzada);
+        await openSection("Requerimientos");
+
+        expect((screen.getByLabelText(/^Entidad/) as HTMLInputElement).value).toBe("DAGMA");
+        expect((screen.getByLabelText(/^Requerimiento/) as HTMLTextAreaElement).value).toBe("Poda urgente");
+        expect((screen.getByLabelText(/^Ubicación/) as HTMLInputElement).value).toBe("Frente al parque");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("does not persist an all-empty form (no draft noise from opening the view)", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        render(RegistrarAvanzada);
+        await vi.advanceTimersByTimeAsync(700);
+        expect(localStorage.getItem("catatrack:draft:registrar-avanzada")).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("clears the draft after a successful save", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        render(RegistrarAvanzada);
+        await fillMinimumValidForm();
+        await vi.advanceTimersByTimeAsync(700);
+        expect(localStorage.getItem("catatrack:draft:registrar-avanzada")).not.toBeNull();
+
+        await fireEvent.click(screen.getByText("Guardar Avanzada"));
+        await fireEvent.click(screen.getByText("Confirmar y guardar"));
+
+        expect(localStorage.getItem("catatrack:draft:registrar-avanzada")).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+});

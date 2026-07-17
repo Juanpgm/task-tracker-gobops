@@ -1,0 +1,409 @@
+/**
+ * Behavioral tests for DetalleAvanzada.svelte.
+ *
+ * Replaces the previous structural (readFileSync + source-matching) test
+ * file. These tests render the real component with @testing-library/svelte
+ * and drive it like a user would — mocking only the store layer
+ * (avanzadasStore, navigationStore).
+ */
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import "@testing-library/jest-dom/vitest";
+import { render, screen, fireEvent, cleanup } from "@testing-library/svelte";
+
+const avanzadasStoreState = vi.hoisted(() => {
+  function createMockStore(initial: any) {
+    let value = initial;
+    const subscribers = new Set<(v: any) => void>();
+    return {
+      subscribe(fn: (v: any) => void) {
+        subscribers.add(fn);
+        fn(value);
+        return () => subscribers.delete(fn);
+      },
+      set(v: any) {
+        value = v;
+        subscribers.forEach((fn) => fn(value));
+      },
+      get: () => value,
+    };
+  }
+  return {
+    store: createMockStore({
+      catalogos: { estrategias: [], equipo: [], dependencias: [], categorias: {} },
+      catalogosLoaded: false,
+      catalogosError: null,
+      catalogosFetchedAt: null,
+      avanzadas: [] as any[],
+      loading: false,
+      error: null,
+      revalidating: false,
+      revalidateError: null,
+      lastFetchedAt: null,
+      detalle: {} as Record<string, any>,
+      detalleLoading: {} as Record<string, boolean>,
+      detalleError: {} as Record<string, string | null>,
+    }),
+    loadAvanzadaDetalle: vi.fn(),
+  };
+});
+
+const navigationStoreState = vi.hoisted(() => {
+  function createMockStore(initial: any) {
+    let value = initial;
+    const subscribers = new Set<(v: any) => void>();
+    return {
+      subscribe(fn: (v: any) => void) {
+        subscribers.add(fn);
+        fn(value);
+        return () => subscribers.delete(fn);
+      },
+      set(v: any) {
+        value = v;
+        subscribers.forEach((fn) => fn(value));
+      },
+    };
+  }
+  return {
+    store: createMockStore({ view: "detalle-avanzada", params: { client_id: "client-1" } }),
+    navigate: vi.fn(),
+  };
+});
+
+vi.mock("../../stores/avanzadasStore", () => ({
+  avanzadasStore: {
+    subscribe: avanzadasStoreState.store.subscribe,
+    loadAvanzadaDetalle: avanzadasStoreState.loadAvanzadaDetalle,
+  },
+}));
+
+vi.mock("../../stores/navigationStore", () => ({
+  navigationStore: {
+    subscribe: navigationStoreState.store.subscribe,
+    navigate: navigationStoreState.navigate,
+  },
+}));
+
+import DetalleAvanzada from "./DetalleAvanzada.svelte";
+
+function setStoreState(patch: Partial<ReturnType<typeof avanzadasStoreState.store.get>>) {
+  avanzadasStoreState.store.set({ ...avanzadasStoreState.store.get(), ...patch });
+}
+
+function requerimiento(overrides: Record<string, unknown> = {}) {
+  return {
+    entidad: "DAGMA",
+    categoria: "Poda de árboles (autorización)",
+    categoria_personalizada: null,
+    requerimiento: "Árbol con riesgo de caída",
+    ubicacion: "Frente al parque",
+    coordenadas: "3.45, -76.53",
+    ...overrides,
+  };
+}
+
+function detalle(overrides: Record<string, unknown> = {}) {
+  return {
+    client_id: "client-1",
+    nombre_avanzada: "Avanzada Comuna 1",
+    fecha: "2026-07-16",
+    estrategia: "En Un 2x3",
+    sector: "Sector norte",
+    comuna: "Comuna 1",
+    barrio: "Salomia",
+    direccion: "Calle 1 #2-3",
+    coordenadas: "3.45, -76.53",
+    encargados: ["Ana Maria Carabali"],
+    asistentes: [],
+    requerimientos: [],
+    isOffline: false,
+    ...overrides,
+  };
+}
+
+describe("DetalleAvanzada", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    avanzadasStoreState.store.set({
+      catalogos: { estrategias: [], equipo: [], dependencias: [], categorias: {} },
+      catalogosLoaded: false,
+      catalogosError: null,
+      catalogosFetchedAt: null,
+      avanzadas: [],
+      loading: false,
+      error: null,
+      revalidating: false,
+      revalidateError: null,
+      lastFetchedAt: null,
+      detalle: {},
+      detalleLoading: {},
+      detalleError: {},
+    });
+    navigationStoreState.store.set({ view: "detalle-avanzada", params: { client_id: "client-1" } });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("reads client_id from navigation params and loads the detail on mount", () => {
+    render(DetalleAvanzada);
+    expect(avanzadasStoreState.loadAvanzadaDetalle).toHaveBeenCalledWith("client-1");
+  });
+
+  it("does not call loadAvanzadaDetalle when there is no client_id in the route params", () => {
+    navigationStoreState.store.set({ view: "detalle-avanzada", params: {} });
+    render(DetalleAvanzada);
+    expect(avanzadasStoreState.loadAvanzadaDetalle).not.toHaveBeenCalled();
+  });
+
+  it("shows skeleton placeholders while loading", () => {
+    setStoreState({ detalleLoading: { "client-1": true } });
+    render(DetalleAvanzada);
+    expect(screen.getByLabelText("Cargando detalle de la avanzada")).toBeInTheDocument();
+  });
+
+  it("shows an error state with a Reintentar button that reloads the detail", async () => {
+    setStoreState({ detalleError: { "client-1": "not found" } });
+    render(DetalleAvanzada);
+    expect(screen.getByText("not found")).toBeInTheDocument();
+
+    avanzadasStoreState.loadAvanzadaDetalle.mockClear();
+    await fireEvent.click(screen.getByRole("button", { name: /reintentar/i }));
+    expect(avanzadasStoreState.loadAvanzadaDetalle).toHaveBeenCalledWith("client-1");
+  });
+
+  it("'Volver' navigates back to the avanzadas list", async () => {
+    setStoreState({ detalle: { "client-1": detalle() } });
+    render(DetalleAvanzada);
+    await fireEvent.click(screen.getByText("← Volver"));
+    expect(navigationStoreState.navigate).toHaveBeenCalledWith("avanzadas");
+  });
+
+  it("shows 'Avanzada no encontrada' when there's no error, not loading, but no detalle either", () => {
+    render(DetalleAvanzada);
+    expect(screen.getByText("Avanzada no encontrada")).toBeInTheDocument();
+  });
+
+  describe("summary section", () => {
+    it("renders estrategia, sector, comuna/barrio and dirección", () => {
+      setStoreState({ detalle: { "client-1": detalle() } });
+      render(DetalleAvanzada);
+      expect(screen.getByText("En Un 2x3")).toBeInTheDocument();
+      expect(screen.getByText("Sector norte")).toBeInTheDocument();
+      expect(screen.getByText("Comuna 1, Salomia")).toBeInTheDocument();
+      expect(screen.getByText(/Calle 1 #2-3/)).toBeInTheDocument();
+    });
+
+    it("renders a Google Maps link built from coordenadas", () => {
+      setStoreState({ detalle: { "client-1": detalle({ coordenadas: "3.45, -76.53" }) } });
+      render(DetalleAvanzada);
+      const link = screen.getByText("Ver en mapa").closest("a")!;
+      expect(link).toHaveAttribute("href", "https://www.google.com/maps?q=3.45,-76.53");
+    });
+
+    it("does not render a maps link when coordenadas is missing", () => {
+      setStoreState({ detalle: { "client-1": detalle({ coordenadas: null }) } });
+      render(DetalleAvanzada);
+      expect(screen.queryByText("Ver en mapa")).not.toBeInTheDocument();
+    });
+
+    it("renders encargados as chips", () => {
+      setStoreState({ detalle: { "client-1": detalle({ encargados: ["Ana Maria Carabali", "Jorge Campaz"] }) } });
+      render(DetalleAvanzada);
+      expect(screen.getByText("Ana Maria Carabali")).toBeInTheDocument();
+      expect(screen.getByText("Jorge Campaz")).toBeInTheDocument();
+    });
+
+    it("renders an informe_url link when present", () => {
+      setStoreState({
+        detalle: { "client-1": detalle({ informe_url: "https://drive.google.com/file/d/abc123/view" }) },
+      });
+      render(DetalleAvanzada);
+      expect(screen.getByText(/Ver informe/)).toBeInTheDocument();
+    });
+
+    it("shows an offline pending-sync banner when detalle.isOffline is true", () => {
+      setStoreState({ detalle: { "client-1": detalle({ isOffline: true }) } });
+      render(DetalleAvanzada);
+      expect(screen.getByText(/Pendiente de sincronizar/)).toBeInTheDocument();
+    });
+  });
+
+  describe("asistentes", () => {
+    it("renders nombre/organismo/celular/correo per asistente", () => {
+      setStoreState({
+        detalle: {
+          "client-1": detalle({
+            asistentes: [{ nombre: "Juan Pérez", organismo: "DAGMA", celular: "3001234567", correo: "juan@x.com" }],
+          }),
+        },
+      });
+      render(DetalleAvanzada);
+      expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
+      expect(screen.getByText("DAGMA")).toBeInTheDocument();
+      expect(screen.getByText("3001234567")).toBeInTheDocument();
+      expect(screen.getByText("juan@x.com")).toBeInTheDocument();
+    });
+
+    it("shows an empty hint when there are zero asistentes", () => {
+      setStoreState({ detalle: { "client-1": detalle({ asistentes: [] }) } });
+      render(DetalleAvanzada);
+      expect(screen.getByText("Sin asistentes registrados.")).toBeInTheDocument();
+    });
+
+    it("is collapsible: clicking the section header hides the asistentes list", async () => {
+      setStoreState({
+        detalle: { "client-1": detalle({ asistentes: [{ nombre: "Juan Pérez", organismo: "", celular: "", correo: "" }] }) },
+      });
+      render(DetalleAvanzada);
+      expect(screen.getByText("Juan Pérez")).toBeInTheDocument();
+
+      await fireEvent.click(screen.getByText("Asistentes"));
+      expect(screen.queryByText("Juan Pérez")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("requerimientos", () => {
+    it("groups requerimientos by entidad with a per-group count badge", () => {
+      setStoreState({
+        detalle: {
+          "client-1": detalle({
+            requerimientos: [
+              requerimiento({ entidad: "DAGMA" }),
+              requerimiento({ entidad: "DAGMA", requerimiento: "Segundo req DAGMA" }),
+              requerimiento({ entidad: "UAESP", requerimiento: "Req UAESP" }),
+            ],
+          }),
+        },
+      });
+      render(DetalleAvanzada);
+      expect(screen.getByText("DAGMA", { selector: ".entidad-name" })).toBeInTheDocument();
+      expect(screen.getByText("UAESP", { selector: ".entidad-name" })).toBeInTheDocument();
+      expect(screen.getByText("Árbol con riesgo de caída")).toBeInTheDocument();
+      expect(screen.getByText("Segundo req DAGMA")).toBeInTheDocument();
+      expect(screen.getByText("Req UAESP")).toBeInTheDocument();
+    });
+
+    it("shows the empty hint when the avanzada has zero requerimientos", () => {
+      setStoreState({ detalle: { "client-1": detalle({ requerimientos: [] }) } });
+      render(DetalleAvanzada);
+      expect(screen.getByText("Esta avanzada no tiene requerimientos registrados.")).toBeInTheDocument();
+    });
+
+    it("filters requerimientos by free text across requerimiento/categoria/ubicacion", async () => {
+      setStoreState({
+        detalle: {
+          "client-1": detalle({
+            requerimientos: [
+              requerimiento({ requerimiento: "Poda urgente de samán" }),
+              requerimiento({ requerimiento: "Bache en la vía", ubicacion: "Carrera 5" }),
+            ],
+          }),
+        },
+      });
+      render(DetalleAvanzada);
+      expect(screen.getByText("Poda urgente de samán")).toBeInTheDocument();
+      expect(screen.getByText("Bache en la vía")).toBeInTheDocument();
+
+      const searchInput = screen.getByPlaceholderText(/Buscar por requerimiento/);
+      await fireEvent.input(searchInput, { target: { value: "samán" } });
+
+      expect(screen.getByText("Poda urgente de samán")).toBeInTheDocument();
+      expect(screen.queryByText("Bache en la vía")).not.toBeInTheDocument();
+    });
+
+    it("filters requerimientos by entidad via the select dropdown", async () => {
+      setStoreState({
+        detalle: {
+          "client-1": detalle({
+            requerimientos: [
+              requerimiento({ entidad: "DAGMA", requerimiento: "Req DAGMA" }),
+              requerimiento({ entidad: "UAESP", requerimiento: "Req UAESP" }),
+            ],
+          }),
+        },
+      });
+      render(DetalleAvanzada);
+
+      const entidadSelect = screen.getByDisplayValue("Todas las entidades");
+      await fireEvent.change(entidadSelect, { target: { value: "UAESP" } });
+
+      expect(screen.queryByText("Req DAGMA")).not.toBeInTheDocument();
+      expect(screen.getByText("Req UAESP")).toBeInTheDocument();
+    });
+
+    it("shows a 'no match' hint distinct from the zero-requerimientos hint when a filter matches nothing", async () => {
+      setStoreState({
+        detalle: { "client-1": detalle({ requerimientos: [requerimiento({ requerimiento: "Poda de árbol" })] }) },
+      });
+      render(DetalleAvanzada);
+
+      const searchInput = screen.getByPlaceholderText(/Buscar por requerimiento/);
+      await fireEvent.input(searchInput, { target: { value: "texto-inexistente" } });
+
+      expect(screen.getByText("Ningún requerimiento coincide con el filtro.")).toBeInTheDocument();
+      expect(screen.queryByText("Esta avanzada no tiene requerimientos registrados.")).not.toBeInTheDocument();
+    });
+
+    it("an entidad group is collapsible", async () => {
+      setStoreState({
+        detalle: { "client-1": detalle({ requerimientos: [requerimiento({ entidad: "DAGMA" })] }) },
+      });
+      render(DetalleAvanzada);
+      expect(screen.getByText("Árbol con riesgo de caída")).toBeInTheDocument();
+
+      const entidadHeader = screen.getByText("DAGMA", { selector: ".entidad-name" }).closest("button")!;
+      await fireEvent.click(entidadHeader);
+      expect(screen.queryByText("Árbol con riesgo de caída")).not.toBeInTheDocument();
+    });
+
+    describe("photos", () => {
+      it("renders a Drive photo as an <img> whose src is the w400 thumbnail form", () => {
+        setStoreState({
+          detalle: {
+            "client-1": detalle({
+              requerimientos: [
+                requerimiento({ fotos_urls: ["https://drive.google.com/file/d/abc123/view?usp=drivesdk"] }),
+              ],
+            }),
+          },
+        });
+        render(DetalleAvanzada);
+        const img = screen.getByRole("img") as HTMLImageElement;
+        expect(img.src).toBe("https://drive.google.com/thumbnail?id=abc123&sz=w400");
+      });
+
+      it("renders a plain (non-Drive) photo URL unchanged", () => {
+        setStoreState({
+          detalle: {
+            "client-1": detalle({
+              requerimientos: [requerimiento({ fotos_urls: ["https://catatrack-photos.s3.amazonaws.com/foo.jpg"] })],
+            }),
+          },
+        });
+        render(DetalleAvanzada);
+        const img = screen.getByRole("img") as HTMLImageElement;
+        expect(img.src).toBe("https://catatrack-photos.s3.amazonaws.com/foo.jpg");
+      });
+
+      it("swaps to the 'Abrir en Drive' fallback when the <img> fails to load", async () => {
+        setStoreState({
+          detalle: {
+            "client-1": detalle({
+              requerimientos: [
+                requerimiento({ fotos_urls: ["https://drive.google.com/file/d/abc123/view?usp=drivesdk"] }),
+              ],
+            }),
+          },
+        });
+        render(DetalleAvanzada);
+        const img = screen.getByRole("img");
+        await fireEvent.error(img);
+
+        expect(screen.queryByRole("img")).not.toBeInTheDocument();
+        const fallbackLink = screen.getByText(/Abrir en Drive/).closest("a")!;
+        expect(fallbackLink).toHaveAttribute("href", "https://drive.google.com/file/d/abc123/view");
+      });
+    });
+  });
+});
