@@ -8,7 +8,8 @@
   import Card from '../ui/Card.svelte';
   import Modal from '../ui/Modal.svelte';
   import Icon from '../ui/Icon.svelte';
-  import DashboardRequerimientos from './DashboardRequerimientos.svelte';
+  import ViewHeader from '../ui/ViewHeader.svelte';
+  import PanelUnificado from '../reportes/PanelUnificado.svelte';
 
   let loading = false;
   let reportes: Reporte[] = [];
@@ -17,7 +18,7 @@
   let showDeleteModal = false;
   let deleteTarget: Reporte | null = null;
   let deleting = false;
-  let activeTab: 'dashboard' | 'lista' = 'dashboard';
+  let activeTab: 'panel' | 'lista' = 'panel';
 
   onMount(loadReportes);
 
@@ -60,28 +61,28 @@
 </script>
 
 <div class="view">
-  <header class="view-header">
-    <button class="back-btn" on:click={() => navigationStore.goHome()}>← Volver</button>
-    <h2 class="view-title"><Icon name="bar-chart" size={20} /> Reportes</h2>
-    <!-- Tab selector -->
-    <div class="tabs">
-      <button class="tab" class:active={activeTab === 'dashboard'} on:click={() => (activeTab = 'dashboard')}>
-        <Icon name="bar-chart" size={15} /> Dashboard
-      </button>
-      <button class="tab" class:active={activeTab === 'lista'} on:click={() => (activeTab = 'lista')}>
-        <Icon name="list" size={15} /> Lista de Reportes
-      </button>
-    </div>
-    {#if activeTab === 'lista'}
-      <Button variant="ghost" size="sm" on:click={loadReportes} disabled={loading}>
-        <Icon name="arrow-right" size={14} /> Actualizar
-      </Button>
-    {/if}
-  </header>
+  <ViewHeader title="Reportes" icon="bar-chart">
+    <svelte:fragment slot="action">
+      <!-- Tab selector -->
+      <div class="tabs">
+        <button class="tab" class:active={activeTab === 'panel'} on:click={() => (activeTab = 'panel')}>
+          <Icon name="bar-chart" size={15} /> Panel
+        </button>
+        <button class="tab" class:active={activeTab === 'lista'} on:click={() => (activeTab = 'lista')}>
+          <Icon name="list" size={15} /> Lista de Reportes
+        </button>
+      </div>
+      {#if activeTab === 'lista'}
+        <Button variant="ghost" size="sm" on:click={loadReportes} disabled={loading}>
+          <Icon name="arrow-right" size={14} /> Actualizar
+        </Button>
+      {/if}
+    </svelte:fragment>
+  </ViewHeader>
 
-  {#if activeTab === 'dashboard'}
+  {#if activeTab === 'panel'}
     <div class="dashboard-wrapper">
-      <DashboardRequerimientos />
+      <PanelUnificado />
     </div>
   {:else}
     <main class="view-body container">
@@ -160,39 +161,7 @@
     min-height: 100vh;
     min-height: -webkit-fill-available;
     min-height: 100dvh;
-    min-height: 100dvh;
     background: var(--bg);
-  }
-  .view-header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: var(--space-md);
-    display: flex;
-    align-items: center;
-    gap: var(--space-md);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    flex-wrap: wrap;
-  }
-  .view-header .view-title {
-    flex: 1;
-  }
-  .back-btn {
-    background: none;
-    border: none;
-    color: var(--primary);
-    font-size: 0.9375rem;
-    font-weight: 600;
-    cursor: pointer;
-    padding: 0;
-    font-family: inherit;
-  }
-  .back-btn:hover { text-decoration: underline; }
-  .view-title {
-    font-size: 1.125rem;
-    font-weight: 700;
-    color: var(--text);
   }
   .view-body {
     padding-top: var(--space-lg);
@@ -202,28 +171,28 @@
   /* Tabs */
   .tabs {
     display: flex;
-    background: #f1f5f9;
-    border-radius: 8px;
+    background: var(--surface-alt);
+    border-radius: var(--radius-md);
     overflow: hidden;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--border);
     gap: 0;
   }
   .tab {
     background: none;
     border: none;
     padding: 0.35rem 0.85rem;
-    font-size: 0.78rem;
+    font-size: var(--fs-sm);
     font-weight: 600;
-    color: #64748b;
+    color: var(--text-secondary);
     cursor: pointer;
     font-family: inherit;
   }
   .tab.active {
-    background: #2563eb;
-    color: white;
+    background: var(--primary);
+    color: var(--surface);
   }
   .tab:hover:not(.active) {
-    background: #e2e8f0;
+    background: var(--border);
     color: #334155;
   }
   .dashboard-wrapper {
