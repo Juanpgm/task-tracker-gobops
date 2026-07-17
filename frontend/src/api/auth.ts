@@ -21,9 +21,23 @@ let loginInProgress = false;
  * petición fresca tras la expiración (p. ej. "Crear PDF", a diferencia de
  * una vista con datos ya cacheados) fallaba con 401 aunque el usuario
  * siguiera logueado.
+ *
+ * Si `auth.currentUser` es null acá, no es un token vencido refrescable: es
+ * que la sesión real de Firebase ya no existe (ITP de iOS purgó su
+ * IndexedDB, `signOut` en otra pestaña, storage borrado). authStore todavía
+ * puede mostrar "logueado" gracias al fallback restoreSession()/
+ * restoreSessionFromIdb() (que cachea el perfil + token para sobrevivir
+ * exactamente esa purga de ITP) — pero ese token cacheado nunca va a poder
+ * refrescarse sin la sesión real de Firebase detrás. Dejarlo así deja al
+ * usuario viendo la app "logueada" mientras cualquier acción nueva falla
+ * con 401 al azar; forzamos logout para que vea el login y pueda
+ * autenticarse de nuevo en vez de quedar atascado.
  */
 async function refrescarTokenYSincronizar(): Promise<string | null> {
-  if (!auth || !auth.currentUser) return null;
+  if (!auth || !auth.currentUser) {
+    authStore.logout();
+    return null;
+  }
   try {
     const idToken = await getIdToken(auth.currentUser, true);
     apiClient.setToken(idToken);
@@ -31,6 +45,7 @@ async function refrescarTokenYSincronizar(): Promise<string | null> {
     uploadApiClient.setToken(idToken);
     return idToken;
   } catch {
+    authStore.logout();
     return null;
   }
 }
