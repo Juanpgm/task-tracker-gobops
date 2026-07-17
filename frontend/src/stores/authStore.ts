@@ -1,6 +1,17 @@
 import { writable, derived } from 'svelte/store';
 import type { AuthState, UserProfile, TemporaryPermission } from '../types';
 import { idbGet, idbSet, idbDel } from '../lib/idbStorage';
+import { apiClient, projectApiClient, uploadApiClient } from '../lib/api-client';
+
+/** Pushes the restored token into every HTTP client singleton. Without this,
+ * a session restored from localStorage/IndexedDB shows the user as logged in
+ * (this store's state) while every request still goes out with no
+ * Authorization header (the clients' own in-memory token, set separately). */
+function syncClientsToken(token: string | null) {
+  apiClient.setToken(token);
+  projectApiClient.setToken(token);
+  uploadApiClient.setToken(token);
+}
 
 const IDB_USER_KEY = 'auth_user';
 const IDB_TOKEN_KEY = 'auth_token';
@@ -29,6 +40,7 @@ function createAuthStore() {
         loading: false,
         error: null,
       });
+      syncClientsToken(user.token);
       try {
         localStorage.setItem('auth_user', JSON.stringify(user));
         sessionStorage.setItem('auth_token', user.token);
@@ -47,6 +59,7 @@ function createAuthStore() {
         loading: false,
         error: null,
       });
+      syncClientsToken(null);
       try {
         localStorage.removeItem('auth_user');
         sessionStorage.removeItem('auth_token');
@@ -76,6 +89,7 @@ function createAuthStore() {
             loading: false,
             error: null,
           });
+          syncClientsToken(savedToken);
           return true;
         }
       } catch {
@@ -103,6 +117,7 @@ function createAuthStore() {
             loading: false,
             error: null,
           });
+          syncClientsToken(savedToken);
           // Repopulate volatile storage for this session
           try {
             localStorage.setItem('auth_user', JSON.stringify(savedUser));
