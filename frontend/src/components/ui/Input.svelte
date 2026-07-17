@@ -47,6 +47,7 @@
     on:input={handleInput}
     on:change
     on:blur
+    on:keydown
     {...$$restProps}
   />
   {#if error}
@@ -79,7 +80,7 @@
     background: var(--surface);
   }
   .input::placeholder {
-    color: #cbd5e1;
+    color: var(--border-strong);
   }
   .input:focus {
     outline: none;

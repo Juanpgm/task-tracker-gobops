@@ -131,12 +131,12 @@
   .search-input {
     width: 100%;
     padding: 0.625rem 0.75rem;
-    border: 1px solid var(--border, #e2e8f0);
+    border: 1px solid var(--border, var(--border));
     border-radius: var(--radius-md, 8px);
     font-size: 0.9375rem;
     font-family: inherit;
     color: var(--text);
-    background: var(--surface, #fff);
+    background: var(--surface, var(--surface));
     box-sizing: border-box;
   }
   .search-input.has-value::placeholder {
@@ -155,7 +155,7 @@
     background: none;
     border: none;
     font-size: 1.15rem;
-    color: var(--text-muted, #94a3b8);
+    color: var(--text-muted, var(--text-muted));
     cursor: pointer;
     padding: 0 0.25rem;
     line-height: 1;
@@ -168,8 +168,8 @@
     margin: 0;
     padding: 0;
     list-style: none;
-    background: var(--surface, #fff);
-    border: 1px solid var(--border, #e2e8f0);
+    background: var(--surface, var(--surface));
+    border: 1px solid var(--border, var(--border));
     border-radius: var(--radius-md, 8px);
     max-height: 220px;
     overflow-y: auto;
@@ -189,16 +189,16 @@
     cursor: pointer;
   }
   .option:hover {
-    background: var(--bg-hover, #f1f5f9);
+    background: var(--bg-hover, var(--surface-alt));
   }
   .option.selected {
     background: var(--primary, #3b82f6);
-    color: #fff;
+    color: var(--surface);
   }
   .no-results {
     padding: 0.75rem;
     text-align: center;
-    color: var(--text-muted, #94a3b8);
+    color: var(--text-muted, var(--text-muted));
     font-size: 0.875rem;
   }
 </style>

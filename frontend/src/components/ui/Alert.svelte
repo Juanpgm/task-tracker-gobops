@@ -32,7 +32,7 @@
   }
   .alert-success { background: var(--success-light); color: #15803d; border: 1px solid #bbf7d0; }
   .alert-error { background: var(--error-light); color: #b91c1c; border: 1px solid #fca5a5; }
-  .alert-warning { background: var(--warning-light); color: #92400e; border: 1px solid #fde68a; }
+  .alert-warning { background: var(--warning-light); color: var(--warning-ink); border: 1px solid #fde68a; }
   .alert-info { background: var(--info-light); color: #0e7490; border: 1px solid #a5f3fc; }
   .alert-message { flex: 1; }
   .alert-dismiss {

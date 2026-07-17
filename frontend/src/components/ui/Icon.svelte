@@ -199,6 +199,9 @@
   {:else if name === 'x'}
     <line x1="18" y1="6" x2="6" y2="18" />
     <line x1="6" y1="6" x2="18" y2="18" />
+  {:else}
+    <!-- Unknown icon name: render a neutral placeholder instead of an invisible/broken icon -->
+    <circle cx="12" cy="12" r="9" stroke-dasharray="2 3" />
   {/if}
 </svg>
 

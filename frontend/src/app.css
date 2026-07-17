@@ -1,23 +1,45 @@
+/*
+ * Design tokens — the single source of truth for the whole app.
+ *
+ * Components must reference these by role (var(--border)) instead of retyping
+ * literals. Values here were reconciled against what the components actually
+ * used: where a literal was already the de-facto standard across the app, the
+ * token adopts that literal rather than the other way round, so adopting a
+ * token does not silently restyle a screen.
+ */
 :root {
-  /* Colors */
+  /* Brand */
   --primary: #2563eb;
   --primary-dark: #1d4ed8;
+  --primary-darker: #1e40af;
   --primary-light: #dbeafe;
   --secondary: #64748b;
+
+  /* Status — meaning, never decoration. Always paired with an icon or label. */
   --success: #16a34a;
   --success-light: #dcfce7;
+  --success-ink: #166534;
   --warning: #d97706;
   --warning-light: #fef3c7;
+  --warning-ink: #92400e;
   --error: #dc2626;
   --error-light: #fee2e2;
+  --error-ink: #991b1b;
   --info: #0891b2;
   --info-light: #cffafe;
+  --info-ink: #155e75;
 
-  /* Neutrals */
+  /* Neutrals.
+     --border adopts #e2e8f0: it was already used ~101x app-wide, while the
+     previous token value (#e9edf2) was used almost nowhere. */
   --bg: #f8fafc;
   --surface: #ffffff;
-  --border: #e9edf2;
+  --surface-alt: #f1f5f9;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text-strong: #0f172a;
   --text: #1e293b;
+  --text-body: #475569;
   --text-secondary: #64748b;
   --text-muted: #94a3b8;
 
@@ -34,6 +56,7 @@
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
+  --radius-pill: 999px;
 
   /* Shadows */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
@@ -43,6 +66,39 @@
   /* Typography */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
   --font-mono: 'Fira Code', 'Cascadia Code', monospace;
+
+  /* Type scale. Replaces 45 hand-tuned font-size literals; every step is a
+     real size difference rather than a sub-pixel variation of its neighbour. */
+  --fs-xs: 0.6875rem;   /* 11px — micro labels, badge text */
+  --fs-sm: 0.75rem;     /* 12px — secondary meta, chips */
+  --fs-md: 0.8125rem;   /* 13px — dense UI text */
+  --fs-base: 0.875rem;  /* 14px — body default */
+  --fs-lg: 1rem;        /* 16px — emphasis, form inputs (16px avoids iOS zoom-on-focus) */
+  --fs-xl: 1.125rem;    /* 18px — view titles */
+  --fs-2xl: 1.375rem;   /* 22px — section heroes */
+  --fs-hero: 3rem;      /* 48px — the one headline figure per view */
+
+  /* Layout */
+  --header-h: 3.25rem;
+
+  /* Minimum comfortable touch target for field use on phones. */
+  --tap-min: 44px;
+
+  /* Focus ring — one definition, so keyboard focus looks the same everywhere. */
+  --focus-ring: 0 0 0 3px rgb(37 99 235 / 0.35);
+
+  /* Domain hues — Reportes: cada dominio tiñe su propio chrome + sus marcas
+     de datos vía --series (ver PanelUnificado.svelte). Dentro de un gráfico
+     dado sigue habiendo un solo hue: el color nunca codifica magnitud. */
+  --domain-avanzadas: #2563eb;
+  --domain-avanzadas-light: #dbeafe;
+  --domain-avanzadas-ink: #1e40af;
+  --domain-mapa: #0891b2;
+  --domain-mapa-light: #cffafe;
+  --domain-mapa-ink: #155e75;
+  --domain-jornadas: #7c3aed;
+  --domain-jornadas-light: #ede9fe;
+  --domain-jornadas-ink: #5b21b6;
 }
 
 * {
@@ -103,11 +159,11 @@ a:hover {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--border-strong);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--text-muted);
 }
 
 /* ---- Loading Spinner ---- */

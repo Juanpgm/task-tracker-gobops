@@ -5,8 +5,11 @@
 
 export interface QueueItem {
   id: string; // Unique queue task ID
-  type: 'create' | 'edit' | 'status';
-  reqId: string; // Requirement ID (can be temporary like 'temp-xxx')
+  // 'avanzada' — Registrar Avanzada capture (see stores/avanzadasStore.ts).
+  // Kept in the same union/store as the legacy requerimiento operations so a
+  // single offline queue and pending-count drive both flows.
+  type: 'create' | 'edit' | 'status' | 'avanzada';
+  reqId: string; // Requirement/client ID (can be temporary like 'temp-xxx')
   payload: any; // Operation payload (can contain Blobs/Files)
   timestamp: number;
   errorCount: number;

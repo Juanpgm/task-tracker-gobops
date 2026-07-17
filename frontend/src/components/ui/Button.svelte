@@ -52,7 +52,7 @@
   .btn-primary:hover:not(:disabled) { background: var(--primary-dark); }
 
   .btn-secondary { background: var(--border); color: var(--text); }
-  .btn-secondary:hover:not(:disabled) { background: #cbd5e1; }
+  .btn-secondary:hover:not(:disabled) { background: var(--border-strong); }
 
   .btn-danger { background: var(--error); color: white; }
   .btn-danger:hover:not(:disabled) { background: #b91c1c; }
