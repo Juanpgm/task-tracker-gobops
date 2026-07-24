@@ -216,6 +216,15 @@ describe("ListaAvanzadas", () => {
     expect(await screen.findByText(/no se pudo generar el pdf/i)).toBeInTheDocument();
   });
 
+  it("clicking 'Editar' navigates to editar-avanzada with that card's client_id, without navigating to the detail view", async () => {
+    setStoreState({ avanzadas: [avanzada({ client_id: "a1" })] });
+    render(ListaAvanzadas);
+
+    await fireEvent.click(screen.getByRole("button", { name: /editar/i }));
+
+    expect(navigationStoreMocks.navigate).toHaveBeenCalledWith("editar-avanzada", { client_id: "a1" });
+  });
+
   it("shows a pending-sync badge for offline items", () => {
     setStoreState({ avanzadas: [avanzada({ isOffline: true })] });
     render(ListaAvanzadas);

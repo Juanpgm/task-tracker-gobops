@@ -11,7 +11,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import "@testing-library/jest-dom/vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/svelte";
+import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/svelte";
 
 /**
  * This machine's Node runtime defines a global `localStorage` backed by
@@ -86,25 +86,55 @@ const avanzadasStoreState = vi.hoisted(() => {
     }),
     loadCatalogos: vi.fn(),
     crearAvanzada: vi.fn(),
+    loadAvanzadaDetalle: vi.fn(),
+    actualizarAvanzada: vi.fn(),
   };
 });
 
-const navigationStoreMocks = vi.hoisted(() => ({
-  navigate: vi.fn(),
-}));
+/**
+ * navigationStore mock as a real reactive store (subscribe/set), same
+ * pattern as DetalleAvanzada.test.ts: RegistrarAvanzada.svelte reads
+ * $navigationStore.params to detect edit mode (client_id present), so a
+ * no-op `subscribe: vi.fn()` (which never calls back) would leave
+ * $navigationStore permanently undefined and crash on `.params`. Defaults to
+ * {} (create mode) in beforeEach; edit-mode tests override it.
+ */
+const navigationStoreState = vi.hoisted(() => {
+  function createMockStore(initial: any) {
+    let value = initial;
+    const subscribers = new Set<(v: any) => void>();
+    return {
+      subscribe(fn: (v: any) => void) {
+        subscribers.add(fn);
+        fn(value);
+        return () => subscribers.delete(fn);
+      },
+      set(v: any) {
+        value = v;
+        subscribers.forEach((fn) => fn(value));
+      },
+    };
+  }
+  return {
+    store: createMockStore({ view: "programar-avanzada", params: {} as Record<string, string> }),
+    navigate: vi.fn(),
+  };
+});
 
 vi.mock("../../stores/avanzadasStore", () => ({
   avanzadasStore: {
     subscribe: avanzadasStoreState.store.subscribe,
     loadCatalogos: avanzadasStoreState.loadCatalogos,
     crearAvanzada: avanzadasStoreState.crearAvanzada,
+    loadAvanzadaDetalle: avanzadasStoreState.loadAvanzadaDetalle,
+    actualizarAvanzada: avanzadasStoreState.actualizarAvanzada,
   },
 }));
 
 vi.mock("../../stores/navigationStore", () => ({
   navigationStore: {
-    subscribe: vi.fn(),
-    navigate: navigationStoreMocks.navigate,
+    subscribe: navigationStoreState.store.subscribe,
+    navigate: navigationStoreState.navigate,
   },
 }));
 
@@ -112,9 +142,16 @@ vi.mock("../shared/LocationPicker.svelte", async () => {
   return await import("./__test-stubs__/LocationPickerStub.svelte");
 });
 
+const geoLookupMocks = vi.hoisted(() => ({
+  lookupComunaBarrio: vi.fn(),
+}));
+vi.mock("../../lib/geoLookup", () => ({
+  lookupComunaBarrio: geoLookupMocks.lookupComunaBarrio,
+}));
+
 import RegistrarAvanzada from "./RegistrarAvanzada.svelte";
 
-async function openSection(name: string) {
+async function openSection(name: string | RegExp) {
   const header = screen.getByText(name, { selector: ".section-title" }).closest("button")!;
   await fireEvent.click(header);
 }
@@ -122,9 +159,8 @@ async function openSection(name: string) {
 async function fillMinimumValidForm() {
   await fireEvent.input(screen.getByLabelText(/Nombre de la avanzada/), { target: { value: "Avanzada de prueba" } });
   await fireEvent.change(screen.getByLabelText(/^Estrategia/), { target: { value: "En Un 2x3" } });
-  await fireEvent.change(screen.getByLabelText(/^Comuna/), { target: { value: "Comuna 1" } });
-  await fireEvent.change(screen.getByLabelText(/^Barrio/), { target: { value: "Salomia" } });
   await fireEvent.click(screen.getByText("Set fake location"));
+  await waitFor(() => expect((screen.getByLabelText(/^Comuna/) as HTMLInputElement).value).toBe("Comuna 1"));
 
   await openSection("Encargados");
   await fireEvent.click(screen.getByText("Ana Maria Carabali"));
@@ -162,6 +198,8 @@ describe("RegistrarAvanzada", () => {
       detalleError: {},
     });
     avanzadasStoreState.crearAvanzada.mockResolvedValue({ isOffline: false, client_id: "new-id" });
+    navigationStoreState.store.set({ view: "programar-avanzada", params: {} });
+    geoLookupMocks.lookupComunaBarrio.mockResolvedValue({ comuna: "Comuna 1", barrio: "Salomia" });
     if (!("createObjectURL" in URL)) {
       // @ts-expect-error jsdom doesn't implement this
       URL.createObjectURL = () => "";
@@ -193,8 +231,6 @@ describe("RegistrarAvanzada", () => {
       render(RegistrarAvanzada);
       await fireEvent.input(screen.getByLabelText(/Nombre de la avanzada/), { target: { value: "Avanzada X" } });
       await fireEvent.change(screen.getByLabelText(/^Estrategia/), { target: { value: "En Un 2x3" } });
-      await fireEvent.change(screen.getByLabelText(/^Comuna/), { target: { value: "Comuna 1" } });
-      await fireEvent.change(screen.getByLabelText(/^Barrio/), { target: { value: "Salomia" } });
       await fireEvent.click(screen.getByText("Set fake coordinates without direccion"));
 
       await openSection("Encargados");
@@ -210,9 +246,8 @@ describe("RegistrarAvanzada", () => {
       render(RegistrarAvanzada);
       await fireEvent.input(screen.getByLabelText(/Nombre de la avanzada/), { target: { value: "Avanzada X" } });
       await fireEvent.change(screen.getByLabelText(/^Estrategia/), { target: { value: "En Un 2x3" } });
-      await fireEvent.change(screen.getByLabelText(/^Comuna/), { target: { value: "Comuna 1" } });
-      await fireEvent.change(screen.getByLabelText(/^Barrio/), { target: { value: "Salomia" } });
       await fireEvent.click(screen.getByText("Set fake location"));
+      await waitFor(() => expect((screen.getByLabelText(/^Comuna/) as HTMLInputElement).value).toBe("Comuna 1"));
 
       await fireEvent.click(screen.getByText("Guardar Avanzada"));
 
@@ -224,9 +259,8 @@ describe("RegistrarAvanzada", () => {
       render(RegistrarAvanzada);
       await fireEvent.input(screen.getByLabelText(/Nombre de la avanzada/), { target: { value: "Avanzada X" } });
       await fireEvent.change(screen.getByLabelText(/^Estrategia/), { target: { value: "En Un 2x3" } });
-      await fireEvent.change(screen.getByLabelText(/^Comuna/), { target: { value: "Comuna 1" } });
-      await fireEvent.change(screen.getByLabelText(/^Barrio/), { target: { value: "Salomia" } });
       await fireEvent.click(screen.getByText("Set fake location"));
+      await waitFor(() => expect((screen.getByLabelText(/^Comuna/) as HTMLInputElement).value).toBe("Comuna 1"));
       await openSection("Encargados");
       await fireEvent.click(screen.getByText("Ana Maria Carabali"));
 
@@ -425,13 +459,25 @@ describe("RegistrarAvanzada", () => {
   });
 
   describe("datos section extras", () => {
-    it("comuna is required before barrio can be chosen (barrio select is disabled until a comuna is set)", async () => {
+    it("Comuna and Barrio start empty and read-only until a location is set", async () => {
       render(RegistrarAvanzada);
-      const barrioSelect = screen.getByLabelText(/^Barrio/) as HTMLSelectElement;
-      expect(barrioSelect).toBeDisabled();
+      const comunaInput = screen.getByLabelText(/^Comuna/) as HTMLInputElement;
+      const barrioInput = screen.getByLabelText(/^Barrio/) as HTMLInputElement;
+      expect(comunaInput).toBeDisabled();
+      expect(barrioInput).toBeDisabled();
+      expect(comunaInput.value).toBe("");
+      expect(barrioInput.value).toBe("");
+    });
 
-      await fireEvent.change(screen.getByLabelText(/^Comuna/), { target: { value: "Comuna 1" } });
-      expect(barrioSelect).not.toBeDisabled();
+    it("derives comuna and barrio automatically once a location is set", async () => {
+      render(RegistrarAvanzada);
+      await fireEvent.click(screen.getByText("Set fake location"));
+
+      await waitFor(() => {
+        expect((screen.getByLabelText(/^Comuna/) as HTMLInputElement).value).toBe("Comuna 1");
+        expect((screen.getByLabelText(/^Barrio/) as HTMLInputElement).value).toBe("Salomia");
+      });
+      expect(geoLookupMocks.lookupComunaBarrio).toHaveBeenCalledWith(3.4516, -76.532);
     });
 
     it("'Otra estrategia...' reveals a free-text field and disables the catalog select", async () => {
@@ -531,7 +577,7 @@ describe("RegistrarAvanzada", () => {
       // per fixed field.
       expect(screen.getByText("Ingrese el nombre de la avanzada.")).toBeInTheDocument();
       expect(screen.getByText("Seleccione o ingrese la estrategia.")).toBeInTheDocument();
-      expect(screen.getByText("Seleccione la comuna.")).toBeInTheDocument();
+      expect(screen.getByText("Defina la ubicación (espere al GPS o ajústela en el mapa).")).toBeInTheDocument();
       expect(avanzadasStoreState.crearAvanzada).not.toHaveBeenCalled();
     });
 
@@ -579,25 +625,23 @@ describe("RegistrarAvanzada", () => {
     });
   });
 
-  describe("comuna/barrio autofill from reverse-geocoded GPS", () => {
-    it("pre-fills comuna and barrio from the LocationPicker's geocode match when the user hasn't picked their own", async () => {
+  describe("comuna/barrio derived from coordinates", () => {
+    it("shows an error and blocks submit when the coordinates don't resolve to a known comuna/barrio", async () => {
+      geoLookupMocks.lookupComunaBarrio.mockResolvedValue({ comuna: null, barrio: null });
       render(RegistrarAvanzada);
+      await fireEvent.input(screen.getByLabelText(/Nombre de la avanzada/), { target: { value: "Avanzada X" } });
+      await fireEvent.change(screen.getByLabelText(/^Estrategia/), { target: { value: "En Un 2x3" } });
+      await fireEvent.click(screen.getByText("Set fake location"));
+      await waitFor(() => expect(geoLookupMocks.lookupComunaBarrio).toHaveBeenCalled());
 
-      await fireEvent.click(screen.getByText("Set fake location with geo match"));
+      await openSection("Encargados");
+      await fireEvent.click(screen.getByText("Ana Maria Carabali"));
 
-      // LocationPickerStub dispatches comunaGeo: "comuna 3", barrioGeo: "peñón",
-      // which should resolve to the catalog's "Comuna 3" / "El Peñón".
-      expect((screen.getByLabelText(/^Comuna/) as HTMLSelectElement).value).toBe("Comuna 3");
-      expect((screen.getByLabelText(/^Barrio/) as HTMLSelectElement).value).toBe("El Peñón");
-    });
+      await fireEvent.click(screen.getByText("Guardar Avanzada"));
 
-    it("never overrides a comuna the user already picked manually", async () => {
-      render(RegistrarAvanzada);
-
-      await fireEvent.change(screen.getByLabelText(/^Comuna/), { target: { value: "Comuna 1" } });
-      await fireEvent.click(screen.getByText("Set fake location with geo match"));
-
-      expect((screen.getByLabelText(/^Comuna/) as HTMLSelectElement).value).toBe("Comuna 1");
+      expect(screen.getByText(/No se pudo determinar la comuna/)).toBeInTheDocument();
+      expect(screen.getByText(/No se pudo determinar el barrio/)).toBeInTheDocument();
+      expect(avanzadasStoreState.crearAvanzada).not.toHaveBeenCalled();
     });
   });
 
@@ -674,6 +718,132 @@ describe("RegistrarAvanzada", () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+  });
+
+  describe("edit mode (client_id present in navigation params)", () => {
+    function detalleMock(overrides: Record<string, unknown> = {}) {
+      return {
+        client_id: "client-1",
+        nombre_avanzada: "Avanzada Comuna 1",
+        fecha: "2026-07-16",
+        estrategia: "En Un 2x3",
+        sector: "Sector norte",
+        comuna: "Comuna 1",
+        barrio: "Salomia",
+        direccion: "Calle 1 #2-3",
+        coordenadas: "3.4516, -76.532",
+        encargados: ["Ana Maria Carabali"],
+        asistentes: [
+          {
+            nombre: "Juan Pérez",
+            organismo: "DAGMA",
+            celular: "3001234567",
+            correo: "juan@x.com",
+            foto_url: "https://example.com/foto.jpg",
+          },
+        ],
+        requerimientos: [],
+        requerimientos_count: 0,
+        isOffline: false,
+        ...overrides,
+      };
+    }
+
+    function setEditMode(detalle: ReturnType<typeof detalleMock> | null, opts: { loading?: boolean } = {}) {
+      navigationStoreState.store.set({ view: "editar-avanzada", params: { client_id: "client-1" } });
+      avanzadasStoreState.store.set({
+        ...avanzadasStoreState.store.get(),
+        detalle: detalle ? { "client-1": detalle } : {},
+        detalleLoading: { "client-1": !!opts.loading },
+        detalleError: {},
+      });
+    }
+
+    it("calls loadAvanzadaDetalle with the client_id on mount and shows the 'Editar Avanzada' title", () => {
+      setEditMode(null);
+      render(RegistrarAvanzada);
+      expect(avanzadasStoreState.loadAvanzadaDetalle).toHaveBeenCalledWith("client-1");
+      expect(screen.getByText("Editar Avanzada")).toBeInTheDocument();
+    });
+
+    it("shows a loading hint instead of the form while the detalle is being fetched", () => {
+      setEditMode(null, { loading: true });
+      render(RegistrarAvanzada);
+      expect(screen.getByText("Cargando avanzada…")).toBeInTheDocument();
+      expect(screen.queryByLabelText(/Nombre de la avanzada/)).not.toBeInTheDocument();
+    });
+
+    it("prefills the form fields (incl. asistentes) from the loaded detalle", async () => {
+      setEditMode(detalleMock());
+      render(RegistrarAvanzada);
+
+      await waitFor(() => {
+        expect((screen.getByLabelText(/Nombre de la avanzada/) as HTMLInputElement).value).toBe("Avanzada Comuna 1");
+      });
+      expect((screen.getByLabelText(/^Fecha/) as HTMLInputElement).value).toBe("2026-07-16");
+      expect((screen.getByLabelText(/^Estrategia/) as HTMLSelectElement).value).toBe("En Un 2x3");
+      expect((screen.getByLabelText(/^Sector/) as HTMLInputElement).value).toBe("Sector norte");
+
+      const asistenciaHeader = screen.getByText(/^Asistencia/, { selector: ".section-title" }).closest("button")!;
+      await fireEvent.click(asistenciaHeader);
+      expect((document.getElementById("asist-nombre-0") as HTMLInputElement).value).toBe("Juan Pérez");
+      expect((document.getElementById("asist-organismo-0") as HTMLInputElement).value).toBe("DAGMA");
+    });
+
+    it("hides the Requerimientos section entirely (it's a separate sub-resource, edited from DetalleAvanzada)", () => {
+      setEditMode(detalleMock());
+      render(RegistrarAvanzada);
+      expect(screen.queryByText("Requerimientos", { selector: ".section-title" })).not.toBeInTheDocument();
+    });
+
+    it("hides the 'Foto del equipo' picker (PATCH/PUT doesn't accept foto_equipo)", async () => {
+      setEditMode(detalleMock());
+      render(RegistrarAvanzada);
+      await openSection("Encargados");
+      expect(screen.queryByText("Foto del equipo")).not.toBeInTheDocument();
+    });
+
+    it("submits via actualizarAvanzada (not crearAvanzada), omits requerimientos, and navigates to the detail view on success", async () => {
+      setEditMode(detalleMock());
+      avanzadasStoreState.actualizarAvanzada.mockResolvedValue(detalleMock());
+      render(RegistrarAvanzada);
+
+      await waitFor(() => {
+        expect((screen.getByLabelText(/Nombre de la avanzada/) as HTMLInputElement).value).toBe("Avanzada Comuna 1");
+      });
+
+      await fireEvent.click(screen.getByText("Guardar cambios"));
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+      await fireEvent.click(screen.getByText("Confirmar y guardar"));
+
+      expect(avanzadasStoreState.actualizarAvanzada).toHaveBeenCalledTimes(1);
+      expect(avanzadasStoreState.crearAvanzada).not.toHaveBeenCalled();
+
+      const [calledClientId, datos] = avanzadasStoreState.actualizarAvanzada.mock.calls[0];
+      expect(calledClientId).toBe("client-1");
+      expect(datos.nombre_avanzada).toBe("Avanzada Comuna 1");
+      expect(datos).not.toHaveProperty("requerimientos");
+      expect(datos).not.toHaveProperty("client_id");
+
+      expect(navigationStoreState.navigate).toHaveBeenCalledWith("detalle-avanzada", { client_id: "client-1" });
+    });
+
+    it("shows an error message (without navigating away) when actualizarAvanzada fails", async () => {
+      setEditMode(detalleMock());
+      avanzadasStoreState.actualizarAvanzada.mockRejectedValue(new Error("network down"));
+      render(RegistrarAvanzada);
+
+      await waitFor(() => {
+        expect((screen.getByLabelText(/Nombre de la avanzada/) as HTMLInputElement).value).toBe("Avanzada Comuna 1");
+      });
+
+      await fireEvent.click(screen.getByText("Guardar cambios"));
+      await fireEvent.click(screen.getByText("Confirmar y guardar"));
+
+      expect(await screen.findByText("network down")).toBeInTheDocument();
+      expect(navigationStoreState.navigate).not.toHaveBeenCalledWith("detalle-avanzada", { client_id: "client-1" });
     });
   });
 });

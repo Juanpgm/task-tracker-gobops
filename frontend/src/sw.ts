@@ -59,6 +59,18 @@ registerRoute(
   })
 );
 
+// Cartografía base (comunas/barrios) para georreferenciación offline
+registerRoute(
+  ({ url }) => url.pathname.startsWith('/cartografia_base/'),
+  new CacheFirst({
+    cacheName: 'cartografia-base',
+    plugins: [
+      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      new ExpirationPlugin({ maxEntries: 4, maxAgeSeconds: 60 * 60 * 24 * 365 }),
+    ],
+  })
+);
+
 // Google Fonts
 registerRoute(
   ({ url }) => url.origin === 'https://fonts.googleapis.com',

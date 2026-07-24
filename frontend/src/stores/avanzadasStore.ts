@@ -13,14 +13,19 @@
  *   5. syncOfflineQueue() reproduce la cola cuando vuelve la conexión.
  */
 import { writable, get } from 'svelte/store';
-import type { AsistenteAvanzada, Avanzada, CatalogosAvanzadas } from '../types/avanzadas';
+import type { AsistenteAvanzada, Avanzada, CatalogosAvanzadas, RequerimientoAvanzada } from '../types/avanzadas';
 import {
   getCatalogosAvanzadas,
   crearAvanzada as crearAvanzadaAPI,
+  actualizarAvanzada as actualizarAvanzadaAPI,
+  agregarRequerimientoAvanzada as agregarRequerimientoAvanzadaAPI,
   listarAvanzadas,
   getAvanzada as getAvanzadaAPI,
   type CrearAvanzadaDatos,
   type CrearAvanzadaFiles,
+  type ActualizarAvanzadaDatos,
+  type ActualizarAvanzadaFiles,
+  type RequerimientoAvanzadaDatos,
   type ListarAvanzadasItem,
 } from '../api/avanzadas';
 import { CATALOGO_AVANZADAS_FALLBACK, mergeCatalogos } from '../data/avanzadas-catalogo';
@@ -98,6 +103,28 @@ function generateClientId(): string {
 /** Descarta filas de asistentes sin nombre (regla del formulario: nombre es requerido por fila). */
 function limpiarAsistentes(asistentes: AsistenteAvanzada[]): AsistenteAvanzada[] {
   return (asistentes || []).filter((a) => a.nombre && a.nombre.trim());
+}
+
+/**
+ * Same nombre-required rule as limpiarAsistentes(), but keeps a parallel
+ * fotos array (index-aligned with datos.asistentes per the backend
+ * contract) in sync: when a row without nombre is dropped, its
+ * corresponding foto entry is dropped too, so foto_asistente_{i} never
+ * ends up misaligned with the asistente it was meant for.
+ */
+function limpiarAsistentesConFotos(
+  asistentes: AsistenteAvanzada[],
+  fotos: (File | null)[] = []
+): { asistentes: AsistenteAvanzada[]; fotos: (File | null)[] } {
+  const asistentesLimpios: AsistenteAvanzada[] = [];
+  const fotosAlineadas: (File | null)[] = [];
+  (asistentes || []).forEach((a, i) => {
+    if (a.nombre && a.nombre.trim()) {
+      asistentesLimpios.push(a);
+      fotosAlineadas.push(fotos[i] ?? null);
+    }
+  });
+  return { asistentes: asistentesLimpios, fotos: fotosAlineadas };
 }
 
 function createAvanzadasStore() {
@@ -281,20 +308,37 @@ function createAvanzadasStore() {
      * sincronizó, el backend responde 404 (no existe el documento todavía);
      * en ese caso se reincorpora desde el payload encolado en IndexedDB en
      * vez de mostrar un error.
+     *
+     * { silent: true } is for background refresh/polling (e.g. DetalleAvanzada
+     * checking for requerimientos added by other users): it does NOT flip
+     * detalleLoading, so it never triggers the full skeleton, and a failure
+     * is logged + swallowed instead of replacing already-visible content
+     * with a blocking error state (same non-destructive spirit as
+     * loadAvanzadas' revalidateError, just without a dedicated error field
+     * since detail view has nowhere non-destructive to show it yet).
+     *
+     * The per-clientId token fence is shared between silent and non-silent
+     * calls, so an in-flight silent refresh can't clobber a fresher explicit
+     * load (or vice versa) — whichever call started LAST wins.
      */
-    loadAvanzadaDetalle: async (clientId: string): Promise<void> => {
+    loadAvanzadaDetalle: async (clientId: string, opts: { silent?: boolean } = {}): Promise<void> => {
+      const silent = !!opts.silent;
+
       // Per-clientId fence: capture the token for THIS call before awaiting
       // anything. If loadAvanzadaDetalle(clientId) is called again for the
-      // SAME id before this call resolves (e.g. a second Reintentar tap),
-      // the later call bumps the token and this call's eventual result is
-      // discarded, whichever order the two network responses land in.
+      // SAME id before this call resolves (e.g. a second Reintentar tap, or
+      // a silent poll firing mid-explicit-load), the later call bumps the
+      // token and this call's eventual result is discarded, whichever order
+      // the two network responses land in.
       const token = (detalleRequestTokens[clientId] = (detalleRequestTokens[clientId] ?? 0) + 1);
 
-      update((s) => ({
-        ...s,
-        detalleLoading: { ...s.detalleLoading, [clientId]: true },
-        detalleError: { ...s.detalleError, [clientId]: null },
-      }));
+      if (!silent) {
+        update((s) => ({
+          ...s,
+          detalleLoading: { ...s.detalleLoading, [clientId]: true },
+          detalleError: { ...s.detalleError, [clientId]: null },
+        }));
+      }
 
       try {
         const data = await getAvanzadaAPI(clientId);
@@ -328,6 +372,13 @@ function createAvanzadasStore() {
         }
 
         if (detalleRequestTokens[clientId] !== token) return; // superseded — discard
+
+        if (silent) {
+          console.warn(`avanzadasStore.loadAvanzadaDetalle (silent) failed for ${clientId}:`, err);
+          update((s) => ({ ...s, detalleLoading: { ...s.detalleLoading, [clientId]: false } }));
+          return;
+        }
+
         const msg = err instanceof Error ? err.message : 'Error al cargar la avanzada';
         update((s) => ({
           ...s,
@@ -339,6 +390,57 @@ function createAvanzadasStore() {
 
     clearDetalleError: (clientId: string) => {
       update((s) => ({ ...s, detalleError: { ...s.detalleError, [clientId]: null } }));
+    },
+
+    /**
+     * Actualiza una avanzada existente (PATCH /avanzadas/{client_id}).
+     * Requiere conectividad — a diferencia de crearAvanzada() no hay cola
+     * offline aquí: editar un registro ya persistido en el backend no tiene
+     * el mismo caso de uso "capturar en campo sin señal" que crear una
+     * avanzada nueva. Los errores de red se propagan (no se silencian) para
+     * que el formulario los muestre.
+     */
+    actualizarAvanzada: async (
+      clientId: string,
+      datosSinId: ActualizarAvanzadaDatos,
+      files: ActualizarAvanzadaFiles = {}
+    ): Promise<Avanzada> => {
+      const { asistentes, fotos } = limpiarAsistentesConFotos(datosSinId.asistentes, files.fotosPorAsistente || []);
+      const datos: ActualizarAvanzadaDatos = { ...datosSinId, asistentes };
+
+      const actualizada = await actualizarAvanzadaAPI(clientId, datos, { fotosPorAsistente: fotos });
+      update((s) => ({ ...s, detalle: { ...s.detalle, [clientId]: actualizada } }));
+      return actualizada;
+    },
+
+    /**
+     * Agrega un requerimiento a una avanzada ya creada (POST
+     * /avanzadas/{client_id}/requerimientos). En éxito, el nuevo
+     * requerimiento se inserta directamente en detalle[clientId] (si está
+     * cargado) para reflejo inmediato sin esperar un refresh.
+     */
+    agregarRequerimiento: async (
+      clientId: string,
+      datos: RequerimientoAvanzadaDatos,
+      fotos: File[] = []
+    ): Promise<RequerimientoAvanzada> => {
+      const nuevo = await agregarRequerimientoAvanzadaAPI(clientId, datos, fotos);
+      update((s) => {
+        const actual = s.detalle[clientId];
+        if (!actual) return s;
+        return {
+          ...s,
+          detalle: {
+            ...s.detalle,
+            [clientId]: {
+              ...actual,
+              requerimientos: [...(actual.requerimientos || []), nuevo],
+              requerimientos_count: (actual.requerimientos_count ?? actual.requerimientos?.length ?? 0) + 1,
+            },
+          },
+        };
+      });
+      return nuevo;
     },
 
     /** Reproduce la cola offline de avanzadas pendientes contra el backend. */

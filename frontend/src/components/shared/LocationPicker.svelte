@@ -41,8 +41,9 @@
   let geocoding = false;
   let geocodeError = "";
   let showManualModal = false;
-  let manualLat = "";
-  let manualLng = "";
+  // Un solo campo "lat, lng" en vez de dos inputs separados — ver
+  // applyManual() para el parseo.
+  let manualCoords = "";
   let manualErr = "";
   let geocodeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -179,8 +180,7 @@
   }
 
   function openManualModal() {
-    manualLat = latitud || "";
-    manualLng = longitud || "";
+    manualCoords = latitud && longitud ? `${latitud}, ${longitud}` : "";
     manualErr = "";
     showManualModal = true;
   }
@@ -190,8 +190,13 @@
   }
 
   function applyManual() {
-    const lat = parseFloat(manualLat);
-    const lng = parseFloat(manualLng);
+    const partes = manualCoords.split(",").map((p) => p.trim());
+    if (partes.length !== 2 || !partes[0] || !partes[1]) {
+      manualErr = "Ingrese latitud y longitud separadas por coma (lat, lng).";
+      return;
+    }
+    const lat = parseFloat(partes[0]);
+    const lng = parseFloat(partes[1]);
     if (isNaN(lat) || isNaN(lng)) {
       manualErr = "Ingrese números válidos para latitud y longitud.";
       return;
@@ -200,6 +205,8 @@
       manualErr = "Rango fuera de límites (lat: -90..90, lng: -180..180).";
       return;
     }
+    // Leaflet usa [lat, lng] nativamente (setCoords ya espera ese orden) —
+    // no hace falta invertir nada para que el marcador se ubique bien.
     setCoords(lat, lng, { recenter: true });
     showManualModal = false;
   }
@@ -208,8 +215,7 @@
     manualErr = "";
     try {
       const pos = await getCurrentPosition();
-      manualLat = pos.latitud.toFixed(8);
-      manualLng = pos.longitud.toFixed(8);
+      manualCoords = `${pos.latitud.toFixed(8)}, ${pos.longitud.toFixed(8)}`;
     } catch (err) {
       manualErr =
         err instanceof Error ? err.message : "No se pudo obtener GPS.";
@@ -267,7 +273,7 @@
   ></div>
 
   <div class="lp-coords">
-    <span class="lp-coords-label">Coordenadas:</span>
+    <span class="lp-coords-label">Coordenadas (lat, lng):</span>
     <span class="lp-coords-value">
       {#if latitud && longitud}
         {parseFloat(latitud).toFixed(6)}, {parseFloat(longitud).toFixed(6)}
@@ -325,26 +331,16 @@
         <Icon name="edit" size={16} /> Editar coordenadas
       </h3>
       <p class="lp-modal-help">
-        Ingrese latitud y longitud manualmente, o use el GPS del dispositivo.
+        Ingrese las coordenadas como latitud, longitud separadas por coma (WGS84), o use el GPS del dispositivo.
       </p>
 
-      <div class="lp-modal-fields">
+      <div class="lp-modal-fields lp-modal-fields--single">
         <label class="lp-modal-field">
-          <span>Latitud</span>
+          <span>Coordenadas (lat, lng)</span>
           <input
-            type="number"
-            step="0.00000001"
-            bind:value={manualLat}
-            placeholder="3.45160000"
-          />
-        </label>
-        <label class="lp-modal-field">
-          <span>Longitud</span>
-          <input
-            type="number"
-            step="0.00000001"
-            bind:value={manualLng}
-            placeholder="-76.53200000"
+            type="text"
+            bind:value={manualCoords}
+            placeholder="3.45160000, -76.53200000"
           />
         </label>
       </div>
@@ -537,6 +533,9 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0.6rem;
+  }
+  .lp-modal-fields--single {
+    grid-template-columns: 1fr;
   }
   .lp-modal-field {
     display: flex;

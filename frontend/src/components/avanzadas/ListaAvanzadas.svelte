@@ -27,6 +27,10 @@
     navigationStore.navigate("detalle-avanzada", { client_id: clientId });
   }
 
+  function editarAvanzada(clientId: string) {
+    navigationStore.navigate("editar-avanzada", { client_id: clientId });
+  }
+
   /* ---- Crear PDF (por tarjeta) ---- */
   let generandoPdfId: string | null = null;
   let errorPdfId: string | null = null;
@@ -222,6 +226,10 @@
                 >
                   <Icon name={generandoPdfId === avanzada.client_id ? "clock" : "file-text"} size={13} />
                   {generandoPdfId === avanzada.client_id ? "Generando…" : "Crear PDF"}
+                </button>
+                <button type="button" class="editar-btn" on:click={() => editarAvanzada(avanzada.client_id)}>
+                  <Icon name="edit" size={13} />
+                  Editar
                 </button>
               </div>
               {#if errorPdfId === avanzada.client_id}
@@ -501,8 +509,10 @@
   .card-actions {
     margin-top: 0.4rem;
     display: flex;
+    gap: 0.5rem;
   }
-  .crear-pdf-btn {
+  .crear-pdf-btn,
+  .editar-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
@@ -516,11 +526,13 @@
     font-family: inherit;
     cursor: pointer;
   }
-  .crear-pdf-btn:hover:not(:disabled) {
+  .crear-pdf-btn:hover:not(:disabled),
+  .editar-btn:hover:not(:disabled) {
     border-color: var(--border-strong);
     background: var(--surface);
   }
-  .crear-pdf-btn:disabled {
+  .crear-pdf-btn:disabled,
+  .editar-btn:disabled {
     opacity: 0.65;
     cursor: not-allowed;
   }

@@ -22,6 +22,10 @@ describe("viewRegistry", () => {
     expect(viewComponents["programar-avanzada"]).toBe(RegistrarAvanzada);
   });
 
+  it("maps 'editar-avanzada' to the same RegistrarAvanzada component (edit mode is detected internally via params.client_id)", () => {
+    expect(viewComponents["editar-avanzada"]).toBe(RegistrarAvanzada);
+  });
+
   it("has no extra keys that aren't valid AppViews", () => {
     const registeredViews = Object.keys(viewComponents);
     for (const view of registeredViews) {

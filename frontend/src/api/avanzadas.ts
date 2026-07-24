@@ -39,7 +39,7 @@ export interface CrearAvanzadaFiles {
   fotosPorRequerimiento?: File[][];
 }
 
-const MAX_FOTOS_POR_REQUERIMIENTO = 5;
+export const MAX_FOTOS_POR_REQUERIMIENTO = 5;
 
 export interface CrearAvanzadaResponse {
   success?: boolean;
@@ -67,6 +67,64 @@ export async function crearAvanzada(
   }
 
   return uploadApiClient.postForm<CrearAvanzadaResponse>('/avanzadas', formData);
+}
+
+/* ============================================================
+ *  PATCH /avanzadas/{client_id} — multipart/form-data (igual forma que POST).
+ *  Campo 'datos' = JSON string con el payload de la avanzada, SIN client_id
+ *  ni requerimientos (excluidos a propósito: los requerimientos son un
+ *  sub-recurso aparte, ver agregarRequerimientoAvanzada más abajo).
+ *  Archivos opcionales: foto_asistente_{i}, index-aligned con datos.asistentes.
+ *  Nota: a diferencia de POST, este endpoint NO acepta foto_equipo — el
+ *  contrato del backend para PATCH/PUT sólo agrega foto_asistente_{i}.
+ * ============================================================ */
+export type ActualizarAvanzadaDatos = Omit<CrearAvanzadaDatos, 'client_id' | 'requerimientos'>;
+
+export interface ActualizarAvanzadaFiles {
+  /** Index-aligned with datos.asistentes; a null entry means "no new photo for this row". */
+  fotosPorAsistente?: (File | null)[];
+}
+
+export async function actualizarAvanzada(
+  clientId: string,
+  datos: ActualizarAvanzadaDatos,
+  files: ActualizarAvanzadaFiles = {}
+): Promise<Avanzada> {
+  const formData = new FormData();
+  formData.append('datos', JSON.stringify(datos));
+
+  if (files.fotosPorAsistente) {
+    files.fotosPorAsistente.forEach((file, idx) => {
+      if (file) formData.append(`foto_asistente_${idx}`, file);
+    });
+  }
+
+  return uploadApiClient.patchForm<Avanzada>(`/avanzadas/${encodeURIComponent(clientId)}`, formData);
+}
+
+/* ============================================================
+ *  POST /avanzadas/{client_id}/requerimientos — multipart/form-data.
+ *  Campo 'datos' = JSON string con el requerimiento (sin fotos_urls).
+ *  Archivos repetibles: 'fotos' (máx. MAX_FOTOS_POR_REQUERIMIENTO).
+ * ============================================================ */
+export type RequerimientoAvanzadaDatos = Omit<RequerimientoAvanzada, 'fotos_urls'>;
+
+export async function agregarRequerimientoAvanzada(
+  clientId: string,
+  datos: RequerimientoAvanzadaDatos,
+  fotos: File[] = []
+): Promise<RequerimientoAvanzada> {
+  const formData = new FormData();
+  formData.append('datos', JSON.stringify(datos));
+
+  fotos.slice(0, MAX_FOTOS_POR_REQUERIMIENTO).forEach((file) => {
+    formData.append('fotos', file);
+  });
+
+  return uploadApiClient.postForm<RequerimientoAvanzada>(
+    `/avanzadas/${encodeURIComponent(clientId)}/requerimientos`,
+    formData
+  );
 }
 
 /* ============================================================

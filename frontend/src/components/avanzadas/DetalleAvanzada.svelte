@@ -1,14 +1,24 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { navigationStore } from "../../stores/navigationStore";
   import { avanzadasStore } from "../../stores/avanzadasStore";
-  import { descargarReporteAvanzadaPdf } from "../../api/avanzadas";
+  import { descargarReporteAvanzadaPdf, MAX_FOTOS_POR_REQUERIMIENTO } from "../../api/avanzadas";
   import { formatDate } from "../../lib/format-date";
   import { toDisplayableImageUrl, toOriginalUrl } from "../../lib/media-urls";
+  import { getCategoriasParaEntidad } from "../../data/avanzadas-catalogo";
   import type { RequerimientoAvanzada } from "../../types/avanzadas";
+  import Alert from "../ui/Alert.svelte";
   import Button from "../ui/Button.svelte";
   import Icon from "../ui/Icon.svelte";
+  import Input from "../ui/Input.svelte";
+  import Select from "../ui/Select.svelte";
+  import Textarea from "../ui/Textarea.svelte";
   import ViewHeader from "../ui/ViewHeader.svelte";
+
+  const OPCION_CATEGORIA_PERSONALIZADA = "__personalizada__";
+  /** Background refresh cadence while this view is mounted (see onMount): lets a
+   * user see requerimientos added by other users/devices without a manual refresh. */
+  const POLL_INTERVAL_MS = 40_000;
 
   $: params = $navigationStore.params;
   $: clientId = params.client_id || "";
@@ -17,8 +27,26 @@
   $: loading = $avanzadasStore.detalleLoading[clientId] ?? false;
   $: error = $avanzadasStore.detalleError[clientId] || null;
 
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
+
   onMount(() => {
     if (clientId) avanzadasStore.loadAvanzadaDetalle(clientId);
+    // Catalogos (dependencias/categorias) feed the "+ Agregar Requerimiento" form below.
+    avanzadasStore.loadCatalogos();
+    // Background polling: lets a user viewing this avanzada see
+    // requerimientos added by OTHER users/devices without needing to know
+    // to hit "Actualizar" manually. Silent so it never flips the full
+    // skeleton mid-view.
+    pollTimer = setInterval(() => {
+      if (clientId) avanzadasStore.loadAvanzadaDetalle(clientId, { silent: true });
+    }, POLL_INTERVAL_MS);
+  });
+
+  onDestroy(() => {
+    if (pollTimer) clearInterval(pollTimer);
+    // Revoke any preview blob URLs left over if the user navigates away
+    // while the "+ Agregar Requerimiento" form is still open.
+    nuevoFotos.forEach((f) => URL.revokeObjectURL(f.previewUrl));
   });
 
   function volver() {
@@ -27,6 +55,19 @@
 
   function reintentar() {
     avanzadasStore.loadAvanzadaDetalle(clientId);
+  }
+
+  /* ---- Actualizar (refresh manual, en segundo plano) ---- */
+  let actualizando = false;
+
+  async function actualizarManual() {
+    if (actualizando) return;
+    actualizando = true;
+    try {
+      await avanzadasStore.loadAvanzadaDetalle(clientId, { silent: true });
+    } finally {
+      actualizando = false;
+    }
   }
 
   /* ---- Crear PDF ---- */
@@ -96,6 +137,146 @@
 
   function toggleEntidad(entidad: string) {
     entidadesColapsadas = { ...entidadesColapsadas, [entidad]: isEntidadAbierta(entidad) };
+  }
+
+  /* ---- "+ Agregar Requerimiento" — formulario inline ---- */
+  let mostrarFormRequerimiento = false;
+  let guardandoRequerimiento = false;
+  let errorNuevoRequerimiento = "";
+
+  let nuevoEntidad = "";
+  let nuevoCategoria = "";
+  let nuevoUsandoCategoriaPersonalizada = false;
+  let nuevoCategoriaPersonalizadaTexto = "";
+  let nuevoRequerimientoTexto = "";
+  let nuevoUbicacion = "";
+  let nuevoCoordenadas = "";
+
+  /** Each entry owns ONE object URL, created once when the file is added and
+   * revoked when removed/cleared/unmounted — never re-created on every
+   * reactive re-render (that would leak a blob URL per render, see
+   * getFilePreviewUrl's removal below). Mirrors RegistrarAvanzada.svelte's
+   * asistente `fotoPreview` handling. */
+  interface NuevaFotoDraft {
+    file: File;
+    previewUrl: string;
+  }
+  let nuevoFotos: NuevaFotoDraft[] = [];
+
+  $: dependenciaOptions = $avanzadasStore.catalogos.dependencias.map((d) => ({ value: d, label: d }));
+
+  function categoriasParaNuevaEntidad(entidad: string): string[] {
+    return getCategoriasParaEntidad(entidad, $avanzadasStore.catalogos.categorias);
+  }
+
+  // Mirrors RegistrarAvanzada.svelte's categoriaOptions()/categoriaPlaceholder()
+  // pattern exactly (entidad -> categoría dependiente + opción "+ Agregar
+  // nueva categoría..." para categoría libre) — ver ese componente para el
+  // razonamiento completo.
+  function nuevaCategoriaOptions(entidad: string): { value: string; label: string }[] {
+    if (!entidad.trim()) return [];
+    return [
+      ...categoriasParaNuevaEntidad(entidad).map((cat) => ({ value: cat, label: cat })),
+      { value: OPCION_CATEGORIA_PERSONALIZADA, label: "+ Agregar nueva categoría..." },
+    ];
+  }
+
+  function nuevaCategoriaPlaceholder(entidad: string): string {
+    if (!entidad.trim()) return "-- Primero selecciona una entidad --";
+    return categoriasParaNuevaEntidad(entidad).length > 0
+      ? "-- Selecciona categoría --"
+      : "-- Sin categorías predefinidas --";
+  }
+
+  function handleNuevaEntidadChange() {
+    nuevoCategoria = "";
+    nuevoUsandoCategoriaPersonalizada = false;
+    nuevoCategoriaPersonalizadaTexto = "";
+  }
+
+  function handleNuevaCategoriaChange(event: Event) {
+    const value = (event.target as HTMLSelectElement).value;
+    if (value === OPCION_CATEGORIA_PERSONALIZADA) {
+      nuevoUsandoCategoriaPersonalizada = true;
+      nuevoCategoria = "";
+    } else {
+      nuevoUsandoCategoriaPersonalizada = false;
+      nuevoCategoria = value;
+    }
+  }
+
+  function handleNuevasFotos(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+    const nuevos = Array.from(input.files).map((file) => ({ file, previewUrl: URL.createObjectURL(file) }));
+    const combined = [...nuevoFotos, ...nuevos];
+    if (combined.length > MAX_FOTOS_POR_REQUERIMIENTO) {
+      errorNuevoRequerimiento = `Máximo ${MAX_FOTOS_POR_REQUERIMIENTO} fotos permitidas`;
+      nuevos.forEach((n) => URL.revokeObjectURL(n.previewUrl));
+      input.value = "";
+      return;
+    }
+    nuevoFotos = combined;
+    input.value = "";
+  }
+
+  function quitarNuevaFoto(idx: number) {
+    URL.revokeObjectURL(nuevoFotos[idx].previewUrl);
+    nuevoFotos = nuevoFotos.filter((_, i) => i !== idx);
+  }
+
+  function abrirFormRequerimiento() {
+    mostrarFormRequerimiento = true;
+  }
+
+  function cerrarFormRequerimiento() {
+    mostrarFormRequerimiento = false;
+    nuevoEntidad = "";
+    nuevoCategoria = "";
+    nuevoUsandoCategoriaPersonalizada = false;
+    nuevoCategoriaPersonalizadaTexto = "";
+    nuevoRequerimientoTexto = "";
+    nuevoUbicacion = "";
+    nuevoCoordenadas = "";
+    nuevoFotos.forEach((f) => URL.revokeObjectURL(f.previewUrl));
+    nuevoFotos = [];
+    errorNuevoRequerimiento = "";
+  }
+
+  async function guardarNuevoRequerimiento() {
+    errorNuevoRequerimiento = "";
+    if (!nuevoEntidad.trim()) {
+      errorNuevoRequerimiento = "La entidad es obligatoria.";
+      return;
+    }
+    if (!nuevoRequerimientoTexto.trim()) {
+      errorNuevoRequerimiento = "Describa el requerimiento.";
+      return;
+    }
+    if (!nuevoUbicacion.trim()) {
+      errorNuevoRequerimiento = "Indique la ubicación.";
+      return;
+    }
+
+    guardandoRequerimiento = true;
+    try {
+      const datos = {
+        entidad: nuevoEntidad.trim(),
+        categoria: nuevoUsandoCategoriaPersonalizada ? nuevoCategoriaPersonalizadaTexto.trim() : nuevoCategoria,
+        categoria_personalizada: nuevoUsandoCategoriaPersonalizada
+          ? nuevoCategoriaPersonalizadaTexto.trim() || null
+          : null,
+        requerimiento: nuevoRequerimientoTexto.trim(),
+        ubicacion: nuevoUbicacion.trim(),
+        coordenadas: nuevoCoordenadas.trim() || null,
+      };
+      await avanzadasStore.agregarRequerimiento(clientId, datos, nuevoFotos.map((f) => f.file));
+      cerrarFormRequerimiento();
+    } catch (err) {
+      errorNuevoRequerimiento = err instanceof Error ? err.message : "No se pudo agregar el requerimiento.";
+    } finally {
+      guardandoRequerimiento = false;
+    }
   }
 
   /* ---- Photos: displayable URL + broken-image fallback + lightbox ---- */
@@ -168,6 +349,15 @@
                 Ver informe ↗
               </a>
             {/if}
+            <button
+              type="button"
+              class="crear-pdf-btn"
+              on:click={actualizarManual}
+              disabled={actualizando}
+            >
+              <Icon name={actualizando ? "clock" : "refresh-cw"} size={14} />
+              {actualizando ? "Actualizando…" : "Actualizar"}
+            </button>
             <button
               type="button"
               class="crear-pdf-btn"
@@ -252,7 +442,113 @@
             <Icon name="clipboard-list" size={16} /> Requerimientos
             <span class="count-badge">{requerimientos.length}</span>
           </span>
+          {#if !mostrarFormRequerimiento}
+            <button type="button" class="agregar-req-btn" on:click={abrirFormRequerimiento}>
+              <Icon name="plus" size={14} /> Agregar Requerimiento
+            </button>
+          {/if}
         </div>
+
+        {#if mostrarFormRequerimiento}
+          <div class="nuevo-req-form">
+            {#if errorNuevoRequerimiento}
+              <Alert type="error" message={errorNuevoRequerimiento} />
+            {/if}
+
+            <Select
+              id="nuevo-req-entidad"
+              label="Entidad"
+              required
+              bind:value={nuevoEntidad}
+              options={dependenciaOptions}
+              placeholder="-- Selecciona una entidad --"
+              on:change={handleNuevaEntidadChange}
+            />
+
+            <div class="field">
+              <Select
+                id="nuevo-req-categoria"
+                label="Categoría"
+                disabled={!nuevoEntidad.trim()}
+                value={nuevoUsandoCategoriaPersonalizada ? OPCION_CATEGORIA_PERSONALIZADA : nuevoCategoria}
+                on:change={handleNuevaCategoriaChange}
+                placeholder={nuevaCategoriaPlaceholder(nuevoEntidad)}
+                options={nuevaCategoriaOptions(nuevoEntidad)}
+              />
+              {#if nuevoUsandoCategoriaPersonalizada}
+                <Input
+                  type="text"
+                  bind:value={nuevoCategoriaPersonalizadaTexto}
+                  placeholder="Escribe la nueva categoría..."
+                />
+              {/if}
+            </div>
+
+            <Textarea
+              id="nuevo-req-detalle"
+              label="Requerimiento"
+              required
+              bind:value={nuevoRequerimientoTexto}
+              rows={3}
+              placeholder="Descripción del requerimiento o hallazgo"
+            />
+
+            <div class="row-2col">
+              <Input
+                id="nuevo-req-ubicacion"
+                label="Ubicación"
+                required
+                bind:value={nuevoUbicacion}
+                placeholder="Ej: Cll 5 con Cra 23, Barrio San Fernando"
+              />
+              <Input
+                id="nuevo-req-coordenadas"
+                type="text"
+                label="Coordenadas GPS (lat, lng)"
+                bind:value={nuevoCoordenadas}
+                placeholder="lat, lng"
+              />
+            </div>
+
+            <div class="media-attachments">
+              <!-- svelte-ignore a11y-label-has-associated-control -->
+              <label class="field-label-subtle">
+                Evidencia fotográfica <small>(máx. {MAX_FOTOS_POR_REQUERIMIENTO})</small>
+              </label>
+              <div class="fotos-container">
+                {#each nuevoFotos as foto, fIdx (foto.previewUrl)}
+                  <div class="foto-thumb-edit">
+                    <img src={foto.previewUrl} alt={foto.file.name} />
+                    <button type="button" class="foto-del" aria-label="Eliminar foto" on:click={() => quitarNuevaFoto(fIdx)}>
+                      <Icon name="x" size={11} />
+                    </button>
+                  </div>
+                {/each}
+              </div>
+              <div class="media-actions">
+                <label class="media-btn">
+                  <Icon name="camera" size={16} />
+                  <span>Cámara</span>
+                  <input type="file" accept="image/*" capture="environment" on:change={handleNuevasFotos} hidden />
+                </label>
+                <label class="media-btn">
+                  <Icon name="image" size={16} />
+                  <span>Galería</span>
+                  <input type="file" accept="image/*" multiple on:change={handleNuevasFotos} hidden />
+                </label>
+              </div>
+            </div>
+
+            <div class="nuevo-req-actions">
+              <Button type="button" variant="secondary" on:click={cerrarFormRequerimiento} disabled={guardandoRequerimiento}>
+                Cancelar
+              </Button>
+              <Button type="button" on:click={guardarNuevoRequerimiento} loading={guardandoRequerimiento}>
+                Guardar requerimiento
+              </Button>
+            </div>
+          </div>
+        {/if}
 
         <div class="filters-row">
           <div class="filter-search">
@@ -624,6 +920,124 @@
   .asistente-meta {
     font-size: var(--fs-sm);
     color: var(--text-secondary);
+  }
+
+  /* "+ Agregar Requerimiento" inline form */
+  .agregar-req-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: var(--surface-alt);
+    color: var(--text-body);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 0.3rem 0.65rem;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .agregar-req-btn:hover {
+    border-color: var(--border-strong);
+    background: var(--surface);
+  }
+  .nuevo-req-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 0.85rem;
+    margin: 0.75rem 0;
+  }
+  .nuevo-req-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .field-label-subtle {
+    font-size: var(--fs-md);
+    font-weight: 600;
+    color: var(--text-body);
+  }
+  .field-label-subtle small {
+    font-weight: 400;
+    color: var(--text-muted);
+  }
+  .row-2col {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .row-2col > :global(.input-group) {
+    flex: 1;
+    min-width: 200px;
+  }
+  .media-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .media-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    color: var(--text-body);
+    font-size: var(--fs-base);
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .media-btn:hover {
+    background: var(--bg);
+    border-color: var(--text-muted);
+  }
+  .fotos-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.375rem;
+  }
+  .foto-thumb-edit {
+    position: relative;
+    width: 90px;
+    height: 90px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    border: 1.5px solid var(--border-strong);
+    flex-shrink: 0;
+  }
+  .foto-thumb-edit img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .foto-del {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 22px;
+    height: 22px;
+    background: var(--error);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   /* Filters */

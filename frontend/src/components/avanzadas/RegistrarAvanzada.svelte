@@ -4,7 +4,6 @@
   import { avanzadasStore } from "../../stores/avanzadasStore";
   import { getCurrentPosition, formatCoordinates, reverseGeocodeWithFallback } from "../../lib/geolocation";
   import { getCategoriasParaEntidad } from "../../data/avanzadas-catalogo";
-  import { getComunasCorregimientos, getBarriosVeredas, matchComuna, matchBarrio } from "../../data/cali-geopolitica";
   import Button from "../ui/Button.svelte";
   import Alert from "../ui/Alert.svelte";
   import Card from "../ui/Card.svelte";
@@ -14,9 +13,21 @@
   import Textarea from "../ui/Textarea.svelte";
   import ViewHeader from "../ui/ViewHeader.svelte";
   import LocationPicker from "../shared/LocationPicker.svelte";
+  import { lookupComunaBarrio } from "../../lib/geoLookup";
+  import type { Avanzada } from "../../types/avanzadas";
 
   const MAX_FOTOS_POR_REQUERIMIENTO = 5;
   const OPCION_CATEGORIA_PERSONALIZADA = "__personalizada__";
+
+  /* ============================================================
+   *  MODO EDICIÓN — presencia de client_id en los params de navegación
+   *  (mismo patrón que DetalleAvanzada.svelte). Cuando está presente, este
+   *  formulario deja de crear una avanzada nueva y pasa a precargar +
+   *  actualizar la avanzada existente vía PATCH.
+   * ============================================================ */
+  $: params = $navigationStore.params;
+  $: clientId = params.client_id || "";
+  $: modoEdicion = !!clientId;
 
   /* ============================================================
    *  SECCIÓN 1 — Datos de la Avanzada
@@ -33,44 +44,67 @@
   let longitud = "";
   let direccion = "";
 
-  // Tracks whether the user picked comuna/barrio themselves, so a later GPS
-  // reverse-geocode result never silently overrides their choice.
-  let comunaTocadaPorUsuario = false;
-  let barrioTocadaPorUsuario = false;
+  // "idle": no coordinates yet. "buscando": lookup in flight. "encontrado":
+  // both comuna and barrio resolved. "no-encontrado": coordinates outside
+  // every polygon (e.g. outside Cali). "error": the geojson couldn't be
+  // fetched (offline before first cache).
+  let geoLookupEstado: "idle" | "buscando" | "encontrado" | "no-encontrado" | "error" = "idle";
+  let geoLookupToken = 0;
 
-  $: comunasOptions = getComunasCorregimientos();
-  $: barriosOptions = comuna ? getBarriosVeredas(comuna) : [];
+  /** Edit mode only: the coordinates + comuna/barrio the avanzada already
+   * had when this screen opened (see prefillFormDesdeDetalle). Lets a
+   * geo-lookup failure fall back to these known-good values instead of
+   * blanking a comuna/barrio the backend already had confirmed -- but only
+   * while the pin hasn't actually moved from that original spot (see the
+   * catch branch in ejecutarGeoLookup). */
+  let coordsOriginalesEdicion: { lat: string; lng: string; comuna: string; barrio: string } | null = null;
 
-  function handleComunaChange() {
-    comunaTocadaPorUsuario = true;
-    barrioTocadaPorUsuario = false;
+  $: if (latitud && longitud) {
+    ejecutarGeoLookup(latitud, longitud);
+  } else {
+    comuna = "";
     barrio = "";
+    geoLookupEstado = "idle";
   }
 
-  function handleBarrioChange() {
-    barrioTocadaPorUsuario = true;
-  }
+  // A token guards against a slower earlier lookup overwriting a faster
+  // later one when the user moves the map marker again before the first
+  // request resolves.
+  async function ejecutarGeoLookup(latStr: string, lngStr: string) {
+    const lat = parseFloat(latStr);
+    const lng = parseFloat(lngStr);
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return;
 
-  /**
-   * LocationPicker resolves comuna/barrio in free text via reverse
-   * geocoding (see lib/geolocation.ts's reverseGeocodeWithFallback). We try
-   * to match that free text against our internal comuna/barrio catalog and
-   * pre-fill the dropdowns — but only while the user hasn't picked their own
-   * value, and only when a confident match exists. A failed/ambiguous match
-   * (or an offline geocode) simply leaves the dropdowns as they were; this
-   * never blocks the form.
-   */
-  function handleLocationChange(e: CustomEvent<{ comunaGeo?: string; barrioGeo?: string }>) {
-    const { comunaGeo, barrioGeo } = e.detail;
-    if (comunaTocadaPorUsuario) return;
-
-    const comunaEncontrada = matchComuna(comunaGeo);
-    if (!comunaEncontrada) return;
-    comuna = comunaEncontrada;
-
-    if (barrioTocadaPorUsuario) return;
-    const barrioEncontrado = matchBarrio(barrioGeo, comunaEncontrada);
-    if (barrioEncontrado) barrio = barrioEncontrado;
+    const token = ++geoLookupToken;
+    geoLookupEstado = "buscando";
+    try {
+      const resultado = await lookupComunaBarrio(lat, lng);
+      if (token !== geoLookupToken) return;
+      comuna = resultado.comuna || "";
+      barrio = resultado.barrio || "";
+      geoLookupEstado = resultado.comuna && resultado.barrio ? "encontrado" : "no-encontrado";
+    } catch {
+      if (token !== geoLookupToken) return;
+      // Edit mode + the pin is still exactly where the avanzada already had
+      // it: a network/cache failure here is just "couldn't reverify", not
+      // "location changed" -- fall back to the comuna/barrio the backend
+      // already had confirmed instead of blanking data that was correct
+      // before this screen even opened. Any other case (create mode, or
+      // the user actually moved the pin) keeps the original behaviour.
+      const esCoordOriginalDeEdicion =
+        coordsOriginalesEdicion !== null &&
+        latStr === coordsOriginalesEdicion.lat &&
+        lngStr === coordsOriginalesEdicion.lng;
+      if (esCoordOriginalDeEdicion) {
+        comuna = coordsOriginalesEdicion!.comuna;
+        barrio = coordsOriginalesEdicion!.barrio;
+        geoLookupEstado = comuna && barrio ? "encontrado" : "error";
+      } else {
+        comuna = "";
+        barrio = "";
+        geoLookupEstado = "error";
+      }
+    }
   }
 
   /* ============================================================
@@ -125,15 +159,59 @@
     organismo: string;
     celular: string;
     correo: string;
+    /** Edit mode only: existing photo URL to keep unless explicitly replaced/removed. */
+    fotoUrlExistente?: string | null;
+    /** Edit mode only: newly picked file pending upload on submit. */
+    fotoNueva?: File | null;
+    /** Object URL preview for fotoNueva. */
+    fotoPreview?: string | null;
+    /** Edit mode only: true when the user explicitly removed the existing photo without picking a new one. */
+    fotoEliminada?: boolean;
   }
+
+  function createEmptyAsistente(): AsistenteDraft {
+    return {
+      nombre: "",
+      organismo: "",
+      celular: "",
+      correo: "",
+      fotoUrlExistente: null,
+      fotoNueva: null,
+      fotoPreview: null,
+      fotoEliminada: false,
+    };
+  }
+
   let asistentes: AsistenteDraft[] = [];
 
   function agregarAsistente() {
-    asistentes = [...asistentes, { nombre: "", organismo: "", celular: "", correo: "" }];
+    asistentes = [...asistentes, createEmptyAsistente()];
   }
 
   function eliminarAsistente(idx: number) {
+    if (asistentes[idx]?.fotoPreview) URL.revokeObjectURL(asistentes[idx].fotoPreview!);
     asistentes = asistentes.filter((_, i) => i !== idx);
+  }
+
+  /* ---- Foto por asistente (sólo edición — ver punto 4 del plan) ---- */
+  function handleFotoAsistente(idx: number, event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+    const file = input.files[0];
+    if (asistentes[idx].fotoPreview) URL.revokeObjectURL(asistentes[idx].fotoPreview!);
+    asistentes[idx].fotoNueva = file;
+    asistentes[idx].fotoPreview = URL.createObjectURL(file);
+    asistentes[idx].fotoEliminada = false;
+    asistentes = [...asistentes];
+    input.value = "";
+  }
+
+  function quitarFotoAsistente(idx: number) {
+    if (asistentes[idx].fotoPreview) URL.revokeObjectURL(asistentes[idx].fotoPreview!);
+    asistentes[idx].fotoNueva = null;
+    asistentes[idx].fotoPreview = null;
+    asistentes[idx].fotoEliminada = true;
+    asistentes = [...asistentes];
   }
 
   /* ============================================================
@@ -360,7 +438,10 @@
       longitud,
       direccion,
       encargadosSeleccionados,
-      asistentes: asistentes.map((a) => ({ ...a })),
+      // Sólo los campos de texto: fotoNueva/fotoPreview no son serializables
+      // (File, blob: URL efímera) y fotoUrlExistente/fotoEliminada son
+      // exclusivos de modo edición, que nunca usa este autosave (ver onMount).
+      asistentes: asistentes.map((a) => ({ nombre: a.nombre, organismo: a.organismo, celular: a.celular, correo: a.correo })),
       requerimientos: requerimientos.map((r) => ({
         entidad: r.entidad,
         categoria: r.categoria,
@@ -429,19 +510,24 @@
       if (typeof d.usandoEstrategiaPersonalizada === "boolean") usandoEstrategiaPersonalizada = d.usandoEstrategiaPersonalizada;
       if (typeof d.estrategiaPersonalizada === "string") estrategiaPersonalizada = d.estrategiaPersonalizada;
       if (typeof d.sector === "string") sector = d.sector;
-      if (typeof d.comuna === "string" && d.comuna) {
-        comuna = d.comuna;
-        comunaTocadaPorUsuario = true;
-      }
-      if (typeof d.barrio === "string" && d.barrio) {
-        barrio = d.barrio;
-        barrioTocadaPorUsuario = true;
-      }
+      if (typeof d.comuna === "string" && d.comuna) comuna = d.comuna;
+      if (typeof d.barrio === "string" && d.barrio) barrio = d.barrio;
       if (typeof d.latitud === "string") latitud = d.latitud;
       if (typeof d.longitud === "string") longitud = d.longitud;
       if (typeof d.direccion === "string") direccion = d.direccion;
       if (Array.isArray(d.encargadosSeleccionados)) encargadosSeleccionados = d.encargadosSeleccionados;
-      if (Array.isArray(d.asistentes)) asistentes = d.asistentes;
+      if (Array.isArray(d.asistentes)) {
+        asistentes = d.asistentes.map((a) => ({
+          nombre: a.nombre || "",
+          organismo: a.organismo || "",
+          celular: a.celular || "",
+          correo: a.correo || "",
+          fotoUrlExistente: null,
+          fotoNueva: null,
+          fotoPreview: null,
+          fotoEliminada: false,
+        }));
+      }
       if (Array.isArray(d.requerimientos) && d.requerimientos.length > 0) {
         requerimientos = d.requerimientos.map((r) => ({
           entidad: r.entidad || "",
@@ -480,7 +566,12 @@
     encargadosSeleccionados;
     asistentes;
     requerimientos;
-    if (formularioListoParaAutosave) programarAutosave();
+    // Edit mode never autosaves a draft: it's editing an already-persisted
+    // record via loadAvanzadaDetalle()/prefillFormDesdeDetalle(), not
+    // capturing a new one — a "draft" concept doesn't apply there, and would
+    // otherwise fight with the prefill (or leak between avanzadas via the
+    // shared DRAFT_KEY, since it isn't scoped by client_id).
+    if (formularioListoParaAutosave && !modoEdicion) programarAutosave();
   }
 
   // Guards the very first reactive run (component init, before onMount has
@@ -520,14 +611,75 @@
   let submitting = false;
   let showConfirm = false;
 
+  /* ============================================================
+   *  MODO EDICIÓN — carga y precarga
+   * ============================================================ */
+  // Guards prefillFormDesdeDetalle() to run exactly once per mount: the
+  // detalle for clientId can be re-fetched later (e.g. a future manual
+  // reload) and re-running the prefill then would clobber whatever the user
+  // has since typed.
+  let prefillHecho = false;
+
+  $: detalleEdicion = modoEdicion ? $avanzadasStore.detalle[clientId] : null;
+  $: detalleEdicionCargando = modoEdicion && ($avanzadasStore.detalleLoading[clientId] ?? false) && !prefillHecho;
+  $: detalleEdicionError = modoEdicion ? $avanzadasStore.detalleError[clientId] || null : null;
+
+  $: if (modoEdicion && detalleEdicion && !prefillHecho) {
+    prefillFormDesdeDetalle(detalleEdicion);
+    prefillHecho = true;
+  }
+
+  function prefillFormDesdeDetalle(d: Avanzada) {
+    nombreAvanzada = d.nombre_avanzada;
+    fecha = d.fecha;
+    if ($avanzadasStore.catalogos.estrategias.includes(d.estrategia)) {
+      estrategia = d.estrategia;
+      usandoEstrategiaPersonalizada = false;
+    } else {
+      usandoEstrategiaPersonalizada = true;
+      estrategiaPersonalizada = d.estrategia;
+    }
+    sector = d.sector || "";
+    direccion = d.direccion || "";
+    const partesCoords = (d.coordenadas || "").split(",").map((p) => p.trim());
+    latitud = partesCoords[0] || "";
+    longitud = partesCoords[1] || "";
+    // comuna/barrio: se setean aquí como valor inicial, pero el efecto de
+    // geo-lookup (más arriba) los recalcula apenas latitud/longitud cambian
+    // — igual que al mover el marcador en el mapa, es la fuente de verdad.
+    // Si ese lookup falla (sin red/caché) y el pin sigue en este mismo punto,
+    // vuelve a caer acá (ver coordsOriginalesEdicion) en vez de quedar vacío.
+    comuna = d.comuna || "";
+    barrio = d.barrio || "";
+    coordsOriginalesEdicion = { lat: latitud, lng: longitud, comuna, barrio };
+    encargadosSeleccionados = [...(d.encargados || [])];
+    asistentes = (d.asistentes || []).map((a) => ({
+      nombre: a.nombre,
+      organismo: a.organismo,
+      celular: a.celular,
+      correo: a.correo,
+      fotoUrlExistente: a.foto_url ?? null,
+      fotoNueva: null,
+      fotoPreview: null,
+      fotoEliminada: false,
+    }));
+  }
+
   onMount(() => {
     avanzadasStore.loadCatalogos();
-    restaurarDraft();
+    if (modoEdicion) {
+      avanzadasStore.loadAvanzadaDetalle(clientId);
+    } else {
+      restaurarDraft();
+    }
     formularioListoParaAutosave = true;
   });
 
   onDestroy(() => {
     if (fotoEquipoPreview) URL.revokeObjectURL(fotoEquipoPreview);
+    asistentes.forEach((a) => {
+      if (a.fotoPreview) URL.revokeObjectURL(a.fotoPreview);
+    });
     if (draftTimer) clearTimeout(draftTimer);
   });
 
@@ -538,19 +690,25 @@
   /** Collects every validation error at once instead of stopping at the first. */
   function validar(): FormErrors {
     const errs: FormErrors = {
-      requerimientos: requerimientos.map(() => ({})),
+      // Requerimientos section doesn't exist in edit mode (see markup: the
+      // backend's PATCH/PUT deliberately excludes requerimientos, they're a
+      // separate sub-resource) — so there's nothing to validate there.
+      requerimientos: modoEdicion ? [] : requerimientos.map(() => ({})),
       asistentes: asistentes.map(() => ({})),
     };
 
     if (!nombreAvanzada.trim()) errs.nombreAvanzada = "Ingrese el nombre de la avanzada.";
     if (!fecha) errs.fecha = "Seleccione la fecha de la avanzada.";
     if (!estrategiaFinal()) errs.estrategia = "Seleccione o ingrese la estrategia.";
-    if (!comuna) errs.comuna = "Seleccione la comuna.";
-    if (!barrio) errs.barrio = "Seleccione el barrio.";
     if (!latitud || !longitud) {
       errs.ubicacion = "Defina la ubicación (espere al GPS o ajústela en el mapa).";
     } else if (!direccion.trim()) {
       errs.ubicacion = "La dirección es obligatoria";
+    } else if (geoLookupEstado === "buscando") {
+      errs.ubicacion = "Espere a que se determinen la comuna y el barrio para estas coordenadas.";
+    } else {
+      if (!comuna) errs.comuna = "No se pudo determinar la comuna para estas coordenadas. Verifique la ubicación en el mapa.";
+      if (!barrio) errs.barrio = "No se pudo determinar el barrio para estas coordenadas. Verifique la ubicación en el mapa.";
     }
     if (encargadosSeleccionados.length === 0) {
       errs.encargados = "Seleccione al menos un encargado de la avanzada.";
@@ -565,13 +723,15 @@
       if (!a.nombre.trim()) errs.asistentes[i] = { nombre: "El nombre es obligatorio." };
     });
 
-    requerimientos.forEach((r, i) => {
-      const rerr: RequerimientoErrors = {};
-      if (!r.entidad.trim()) rerr.entidad = `Requerimiento #${i + 1}: la entidad es obligatoria.`;
-      if (!r.requerimiento.trim()) rerr.requerimiento = `Requerimiento #${i + 1}: describa el requerimiento.`;
-      if (!r.ubicacion.trim()) rerr.ubicacion = `Requerimiento #${i + 1}: indique la ubicación.`;
-      errs.requerimientos[i] = rerr;
-    });
+    if (!modoEdicion) {
+      requerimientos.forEach((r, i) => {
+        const rerr: RequerimientoErrors = {};
+        if (!r.entidad.trim()) rerr.entidad = `Requerimiento #${i + 1}: la entidad es obligatoria.`;
+        if (!r.requerimiento.trim()) rerr.requerimiento = `Requerimiento #${i + 1}: describa el requerimiento.`;
+        if (!r.ubicacion.trim()) rerr.ubicacion = `Requerimiento #${i + 1}: indique la ubicación.`;
+        errs.requerimientos[i] = rerr;
+      });
+    }
 
     return errs;
   }
@@ -633,8 +793,8 @@
     latitud = "";
     longitud = "";
     direccion = "";
-    comunaTocadaPorUsuario = false;
-    barrioTocadaPorUsuario = false;
+    geoLookupEstado = "idle";
+    geoLookupToken++;
     encargadosSeleccionados = [];
     encargadoNuevo = "";
     quitarFotoEquipo();
@@ -653,7 +813,7 @@
     offlineMsg = "";
 
     try {
-      const datos = {
+      const datosBase = {
         nombre_avanzada: nombreAvanzada.trim(),
         fecha,
         estrategia: estrategiaFinal(),
@@ -663,7 +823,40 @@
         direccion: direccion.trim(),
         coordenadas: `${latitud}, ${longitud}`,
         encargados: encargadosSeleccionados,
-        asistentes: asistentes.map((a) => ({ ...a })),
+      };
+
+      if (modoEdicion) {
+        const datos = {
+          ...datosBase,
+          asistentes: asistentes.map((a) => ({
+            nombre: a.nombre,
+            organismo: a.organismo,
+            celular: a.celular,
+            correo: a.correo,
+            // A new file makes the existing foto_url moot (the server
+            // replaces it from the upload); only send foto_url when we're
+            // NOT uploading a replacement, to keep/clear the existing one.
+            ...(a.fotoNueva ? {} : { foto_url: a.fotoEliminada ? null : (a.fotoUrlExistente ?? null) }),
+          })),
+        };
+        const files = {
+          fotosPorAsistente: asistentes.map((a) => a.fotoNueva ?? null),
+        };
+
+        await avanzadasStore.actualizarAvanzada(clientId, datos, files);
+        successMsg = "Avanzada actualizada correctamente.";
+        navigationStore.navigate("detalle-avanzada", { client_id: clientId });
+        return;
+      }
+
+      const datos = {
+        ...datosBase,
+        asistentes: asistentes.map((a) => ({
+          nombre: a.nombre,
+          organismo: a.organismo,
+          celular: a.celular,
+          correo: a.correo,
+        })),
         requerimientos: requerimientos.map((r) => ({
           entidad: r.entidad.trim(),
           categoria: r.usandoCategoriaPersonalizada
@@ -695,7 +888,8 @@
         offlineMsg = "";
       }, 6000);
     } catch (err) {
-      errorMsg = err instanceof Error ? err.message : "Error al registrar la avanzada.";
+      errorMsg =
+        err instanceof Error ? err.message : modoEdicion ? "Error al actualizar la avanzada." : "Error al registrar la avanzada.";
       console.error("confirmarGuardado error:", err);
     } finally {
       submitting = false;
@@ -704,7 +898,14 @@
 </script>
 
 <div class="view">
-  <ViewHeader title="Registrar Avanzada" icon="flag" onBack={() => navigationStore.navigate("avanzadas")} />
+  <ViewHeader
+    title={modoEdicion ? "Editar Avanzada" : "Registrar Avanzada"}
+    icon="flag"
+    onBack={() =>
+      modoEdicion
+        ? navigationStore.navigate("detalle-avanzada", { client_id: clientId })
+        : navigationStore.navigate("avanzadas")}
+  />
 
   <main class="view-body container">
     {#if successMsg}
@@ -720,6 +921,16 @@
       <Alert type="info" message="Se restauró un borrador guardado automáticamente." />
     {/if}
 
+    {#if detalleEdicionCargando}
+      <p class="loading-hint">Cargando avanzada…</p>
+    {:else if detalleEdicionError}
+      <Alert type="error" message={detalleEdicionError} />
+      <div class="submit-row">
+        <Button type="button" variant="secondary" on:click={() => avanzadasStore.loadAvanzadaDetalle(clientId)}>
+          Reintentar
+        </Button>
+      </div>
+    {:else}
     <!-- ============ SECCIÓN 1: Datos de la Avanzada ============ -->
     <Card padding="lg">
       <button type="button" class="section-header" on:click={() => toggleSeccion("datos")}>
@@ -769,31 +980,27 @@
 
           <Input id="av-sector" label="Sector" bind:value={sector} placeholder="Referencia del sector (opcional)" />
 
+          <LocationPicker bind:latitud bind:longitud bind:direccion error={errors.ubicacion} />
+
           <div class="form-grid-2">
-            <Select
+            <Input
               id="av-comuna"
               label="Comuna"
-              required
-              bind:value={comuna}
-              on:change={handleComunaChange}
-              options={comunasOptions}
+              disabled
+              value={geoLookupEstado === "buscando" ? "Determinando…" : comuna}
+              placeholder="Se determina automáticamente según la ubicación"
               error={errors.comuna}
             />
 
-            <Select
+            <Input
               id="av-barrio"
               label="Barrio"
-              required
-              bind:value={barrio}
-              on:change={handleBarrioChange}
-              disabled={!comuna}
-              options={barriosOptions}
-              placeholder={comuna ? "-- Seleccione --" : "Seleccione una comuna primero"}
+              disabled
+              value={geoLookupEstado === "buscando" ? "Determinando…" : barrio}
+              placeholder="Se determina automáticamente según la ubicación"
               error={errors.barrio}
             />
           </div>
-
-          <LocationPicker bind:latitud bind:longitud bind:direccion on:change={handleLocationChange} error={errors.ubicacion} />
         </div>
       {/if}
     </Card>
@@ -855,6 +1062,10 @@
             </div>
           {/each}
 
+          {#if !modoEdicion}
+          <!-- El contrato de PATCH/PUT no acepta foto_equipo (sólo
+               foto_asistente_{i}) — este control queda oculto en edición
+               para no ofrecer una acción que no se enviaría al backend. -->
           <div class="field foto-equipo-field">
             <!-- svelte-ignore a11y-label-has-associated-control -->
             <label class="field-label-subtle">Foto del equipo <small>(opcional)</small></label>
@@ -880,6 +1091,7 @@
               </div>
             {/if}
           </div>
+          {/if}
         </div>
       {/if}
     </Card>
@@ -941,6 +1153,47 @@
                   placeholder="correo@ejemplo.com"
                 />
               </div>
+
+              {#if modoEdicion}
+                <div class="field foto-equipo-field">
+                  <!-- svelte-ignore a11y-label-has-associated-control -->
+                  <label class="field-label-subtle">Foto <small>(opcional)</small></label>
+                  {#if asistente.fotoPreview}
+                    <div class="foto-equipo-preview">
+                      <img src={asistente.fotoPreview} alt={asistente.nombre || "Asistente"} />
+                      <button type="button" class="foto-remove-btn" on:click={() => quitarFotoAsistente(idx)}>
+                        <Icon name="x" size={12} />
+                      </button>
+                    </div>
+                  {:else if asistente.fotoUrlExistente && !asistente.fotoEliminada}
+                    <div class="foto-equipo-preview">
+                      <img src={asistente.fotoUrlExistente} alt={asistente.nombre || "Asistente"} />
+                      <button type="button" class="foto-remove-btn" on:click={() => quitarFotoAsistente(idx)}>
+                        <Icon name="x" size={12} />
+                      </button>
+                    </div>
+                  {:else}
+                    <div class="media-actions">
+                      <label class="media-btn">
+                        <Icon name="camera" size={16} />
+                        <span>Cámara</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          on:change={(e) => handleFotoAsistente(idx, e)}
+                          hidden
+                        />
+                      </label>
+                      <label class="media-btn">
+                        <Icon name="image" size={16} />
+                        <span>Galería</span>
+                        <input type="file" accept="image/*" on:change={(e) => handleFotoAsistente(idx, e)} hidden />
+                      </label>
+                    </div>
+                  {/if}
+                </div>
+              {/if}
             </div>
           {/each}
 
@@ -952,6 +1205,10 @@
     </Card>
 
     <!-- ============ SECCIÓN 4: Requerimientos ============ -->
+    <!-- Oculta en modo edición: el backend excluye requerimientos de
+         PATCH/PUT a propósito (son un sub-recurso aparte, ver
+         DetalleAvanzada.svelte "+ Agregar Requerimiento"). -->
+    {#if !modoEdicion}
     <Card padding="lg">
       <button type="button" class="section-header" on:click={() => toggleSeccion("requerimientos")}>
         <span class="section-title">
@@ -1033,7 +1290,7 @@
 
                 <div class="field">
                   <!-- svelte-ignore a11y-label-has-associated-control -->
-                  <label class="field-label-subtle" for="req-coords-{idx}">Coordenadas GPS</label>
+                  <label class="field-label-subtle" for="req-coords-{idx}">Coordenadas GPS (lat, lng)</label>
                   <div class="gps-row">
                     <Input
                       id="req-coords-{idx}"
@@ -1109,12 +1366,14 @@
         </div>
       {/if}
     </Card>
+    {/if}
 
     <div class="submit-row">
       <Button type="button" on:click={abrirConfirmacion} loading={submitting}>
-        Guardar Avanzada
+        {modoEdicion ? "Guardar cambios" : "Guardar Avanzada"}
       </Button>
     </div>
+    {/if}
   </main>
 
   <datalist id="dependencias-list">
@@ -1128,10 +1387,16 @@
   <div class="modal-backdrop" role="presentation" on:click={cancelarConfirmacion}>
     <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-noninteractive-element-interactions -->
     <div class="modal" role="dialog" aria-modal="true" on:click|stopPropagation>
-      <h3 class="modal-title"><Icon name="check-circle" size={18} /> Confirmar registro</h3>
+      <h3 class="modal-title">
+        <Icon name="check-circle" size={18} /> {modoEdicion ? "Confirmar actualización" : "Confirmar registro"}
+      </h3>
       <p class="modal-text">
-        Se registrará la avanzada <strong>{nombreAvanzada}</strong> con
-        <strong>{requerimientos.length}</strong> requerimiento{requerimientos.length !== 1 ? "s" : ""}.
+        {#if modoEdicion}
+          Se actualizará la avanzada <strong>{nombreAvanzada}</strong>.
+        {:else}
+          Se registrará la avanzada <strong>{nombreAvanzada}</strong> con
+          <strong>{requerimientos.length}</strong> requerimiento{requerimientos.length !== 1 ? "s" : ""}.
+        {/if}
       </p>
       <ul class="modal-summary">
         <li><strong>Fecha:</strong> {fecha}</li>
@@ -1161,6 +1426,13 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+  }
+
+  .loading-hint {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--text-secondary);
+    font-size: var(--fs-md);
   }
 
   /* Collapsible section header */

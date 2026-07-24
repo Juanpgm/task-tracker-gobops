@@ -21,5 +21,8 @@ export const viewComponents: Record<AppView, ComponentType> = {
   kanban: KanbanRequerimientos,
   avanzadas: ListaAvanzadas,
   'detalle-avanzada': DetalleAvanzada,
+  // Mismo componente que 'programar-avanzada': RegistrarAvanzada.svelte
+  // pasa a modo edición cuando la navegación trae params.client_id.
+  'editar-avanzada': RegistrarAvanzada,
   reportes: Reportes,
 };

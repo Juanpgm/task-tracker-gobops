@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import "@testing-library/jest-dom/vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/svelte";
+import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/svelte";
 
 const avanzadasStoreState = vi.hoisted(() => {
   function createMockStore(initial: any) {
@@ -44,6 +44,8 @@ const avanzadasStoreState = vi.hoisted(() => {
       detalleError: {} as Record<string, string | null>,
     }),
     loadAvanzadaDetalle: vi.fn(),
+    loadCatalogos: vi.fn(),
+    agregarRequerimiento: vi.fn(),
   };
 });
 
@@ -73,6 +75,8 @@ vi.mock("../../stores/avanzadasStore", () => ({
   avanzadasStore: {
     subscribe: avanzadasStoreState.store.subscribe,
     loadAvanzadaDetalle: avanzadasStoreState.loadAvanzadaDetalle,
+    loadCatalogos: avanzadasStoreState.loadCatalogos,
+    agregarRequerimiento: avanzadasStoreState.agregarRequerimiento,
   },
 }));
 
@@ -89,6 +93,7 @@ const avanzadasApiMocks = vi.hoisted(() => ({
 
 vi.mock("../../api/avanzadas", () => ({
   descargarReporteAvanzadaPdf: avanzadasApiMocks.descargarReporteAvanzadaPdf,
+  MAX_FOTOS_POR_REQUERIMIENTO: 5,
 }));
 
 import DetalleAvanzada from "./DetalleAvanzada.svelte";
@@ -254,6 +259,123 @@ describe("DetalleAvanzada", () => {
       await fireEvent.click(screen.getByRole("button", { name: /crear pdf/i }));
 
       expect(await screen.findByText(/no se pudo generar el pdf/i)).toBeInTheDocument();
+    });
+  });
+
+  describe("actualizar (manual refresh) + background polling", () => {
+    it("'Actualizar' triggers a silent background refresh (no full skeleton)", async () => {
+      setStoreState({ detalle: { "client-1": detalle() } });
+      render(DetalleAvanzada);
+      avanzadasStoreState.loadAvanzadaDetalle.mockClear();
+
+      await fireEvent.click(screen.getByRole("button", { name: /^actualizar$/i }));
+
+      expect(avanzadasStoreState.loadAvanzadaDetalle).toHaveBeenCalledWith("client-1", { silent: true });
+    });
+
+    it("polls loadAvanzadaDetalle silently every ~40s while mounted", () => {
+      vi.useFakeTimers();
+      try {
+        setStoreState({ detalle: { "client-1": detalle() } });
+        render(DetalleAvanzada);
+        avanzadasStoreState.loadAvanzadaDetalle.mockClear();
+
+        vi.advanceTimersByTime(40_000);
+
+        expect(avanzadasStoreState.loadAvanzadaDetalle).toHaveBeenCalledWith("client-1", { silent: true });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("stops polling once the component unmounts", () => {
+      vi.useFakeTimers();
+      try {
+        setStoreState({ detalle: { "client-1": detalle() } });
+        const { unmount } = render(DetalleAvanzada);
+        unmount();
+        avanzadasStoreState.loadAvanzadaDetalle.mockClear();
+
+        vi.advanceTimersByTime(120_000);
+
+        expect(avanzadasStoreState.loadAvanzadaDetalle).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe("'+ Agregar Requerimiento' inline form", () => {
+    beforeEach(() => {
+      avanzadasStoreState.store.set({
+        ...avanzadasStoreState.store.get(),
+        catalogos: {
+          estrategias: [],
+          equipo: [],
+          dependencias: ["DAGMA - Departamento Administrativo de Gestión del Medio Ambiente"],
+          categorias: { DAGMA: ["Poda de árboles (autorización)", "Otro — DAGMA"] },
+        },
+      });
+    });
+
+    it("reveals the inline form and hides the trigger button", async () => {
+      setStoreState({ detalle: { "client-1": detalle() } });
+      render(DetalleAvanzada);
+
+      await fireEvent.click(screen.getByRole("button", { name: /agregar requerimiento/i }));
+
+      expect(screen.getByLabelText(/^Entidad/)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /agregar requerimiento/i })).not.toBeInTheDocument();
+    });
+
+    it("'Cancelar' closes the form without calling agregarRequerimiento", async () => {
+      setStoreState({ detalle: { "client-1": detalle() } });
+      render(DetalleAvanzada);
+      await fireEvent.click(screen.getByRole("button", { name: /agregar requerimiento/i }));
+
+      await fireEvent.click(screen.getByText("Cancelar"));
+
+      expect(screen.queryByLabelText(/^Entidad/)).not.toBeInTheDocument();
+      expect(avanzadasStoreState.agregarRequerimiento).not.toHaveBeenCalled();
+    });
+
+    it("shows a validation error and doesn't call agregarRequerimiento when required fields are missing", async () => {
+      setStoreState({ detalle: { "client-1": detalle() } });
+      render(DetalleAvanzada);
+
+      await fireEvent.click(screen.getByRole("button", { name: /agregar requerimiento/i }));
+      await fireEvent.click(screen.getByText("Guardar requerimiento"));
+
+      expect(screen.getByText("La entidad es obligatoria.")).toBeInTheDocument();
+      expect(avanzadasStoreState.agregarRequerimiento).not.toHaveBeenCalled();
+    });
+
+    it("submits via avanzadasStore.agregarRequerimiento and closes the form on success", async () => {
+      setStoreState({ detalle: { "client-1": detalle() } });
+      avanzadasStoreState.agregarRequerimiento.mockResolvedValue(
+        requerimiento({ entidad: "DAGMA - Departamento Administrativo de Gestión del Medio Ambiente", requerimiento: "Árbol caído" })
+      );
+      render(DetalleAvanzada);
+
+      await fireEvent.click(screen.getByRole("button", { name: /agregar requerimiento/i }));
+      await fireEvent.change(screen.getByLabelText(/^Entidad/), {
+        target: { value: "DAGMA - Departamento Administrativo de Gestión del Medio Ambiente" },
+      });
+      await fireEvent.input(screen.getByLabelText(/^Requerimiento/), { target: { value: "Árbol caído" } });
+      await fireEvent.input(screen.getByLabelText(/^Ubicación/), { target: { value: "Frente al parque" } });
+
+      await fireEvent.click(screen.getByText("Guardar requerimiento"));
+
+      expect(avanzadasStoreState.agregarRequerimiento).toHaveBeenCalledTimes(1);
+      const [calledClientId, datos] = avanzadasStoreState.agregarRequerimiento.mock.calls[0];
+      expect(calledClientId).toBe("client-1");
+      expect(datos.entidad).toBe("DAGMA - Departamento Administrativo de Gestión del Medio Ambiente");
+      expect(datos.requerimiento).toBe("Árbol caído");
+      expect(datos.ubicacion).toBe("Frente al parque");
+
+      await waitFor(() => {
+        expect(screen.queryByLabelText(/^Entidad/)).not.toBeInTheDocument();
+      });
     });
   });
 

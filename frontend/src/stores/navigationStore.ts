@@ -7,6 +7,10 @@ export type AppView =
   // Avanzadas — captura simple de una sola pantalla (offline-first)
   | 'avanzadas'
   | 'detalle-avanzada'
+  // Edita una avanzada ya creada — mismo componente que 'programar-avanzada'
+  // (RegistrarAvanzada.svelte detecta el modo por la presencia de
+  // params.client_id), ver viewRegistry.ts.
+  | 'editar-avanzada'
   | 'reportes';
 
 /**
@@ -21,6 +25,7 @@ export const ALL_APP_VIEWS: readonly AppView[] = [
   'kanban',
   'avanzadas',
   'detalle-avanzada',
+  'editar-avanzada',
   'reportes',
 ];
 

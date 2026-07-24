@@ -10,6 +10,8 @@ export interface AsistenteAvanzada {
   organismo: string;
   celular: string;
   correo: string;
+  /** URL de la foto del asistente (existente a conservar), u omitida/null si no tiene. */
+  foto_url?: string | null;
 }
 
 /** Requerimiento levantado durante la avanzada, asignado a una entidad/categoría */
