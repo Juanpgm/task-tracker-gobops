@@ -22,6 +22,8 @@ export interface RequerimientoGeo {
   avanzada_client_id: string;
   sigla: string;
   entidad: string;
+  /** Todos los organismos asignados; `entidad` es solo el primero (compat). */
+  entidades?: string[];
   categoria: string;
   requerimiento: string;
   ubicacion: string;

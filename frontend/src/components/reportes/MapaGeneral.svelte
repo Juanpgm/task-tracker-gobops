@@ -65,7 +65,12 @@
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
   }
 
-  $: entidadOptions = uniqueSorted((data?.requerimientos ?? []).map((r) => r.entidad));
+  /** Todos los organismos de un requerimiento geo; fallback al legado `entidad` único. */
+  function organismosDeGeo(r: RequerimientoGeo): string[] {
+    return r.entidades?.length ? r.entidades : r.entidad ? [r.entidad] : [];
+  }
+
+  $: entidadOptions = uniqueSorted((data?.requerimientos ?? []).flatMap((r) => organismosDeGeo(r)));
   $: estrategiaOptions = uniqueSorted((data?.avanzadas ?? []).map((a) => a.estrategia));
   $: comunaOptions = uniqueSorted([
     ...(data?.avanzadas ?? []).map((a) => a.comuna),
@@ -90,7 +95,7 @@
   };
 
   $: filteredRequerimientos = (data?.requerimientos ?? []).filter((r) => {
-    if (filtroEntidad && r.entidad !== filtroEntidad) return false;
+    if (filtroEntidad && !organismosDeGeo(r).includes(filtroEntidad)) return false;
     const padre = avanzadaById.get(r.avanzada_client_id);
     if (filtroEstrategia && padre?.estrategia !== filtroEstrategia) return false;
     if (filtroComuna && padre?.comuna !== filtroComuna) return false;
@@ -143,7 +148,7 @@
           key: `rq-${r.id}`,
           layer: 'Requerimiento' as const,
           nombre: r.requerimiento,
-          entidad: r.entidad,
+          entidad: organismosDeGeo(r).join(', '),
           comuna: avanzadaById.get(r.avanzada_client_id)?.comuna ?? '—',
           fecha: r.fecha,
           lat: r.lat,
@@ -210,7 +215,9 @@
 
   function buildPopupRequerimiento(r: RequerimientoGeo): HTMLElement {
     const wrap = domEl('div', { className: 'mg-popup' });
-    wrap.appendChild(domEl('p', { className: 'mg-popup-title', text: r.entidad || 'Sin entidad' }));
+    wrap.appendChild(
+      domEl('p', { className: 'mg-popup-title', text: organismosDeGeo(r).join(', ') || 'Sin entidad' })
+    );
     wrap.appendChild(domEl('p', { className: 'mg-popup-row', text: `Categoría: ${r.categoria || '—'}` }));
     wrap.appendChild(domEl('p', { className: 'mg-popup-desc', text: r.requerimiento || 'Sin descripción' }));
     wrap.appendChild(domEl('p', { className: 'mg-popup-row', text: `Ubicación: ${r.ubicacion || '—'}` }));
