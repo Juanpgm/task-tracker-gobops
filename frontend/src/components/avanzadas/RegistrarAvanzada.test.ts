@@ -384,7 +384,7 @@ describe("RegistrarAvanzada", () => {
       expect(optionTexts).toContain("Otro — DAGMA");
     });
 
-    it("resets the previously chosen categoria when the organismos change again", async () => {
+    it("keeps a still-valid categoria when adding another organismo (union, not just the primary)", async () => {
       render(RegistrarAvanzada);
       await openSection("Requerimientos");
 
@@ -394,9 +394,28 @@ describe("RegistrarAvanzada", () => {
       await fireEvent.change(categoriaSelect, { target: { value: "Otro — DAGMA" } });
       expect(categoriaSelect.value).toBe("Otro — DAGMA");
 
-      // Adding another organismo fires the change handler, which clears the
-      // now-possibly-stale categoria.
+      // UAESP's categories don't include "Otro — DAGMA", but DAGMA is still
+      // selected too, so it's still in the union — must not be cleared.
       await selectOrganismo(UAESP);
+
+      expect(categoriaSelect.value).toBe("Otro — DAGMA");
+      // And UAESP's own categories are now offered alongside DAGMA's.
+      const optionTexts = Array.from(categoriaSelect.options).map((o) => o.textContent);
+      expect(optionTexts).toContain("Otro — UAESP");
+    });
+
+    it("clears the categoria once removing an organismo drops it out of the union", async () => {
+      render(RegistrarAvanzada);
+      await openSection("Requerimientos");
+
+      await selectOrganismo(DAGMA);
+      const categoriaSelect = screen.getByLabelText(/^Categoría/) as HTMLSelectElement;
+      await fireEvent.change(categoriaSelect, { target: { value: "Otro — DAGMA" } });
+      expect(categoriaSelect.value).toBe("Otro — DAGMA");
+
+      // Deselect DAGMA (the only organismo whose categories include "Otro — DAGMA").
+      const container = organismoContainer(0);
+      await fireEvent.click(within(container).getByLabelText(`Quitar ${DAGMA}`));
 
       expect(categoriaSelect.value).toBe("");
     });
@@ -426,6 +445,35 @@ describe("RegistrarAvanzada", () => {
       await fireEvent.change(categoriaSelect, { target: { value: "__personalizada__" } });
 
       expect(screen.getByPlaceholderText("Escribe la nueva categoría...")).toBeInTheDocument();
+    });
+  });
+
+  describe("organismo -> agregar nuevo", () => {
+    it("offers a '+ Agregar' option when the search matches no catalog entry, and selecting it adds the typed text", async () => {
+      render(RegistrarAvanzada);
+      await openSection("Requerimientos");
+
+      const container = organismoContainer(0);
+      const input = container.querySelector(".ms-input") as HTMLInputElement;
+      await fireEvent.focus(input);
+      await fireEvent.input(input, { target: { value: "Organismo Inventado" } });
+
+      const crearBtn = within(container).getByText('+ Agregar "Organismo Inventado" como nuevo organismo');
+      await fireEvent.click(crearBtn);
+
+      expect(within(container).getByText("Organismo Inventado", { selector: ".chip" })).toBeInTheDocument();
+    });
+
+    it("does not offer '+ Agregar' when the search exactly matches an existing catalog entry", async () => {
+      render(RegistrarAvanzada);
+      await openSection("Requerimientos");
+
+      const container = organismoContainer(0);
+      const input = container.querySelector(".ms-input") as HTMLInputElement;
+      await fireEvent.focus(input);
+      await fireEvent.input(input, { target: { value: DAGMA } });
+
+      expect(within(container).queryByText(/\+ Agregar ".*" como nuevo organismo/)).not.toBeInTheDocument();
     });
   });
 

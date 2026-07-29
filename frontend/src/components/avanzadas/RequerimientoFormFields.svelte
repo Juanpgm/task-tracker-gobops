@@ -32,35 +32,43 @@
 
   const dispatch = createEventDispatcher();
 
-  function categoriasPara(entidad: string): string[] {
-    return getCategoriasParaEntidad(entidad, categoriasCatalogo);
+  /** Unión de categorías de TODOS los organismos elegidos (no solo el primero). */
+  function categoriasParaTodas(entidadesElegidas: string[]): string[] {
+    const union = new Set<string>();
+    for (const e of entidadesElegidas) {
+      for (const cat of getCategoriasParaEntidad(e, categoriasCatalogo)) {
+        union.add(cat);
+      }
+    }
+    return Array.from(union);
   }
 
-  function categoriaOptions(entidad: string): { value: string; label: string }[] {
-    if (!entidad.trim()) return [];
+  function categoriaOptions(entidadesElegidas: string[]): { value: string; label: string }[] {
+    if (entidadesElegidas.length === 0) return [];
     return [
-      ...categoriasPara(entidad).map((cat) => ({ value: cat, label: cat })),
+      ...categoriasParaTodas(entidadesElegidas).map((cat) => ({ value: cat, label: cat })),
       { value: OPCION_CATEGORIA_PERSONALIZADA, label: "+ Agregar nueva categoría..." },
     ];
   }
 
-  function categoriaPlaceholder(entidad: string): string {
-    if (!entidad.trim()) return "-- Primero selecciona un organismo --";
-    return categoriasPara(entidad).length > 0
+  function categoriaPlaceholder(entidadesElegidas: string[]): string {
+    if (entidadesElegidas.length === 0) return "-- Primero selecciona un organismo --";
+    return categoriasParaTodas(entidadesElegidas).length > 0
       ? "-- Selecciona categoría --"
       : "-- Sin categorías predefinidas --";
   }
 
-  /** Mismo criterio que el anterior handleEntidadChange: el organismo primario (entidades[0]) manda la categoría. */
-  $: entidadPrimaria = entidades[0] || "";
-
   function handleEntidadesChange() {
-    // Al cambiar los organismos, la categoría previamente elegida ya no aplica necesariamente.
-    categoria = "";
-    usandoCategoriaPersonalizada = false;
-    categoriaPersonalizadaTexto = "";
     sugeridos = [];
     sugerenciaAplicada = false;
+    // Una categoría personalizada (texto libre) sigue valiendo sin importar
+    // qué organismos queden elegidos. Una categoría del catálogo solo se
+    // limpia si ya no pertenece a la unión de categorías de los organismos
+    // actuales (agregar un organismo nunca invalida la elección previa).
+    if (usandoCategoriaPersonalizada) return;
+    if (categoria && !categoriasParaTodas(entidades).includes(categoria)) {
+      categoria = "";
+    }
   }
 
   function onCategoriaSelectChange(event: Event) {
@@ -164,11 +172,11 @@
     id="req-categoria-{idPrefix}"
     label="Categoría"
     required
-    disabled={!entidadPrimaria.trim()}
+    disabled={entidades.length === 0}
     value={usandoCategoriaPersonalizada ? OPCION_CATEGORIA_PERSONALIZADA : categoria}
     on:change={onCategoriaSelectChange}
-    placeholder={categoriaPlaceholder(entidadPrimaria)}
-    options={categoriaOptions(entidadPrimaria)}
+    placeholder={categoriaPlaceholder(entidades)}
+    options={categoriaOptions(entidades)}
     error={usandoCategoriaPersonalizada ? undefined : errors.categoria}
   />
   {#if usandoCategoriaPersonalizada}
@@ -180,8 +188,8 @@
     />
   {/if}
   <p class="req-hint">
-    Tipo de intervención según el organismo primario (el primero seleccionado). Si eliges "Otro", escribe una
-    nueva y quedará disponible para todos.
+    Tipo de intervención — se combinan las categorías de todos los organismos elegidos. Si eliges "Otro",
+    escribe una nueva y quedará disponible para todos.
   </p>
 </div>
 

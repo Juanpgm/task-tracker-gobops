@@ -22,10 +22,24 @@
     search ? options.filter((o) => o.toLowerCase().includes(search.toLowerCase())) : options
   ).filter((o) => !value.includes(o));
 
+  /** Búsqueda que no matchea ninguna opción existente ni ya elegida — se
+   * ofrece como organismo nuevo (se persiste server-side al guardar el
+   * requerimiento, ver _upsert_dependencias_personalizadas en el backend). */
+  $: searchTrimmed = search.trim();
+  $: canCreate =
+    searchTrimmed.length > 0 &&
+    !options.some((o) => o.toLowerCase() === searchTrimmed.toLowerCase()) &&
+    !value.some((v) => v.toLowerCase() === searchTrimmed.toLowerCase());
+
   function toggle(opt: string) {
     value = value.includes(opt) ? value.filter((v) => v !== opt) : [...value, opt];
     search = "";
     dispatch("change", value);
+  }
+
+  function crearNuevo() {
+    if (!canCreate) return;
+    toggle(searchTrimmed);
   }
 
   function remove(opt: string) {
@@ -99,7 +113,14 @@
   {#if open}
     <div class="dropdown">
       <ul class="options-list" role="listbox">
-        {#if filtered.length === 0}
+        {#if canCreate}
+          <li>
+            <button type="button" class="option option-create" on:click={crearNuevo}>
+              + Agregar "{searchTrimmed}" como nuevo organismo
+            </button>
+          </li>
+        {/if}
+        {#if filtered.length === 0 && !canCreate}
           <li class="no-results">Sin resultados</li>
         {:else}
           {#each filtered as opt (opt)}
@@ -262,6 +283,11 @@
   }
   .option:hover {
     background: var(--bg);
+  }
+  .option-create {
+    color: var(--primary-darker);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
   }
   .option-badge {
     flex-shrink: 0;
