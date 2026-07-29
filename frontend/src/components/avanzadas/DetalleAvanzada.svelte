@@ -220,12 +220,6 @@
     return req.entidades?.length ? req.entidades : req.entidad ? [req.entidad] : [];
   }
 
-  /** Expandir/colapsar los organismos secundarios de un req-card ("+N más"). */
-  let organismosExpandidos: Record<string, boolean> = {};
-  function toggleOrganismos(reqId: string) {
-    organismosExpandidos = { ...organismosExpandidos, [reqId]: !organismosExpandidos[reqId] };
-  }
-
   /* ---- Eliminar requerimiento ---- */
   let errorEliminarReq = "";
   let reqAEliminar: RequerimientoAvanzada | null = null;
@@ -641,28 +635,12 @@
                       </div>
                       {#if organismosDe(req).length > 0}
                         <div class="req-organismos">
-                          <span class="entidad-chip entidad-chip-primary">
-                            {extractAcronimo(organismosDe(req)[0])}
-                          </span>
-                          {#if organismosDe(req).length > 1}
-                            <button
-                              type="button"
-                              class="entidad-chip entidad-chip-more"
-                              on:click={() => toggleOrganismos(req.id)}
-                            >
-                              {organismosExpandidos[req.id]
-                                ? "Ocultar"
-                                : `+${organismosDe(req).length - 1} más`}
-                            </button>
-                          {/if}
+                          {#each organismosDe(req) as organismo, i}
+                            <span class="entidad-chip" class:entidad-chip-primary={i === 0}>
+                              {extractAcronimo(organismo)}
+                            </span>
+                          {/each}
                         </div>
-                        {#if organismosExpandidos[req.id]}
-                          <div class="req-organismos req-organismos-extra">
-                            {#each organismosDe(req).slice(1) as organismo}
-                              <span class="entidad-chip">{extractAcronimo(organismo)}</span>
-                            {/each}
-                          </div>
-                        {/if}
                       {/if}
                       <p class="req-text">{req.requerimiento}</p>
                       <p class="req-ubicacion">
@@ -1247,15 +1225,6 @@
   }
   .entidad-chip-primary {
     font-weight: 700;
-  }
-  .entidad-chip-more {
-    border: 1px dashed var(--primary-darker);
-    background: none;
-    cursor: pointer;
-    font-family: inherit;
-  }
-  .req-organismos-extra {
-    margin-top: -0.15rem;
   }
   .categoria-badge {
     display: inline-block;

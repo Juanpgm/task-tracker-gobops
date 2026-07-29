@@ -17,7 +17,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import "@testing-library/jest-dom/vitest";
-import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/svelte";
+import { render, screen, fireEvent, cleanup, waitFor, within } from "@testing-library/svelte";
 
 // --- Mock the store's own dependencies (NOT the store itself) ---
 const apiMocks = vi.hoisted(() => ({
@@ -88,6 +88,7 @@ import { avanzadasStore } from "../../stores/avanzadasStore";
 import DetalleAvanzada from "./DetalleAvanzada.svelte";
 
 const DAGMA = "DAGMA - Departamento Administrativo de Gestión del Medio Ambiente";
+const UAESP = "UAESP - Unidad Administrativa Especial de Servicios Públicos Municipales";
 
 function reqExistente(overrides: Record<string, unknown> = {}) {
   return {
@@ -133,7 +134,7 @@ describe("DetalleAvanzada — edit requerimiento (REAL store integration)", () =
     apiMocks.getCatalogosAvanzadas.mockResolvedValue({
       estrategias: [],
       equipo: [],
-      dependencias: [DAGMA],
+      dependencias: [DAGMA, UAESP],
       categorias: { [DAGMA]: ["Poda de árboles (autorización)"] },
     });
     apiMocks.clasificarRequerimiento.mockResolvedValue({
@@ -224,5 +225,47 @@ describe("DetalleAvanzada — edit requerimiento (REAL store integration)", () =
     expect(screen.queryByText(DAGMA, { selector: ".entidad-name" })).not.toBeInTheDocument();
     const card = (await screen.findByText("Poste reparado")).closest(".req-card");
     expect(card).not.toBeNull();
+  });
+
+  it("adding a second organismo in the edit modal and saving shows BOTH chips in the card (bug report: multi-organismo not persisting on edit)", async () => {
+    apiMocks.getAvanzada.mockResolvedValue(detalle());
+
+    render(DetalleAvanzada);
+    await screen.findByText("Poste caído");
+    // Only the primary organismo is visible before editing.
+    expect(screen.getByText("DAGMA", { selector: ".entidad-chip" })).toBeInTheDocument();
+    expect(screen.queryByText("UAESP", { selector: ".entidad-chip" })).not.toBeInTheDocument();
+
+    // The backend is the source of truth for the assertion below: it must echo
+    // back BOTH organismos for the round-trip to be meaningful (already proven
+    // server-side by the pytest round-trip test; here we prove the frontend
+    // actually SENDS both and correctly RENDERS whatever it gets back).
+    apiMocks.actualizarRequerimientoAvanzada.mockImplementation(async (_clientId, _reqId, datos) => {
+      expect(datos.entidades).toEqual([DAGMA, UAESP]);
+      return reqExistente({ entidad: DAGMA, entidades: datos.entidades });
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: /editar requerimiento/i }));
+    expect(screen.getByText("Editar requerimiento")).toBeInTheDocument();
+
+    const modal = screen.getByText("Editar requerimiento").closest(".modal") as HTMLElement;
+    const organismosContainer = within(modal)
+      .getByText("Organismos", { selector: ".ms-label" })
+      .closest(".multiselect") as HTMLElement;
+    const searchInput = organismosContainer.querySelector(".ms-input") as HTMLInputElement;
+    await fireEvent.focus(searchInput);
+    await fireEvent.input(searchInput, { target: { value: "UAESP" } });
+    await fireEvent.click(within(organismosContainer).getByText(UAESP, { selector: ".option" }));
+    await fireEvent.click(within(organismosContainer).getByText("Aceptar"));
+
+    await fireEvent.click(within(modal).getByText("Guardar cambios"));
+
+    await waitFor(() => {
+      expect(apiMocks.actualizarRequerimientoAvanzada).toHaveBeenCalledTimes(1);
+    });
+
+    // Both organismos now show as chips on the card, no manual refresh needed.
+    expect(await screen.findByText("DAGMA", { selector: ".entidad-chip" })).toBeInTheDocument();
+    expect(await screen.findByText("UAESP", { selector: ".entidad-chip" })).toBeInTheDocument();
   });
 });

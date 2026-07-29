@@ -713,7 +713,7 @@ describe("DetalleAvanzada", () => {
       expect(screen.queryByText("Esta avanzada no tiene requerimientos registrados.")).not.toBeInTheDocument();
     });
 
-    it("shows the primary organismo and a '+N más' toggle that reveals the rest", async () => {
+    it("shows a chip for every organismo assigned to the requerimiento, all visible at once", () => {
       setStoreState({
         detalle: {
           "client-1": detalle({
@@ -723,10 +723,6 @@ describe("DetalleAvanzada", () => {
       });
       render(DetalleAvanzada);
       expect(screen.getByText("DAGMA", { selector: ".entidad-chip" })).toBeInTheDocument();
-      expect(screen.queryByText("UAESP", { selector: ".entidad-chip" })).not.toBeInTheDocument();
-
-      await fireEvent.click(screen.getByText("+1 más"));
-
       expect(screen.getByText("UAESP", { selector: ".entidad-chip" })).toBeInTheDocument();
     });
 
