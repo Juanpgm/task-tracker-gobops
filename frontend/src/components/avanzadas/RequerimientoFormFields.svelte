@@ -28,7 +28,7 @@
   export let coordenadas = "";
   export let dependencias: string[] = [];
   export let categoriasCatalogo: Record<string, string[]> = {};
-  export let errors: { entidad?: string; requerimiento?: string; ubicacion?: string } = {};
+  export let errors: { entidad?: string; categoria?: string; requerimiento?: string; ubicacion?: string } = {};
 
   const dispatch = createEventDispatcher();
 
@@ -163,14 +163,21 @@
   <Select
     id="req-categoria-{idPrefix}"
     label="Categoría"
+    required
     disabled={!entidadPrimaria.trim()}
     value={usandoCategoriaPersonalizada ? OPCION_CATEGORIA_PERSONALIZADA : categoria}
     on:change={onCategoriaSelectChange}
     placeholder={categoriaPlaceholder(entidadPrimaria)}
     options={categoriaOptions(entidadPrimaria)}
+    error={usandoCategoriaPersonalizada ? undefined : errors.categoria}
   />
   {#if usandoCategoriaPersonalizada}
-    <Input type="text" bind:value={categoriaPersonalizadaTexto} placeholder="Escribe la nueva categoría..." />
+    <Input
+      type="text"
+      bind:value={categoriaPersonalizadaTexto}
+      placeholder="Escribe la nueva categoría..."
+      error={errors.categoria}
+    />
   {/if}
   <p class="req-hint">
     Tipo de intervención según el organismo primario (el primero seleccionado). Si eliges "Otro", escribe una

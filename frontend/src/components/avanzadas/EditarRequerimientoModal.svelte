@@ -146,6 +146,11 @@
       errorMsg = "Describa el requerimiento.";
       return;
     }
+    const categoriaElegida = usandoCategoriaPersonalizada ? categoriaPersonalizadaTexto.trim() : categoria;
+    if (!categoriaElegida) {
+      errorMsg = "Selecciona una categoría.";
+      return;
+    }
     if (!ubicacion.trim()) {
       errorMsg = "Indique la ubicación.";
       return;

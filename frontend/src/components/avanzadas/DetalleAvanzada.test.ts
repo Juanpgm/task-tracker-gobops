@@ -399,6 +399,10 @@ describe("DetalleAvanzada", () => {
       await fireEvent.click(screen.getByRole("button", { name: /agregar requerimiento/i }));
       await selectOrganismo(DAGMA);
       await fireEvent.input(screen.getByLabelText(/^Requerimiento/), { target: { value: "Árbol caído" } });
+      await fireEvent.change(screen.getByLabelText(/^Categoría/), { target: { value: "__personalizada__" } });
+      await fireEvent.input(screen.getByPlaceholderText("Escribe la nueva categoría..."), {
+        target: { value: "Poda" },
+      });
       await fireEvent.input(screen.getByLabelText(/^Ubicación/), { target: { value: "Frente al parque" } });
 
       await fireEvent.click(screen.getByText("Guardar requerimiento"));
@@ -709,7 +713,7 @@ describe("DetalleAvanzada", () => {
       expect(screen.queryByText("Esta avanzada no tiene requerimientos registrados.")).not.toBeInTheDocument();
     });
 
-    it("renders a chip per organismo from entidades", () => {
+    it("shows the primary organismo and a '+N más' toggle that reveals the rest", async () => {
       setStoreState({
         detalle: {
           "client-1": detalle({
@@ -719,6 +723,10 @@ describe("DetalleAvanzada", () => {
       });
       render(DetalleAvanzada);
       expect(screen.getByText("DAGMA", { selector: ".entidad-chip" })).toBeInTheDocument();
+      expect(screen.queryByText("UAESP", { selector: ".entidad-chip" })).not.toBeInTheDocument();
+
+      await fireEvent.click(screen.getByText("+1 más"));
+
       expect(screen.getByText("UAESP", { selector: ".entidad-chip" })).toBeInTheDocument();
     });
 

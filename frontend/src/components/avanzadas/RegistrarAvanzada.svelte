@@ -544,6 +544,7 @@
    * ============================================================ */
   interface RequerimientoErrors {
     entidad?: string;
+    categoria?: string;
     requerimiento?: string;
     ubicacion?: string;
   }
@@ -687,6 +688,10 @@
         const rerr: RequerimientoErrors = {};
         if (r.entidades.length === 0) rerr.entidad = `Requerimiento #${i + 1}: la entidad es obligatoria.`;
         if (!r.requerimiento.trim()) rerr.requerimiento = `Requerimiento #${i + 1}: describa el requerimiento.`;
+        const categoriaElegida = r.usandoCategoriaPersonalizada
+          ? r.categoriaPersonalizadaTexto.trim()
+          : r.categoria;
+        if (!categoriaElegida) rerr.categoria = `Requerimiento #${i + 1}: selecciona una categoría.`;
         if (!r.ubicacion.trim()) rerr.ubicacion = `Requerimiento #${i + 1}: indique la ubicación.`;
         errs.requerimientos[i] = rerr;
       });
