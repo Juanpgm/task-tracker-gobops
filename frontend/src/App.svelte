@@ -11,6 +11,7 @@
   import { viewComponents } from "./lib/viewRegistry";
   import PWAInstall from "./components/PWAInstall.svelte";
   import SyncStatusBar from "./components/seguimiento/SyncStatusBar.svelte";
+  import UpdateBanner from "./components/UpdateBanner.svelte";
 
   let unsubscribeAuth: (() => void) | undefined;
   let showRegister = false;
@@ -73,6 +74,7 @@
     <Login on:register={handleRegister} on:forgot={handleForgotPassword} />
   {/if}
 {:else if $authStore.isAuthenticated}
+  <UpdateBanner />
   <SyncStatusBar />
   {#if currentComponent}
     <svelte:component this={currentComponent} />
