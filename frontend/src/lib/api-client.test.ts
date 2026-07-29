@@ -7,7 +7,7 @@
  * the user was still logged in — other views kept working because they
  * showed already-cached data without re-fetching.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ApiClient } from "./api-client";
 
 function mockResponse(ok: boolean, status: number, body: unknown = {}) {
@@ -91,5 +91,40 @@ describe("ApiClient 401 retry", () => {
 
     expect(blob).toBeInstanceOf(Blob);
     expect(refreshHandler).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ApiClient request timeout", () => {
+  let client: ApiClient;
+
+  beforeEach(() => {
+    client = new ApiClient("https://api.test");
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("rejects a stalled GET after 30s instead of hanging forever", async () => {
+    (global.fetch as any) = vi.fn().mockImplementation(() => new Promise(() => {})); // never resolves
+
+    const pending = client.get("/foo");
+    const assertion = expect(pending).rejects.toThrow(/tardó demasiado/);
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    await assertion;
+  });
+
+  it("gives multipart uploads a longer 90s timeout before failing", async () => {
+    (global.fetch as any) = vi.fn().mockImplementation(() => new Promise(() => {})); // never resolves
+
+    const pending = client.patchForm("/foo", new FormData());
+    const assertion = expect(pending).rejects.toThrow(/tardó demasiado/);
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(vi.getTimerCount()).toBeGreaterThan(0); // 30s isn't enough for uploads, still pending
+    await vi.advanceTimersByTimeAsync(60_000);
+    await assertion;
   });
 });

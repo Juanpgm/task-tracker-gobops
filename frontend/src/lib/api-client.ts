@@ -8,6 +8,9 @@ const UPLOAD_API_URL = import.meta.env.VITE_UPLOAD_API_URL || import.meta.env.VI
 type UnauthorizedHandler = () => Promise<string | null>;
 
 export class ApiClient {
+  private static readonly DEFAULT_TIMEOUT_MS = 30_000;
+  private static readonly UPLOAD_TIMEOUT_MS = 90_000;
+
   private baseUrl: string;
   private token: string | null = null;
   private onUnauthorized: UnauthorizedHandler | null = null;
@@ -36,6 +39,37 @@ export class ApiClient {
   }
 
   /**
+   * Races `promise` against a timeout so a stalled connection (common on
+   * field mobile data) fails loudly instead of leaving an awaiting UI
+   * (e.g. a modal's "Guardar" button) stuck forever with no error and no
+   * feedback — plain `fetch()` has no built-in timeout.
+   *
+   * ponytail: doesn't abort the underlying fetch, it just stops waiting on
+   * it — the request keeps running in the background until it resolves or
+   * the browser gives up. Upgrade to AbortController + signal-threading
+   * through every method if wasted in-flight requests become a real cost.
+   */
+  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+    let timer!: ReturnType<typeof setTimeout>;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () =>
+          reject(
+            new Error(
+              `La solicitud tardó demasiado (más de ${Math.round(timeoutMs / 1000)}s). Verificá tu conexión e intentá de nuevo.`
+            )
+          ),
+        timeoutMs
+      );
+    });
+    try {
+      return await Promise.race([promise, timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
    * Runs `doFetch` and, on a 401, refreshes the token once via
    * `setUnauthorizedHandler` and retries — this PWA stays open for hours in
    * the field, so the Firebase ID token (valid ~1h) routinely expires
@@ -45,8 +79,11 @@ export class ApiClient {
    * read `this.token` at call time (via a closure over `getHeaders()`) so
    * the retry picks up the refreshed value.
    */
-  private async fetchWithRetry(doFetch: () => Promise<Response>): Promise<Response> {
-    const response = await doFetch();
+  private async fetchWithRetry(
+    doFetch: () => Promise<Response>,
+    timeoutMs: number = ApiClient.DEFAULT_TIMEOUT_MS
+  ): Promise<Response> {
+    const response = await this.withTimeout(doFetch(), timeoutMs);
     if (response.status !== 401 || !this.onUnauthorized) {
       return response;
     }
@@ -54,7 +91,7 @@ export class ApiClient {
     if (!refreshed) {
       return response;
     }
-    return doFetch();
+    return this.withTimeout(doFetch(), timeoutMs);
   }
 
   async get<T>(path: string, params?: Record<string, string>): Promise<T> {
@@ -89,12 +126,14 @@ export class ApiClient {
   }
 
   async postForm<T>(path: string, formData: FormData): Promise<T> {
-    const response = await this.fetchWithRetry(() =>
-      fetch(`${this.baseUrl}${path}`, {
-        method: 'POST',
-        headers: this.getHeaders(false),
-        body: formData,
-      })
+    const response = await this.fetchWithRetry(
+      () =>
+        fetch(`${this.baseUrl}${path}`, {
+          method: 'POST',
+          headers: this.getHeaders(false),
+          body: formData,
+        }),
+      ApiClient.UPLOAD_TIMEOUT_MS
     );
     if (!response.ok) {
       const errorBody = await response.text();
@@ -104,12 +143,14 @@ export class ApiClient {
   }
 
   async patchForm<T>(path: string, formData: FormData): Promise<T> {
-    const response = await this.fetchWithRetry(() =>
-      fetch(`${this.baseUrl}${path}`, {
-        method: 'PATCH',
-        headers: this.getHeaders(false),
-        body: formData,
-      })
+    const response = await this.fetchWithRetry(
+      () =>
+        fetch(`${this.baseUrl}${path}`, {
+          method: 'PATCH',
+          headers: this.getHeaders(false),
+          body: formData,
+        }),
+      ApiClient.UPLOAD_TIMEOUT_MS
     );
     if (!response.ok) {
       const errorBody = await response.text();
