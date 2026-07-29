@@ -722,8 +722,35 @@ describe("DetalleAvanzada", () => {
         },
       });
       render(DetalleAvanzada);
-      expect(screen.getByText("DAGMA", { selector: ".entidad-chip" })).toBeInTheDocument();
-      expect(screen.getByText("UAESP", { selector: ".entidad-chip" })).toBeInTheDocument();
+      // The requerimiento is shared by both organismos, so it renders once
+      // per group (see "appears under every organismo's group" below) —
+      // each chip therefore shows up at least once, not exactly once.
+      expect(screen.getAllByText("DAGMA", { selector: ".entidad-chip" }).length).toBeGreaterThan(0);
+      expect(screen.getAllByText("UAESP", { selector: ".entidad-chip" }).length).toBeGreaterThan(0);
+    });
+
+    it("appears under every organismo's group, and the filter dropdown offers every organismo (not just the primary)", async () => {
+      setStoreState({
+        detalle: {
+          "client-1": detalle({
+            requerimientos: [requerimiento({ entidades: ["DAGMA", "UAESP"] })],
+          }),
+        },
+      });
+      render(DetalleAvanzada);
+
+      expect(screen.getByText("DAGMA", { selector: ".entidad-name" })).toBeInTheDocument();
+      expect(screen.getByText("UAESP", { selector: ".entidad-name" })).toBeInTheDocument();
+
+      const filtro = screen.getByDisplayValue("Todas las entidades") as HTMLSelectElement;
+      const opciones = Array.from(filtro.options).map((o) => o.value);
+      expect(opciones).toContain("DAGMA");
+      expect(opciones).toContain("UAESP");
+
+      await fireEvent.change(filtro, { target: { value: "UAESP" } });
+      // Still renders under both of its groups (it's genuinely shared) —
+      // what matters is filtering by the secondary organismo doesn't hide it.
+      expect(screen.getAllByText("Árbol con riesgo de caída").length).toBeGreaterThan(0);
     });
 
     it("falls back to entidad for a fixture without entidades", () => {

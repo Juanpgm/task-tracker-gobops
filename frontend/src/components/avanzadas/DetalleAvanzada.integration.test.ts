@@ -265,7 +265,12 @@ describe("DetalleAvanzada — edit requerimiento (REAL store integration)", () =
     });
 
     // Both organismos now show as chips on the card, no manual refresh needed.
-    expect(await screen.findByText("DAGMA", { selector: ".entidad-chip" })).toBeInTheDocument();
-    expect(await screen.findByText("UAESP", { selector: ".entidad-chip" })).toBeInTheDocument();
+    // The requerimiento is now shared by both, so it renders once per group
+    // (one card instance under DAGMA's section, one under UAESP's) — each
+    // chip therefore appears at least once, not necessarily exactly once.
+    await waitFor(() => {
+      expect(screen.getAllByText("DAGMA", { selector: ".entidad-chip" }).length).toBeGreaterThan(0);
+      expect(screen.getAllByText("UAESP", { selector: ".entidad-chip" }).length).toBeGreaterThan(0);
+    });
   });
 });

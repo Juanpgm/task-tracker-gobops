@@ -104,10 +104,14 @@
   let entidadesColapsadas: Record<string, boolean> = {};
 
   $: requerimientos = detalle?.requerimientos || [];
-  $: entidadesDisponibles = Array.from(new Set(requerimientos.map((r) => r.entidad))).sort();
+  // Todos los organismos de cada requerimiento (no solo el primario) cuentan
+  // para el filtro y el agrupado -- un requerimiento con varios organismos
+  // debe poder encontrarse/filtrarse por cualquiera de ellos, no solo el
+  // primero (ver organismosDe más abajo).
+  $: entidadesDisponibles = Array.from(new Set(requerimientos.flatMap((r) => organismosDe(r)))).sort();
 
   $: requerimientosFiltrados = requerimientos.filter((r) => {
-    if (filtroEntidad && r.entidad !== filtroEntidad) return false;
+    if (filtroEntidad && !organismosDe(r).includes(filtroEntidad)) return false;
     if (filtroTexto) {
       const q = filtroTexto.toLowerCase();
       const match =
@@ -120,11 +124,16 @@
     return true;
   });
 
+  // Un requerimiento con varios organismos aparece en el grupo de CADA UNO
+  // (mismo criterio que el filtro): la lista de una entidad tiene que
+  // mostrar todo lo que le compete, incluidos los compartidos con otras.
   $: gruposPorEntidad = (() => {
     const grouped: Record<string, RequerimientoAvanzada[]> = {};
     for (const req of requerimientosFiltrados) {
-      if (!grouped[req.entidad]) grouped[req.entidad] = [];
-      grouped[req.entidad].push(req);
+      for (const organismo of organismosDe(req)) {
+        if (!grouped[organismo]) grouped[organismo] = [];
+        grouped[organismo].push(req);
+      }
     }
     return grouped;
   })();
