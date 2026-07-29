@@ -443,7 +443,7 @@ describe("DetalleAvanzada", () => {
       });
     });
 
-    const reqExistente = () =>
+    const reqExistente = (overrides: Record<string, unknown> = {}) =>
       requerimiento({
         id: "req-42",
         entidad: DAGMA,
@@ -451,17 +451,34 @@ describe("DetalleAvanzada", () => {
         requerimiento: "Poste caído",
         ubicacion: "Calle 10",
         coordenadas: "3.4, -76.5",
+        ...overrides,
       });
 
-    it("'Editar' on a req-card prefills the form with existing values and relabels the submit button", async () => {
+    it("'Editar' on a req-card opens the modal prefilled with existing values", async () => {
       setStoreState({ detalle: { "client-1": detalle({ requerimientos: [reqExistente()] }) } });
       render(DetalleAvanzada);
 
       await fireEvent.click(screen.getByRole("button", { name: /editar requerimiento/i }));
 
+      expect(screen.getByText("Editar requerimiento")).toBeInTheDocument();
       expect(screen.getByLabelText(/^Requerimiento/)).toHaveValue("Poste caído");
       expect(screen.getByLabelText(/^Ubicación/)).toHaveValue("Calle 10");
       expect(screen.getByText("Guardar cambios")).toBeInTheDocument();
+    });
+
+    it("prefills a categoría personalizada into the custom-category field", async () => {
+      setStoreState({
+        detalle: {
+          "client-1": detalle({
+            requerimientos: [reqExistente({ categoria: "", categoria_personalizada: "Categoría a medida" })],
+          }),
+        },
+      });
+      render(DetalleAvanzada);
+
+      await fireEvent.click(screen.getByRole("button", { name: /editar requerimiento/i }));
+
+      expect(screen.getByDisplayValue("Categoría a medida")).toBeInTheDocument();
     });
 
     it("submits an edit via avanzadasStore.actualizarRequerimiento with clientId, reqId, datos and files", async () => {
@@ -479,44 +496,98 @@ describe("DetalleAvanzada", () => {
       expect(calledClientId).toBe("client-1");
       expect(calledReqId).toBe("req-42");
       expect(datos.entidades).toEqual([DAGMA]);
+      expect(datos.entidad).toBe(DAGMA); // legacy field still sent (= entidades[0])
       expect(datos.requerimiento).toBe("Poste reparado");
       expect(Array.isArray(files)).toBe(true);
       expect(avanzadasStoreState.agregarRequerimiento).not.toHaveBeenCalled();
+    });
+
+    it("closes the modal on success without touching the create path", async () => {
+      setStoreState({ detalle: { "client-1": detalle({ requerimientos: [reqExistente()] }) } });
+      avanzadasStoreState.actualizarRequerimiento.mockResolvedValue(reqExistente());
+      render(DetalleAvanzada);
+
+      await fireEvent.click(screen.getByRole("button", { name: /editar requerimiento/i }));
+      await fireEvent.click(screen.getByText("Guardar cambios"));
+
+      await waitFor(() => {
+        expect(screen.queryByText("Editar requerimiento")).not.toBeInTheDocument();
+      });
+    });
+
+    it("Cancelar closes the modal without calling actualizarRequerimiento", async () => {
+      setStoreState({ detalle: { "client-1": detalle({ requerimientos: [reqExistente()] }) } });
+      render(DetalleAvanzada);
+
+      await fireEvent.click(screen.getByRole("button", { name: /editar requerimiento/i }));
+      await fireEvent.click(screen.getByText("Cancelar"));
+
+      await waitFor(() => {
+        expect(screen.queryByText("Editar requerimiento")).not.toBeInTheDocument();
+      });
+      expect(avanzadasStoreState.actualizarRequerimiento).not.toHaveBeenCalled();
+    });
+
+    it("deleting the requerimiento being edited closes the modal", async () => {
+      setStoreState({ detalle: { "client-1": detalle({ requerimientos: [reqExistente()] }) } });
+      avanzadasStoreState.eliminarRequerimiento.mockResolvedValue(undefined);
+      render(DetalleAvanzada);
+
+      await fireEvent.click(screen.getByRole("button", { name: /editar requerimiento/i }));
+      expect(screen.getByText("Editar requerimiento")).toBeInTheDocument();
+
+      await fireEvent.click(screen.getByRole("button", { name: /^eliminar requerimiento$/i }));
+      await fireEvent.click(screen.getByRole("button", { name: "Eliminar" }));
+
+      await waitFor(() => {
+        expect(screen.queryByText("Editar requerimiento")).not.toBeInTheDocument();
+      });
     });
   });
 
   describe("eliminar requerimiento", () => {
     const reqExistente = () => requerimiento({ id: "req-42", entidad: DAGMA });
 
-    it("prompts confirm and calls avanzadasStore.eliminarRequerimiento when confirmed", async () => {
+    it("shows a confirmation dialog and calls avanzadasStore.eliminarRequerimiento when confirmed", async () => {
       setStoreState({ detalle: { "client-1": detalle({ requerimientos: [reqExistente()] }) } });
       avanzadasStoreState.eliminarRequerimiento.mockResolvedValue(undefined);
-      const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
       render(DetalleAvanzada);
 
-      await fireEvent.click(screen.getByRole("button", { name: /eliminar requerimiento/i }));
+      await fireEvent.click(screen.getByRole("button", { name: /^eliminar requerimiento$/i }));
 
-      expect(confirmSpy).toHaveBeenCalledWith("¿Eliminar este requerimiento? Esta acción no se puede deshacer.");
+      expect(screen.getByText("¿Eliminar este requerimiento? Esta acción no se puede deshacer.")).toBeInTheDocument();
+      expect(avanzadasStoreState.eliminarRequerimiento).not.toHaveBeenCalled();
+
+      await fireEvent.click(screen.getByRole("button", { name: "Eliminar" }));
+
       expect(avanzadasStoreState.eliminarRequerimiento).toHaveBeenCalledWith("client-1", "req-42");
+      await waitFor(() => {
+        expect(
+          screen.queryByText("¿Eliminar este requerimiento? Esta acción no se puede deshacer.")
+        ).not.toBeInTheDocument();
+      });
     });
 
-    it("does not call avanzadasStore.eliminarRequerimiento when the confirm dialog is cancelled", async () => {
+    it("does not call avanzadasStore.eliminarRequerimiento when the confirmation dialog is cancelled", async () => {
       setStoreState({ detalle: { "client-1": detalle({ requerimientos: [reqExistente()] }) } });
-      vi.spyOn(window, "confirm").mockReturnValue(false);
       render(DetalleAvanzada);
 
-      await fireEvent.click(screen.getByRole("button", { name: /eliminar requerimiento/i }));
+      await fireEvent.click(screen.getByRole("button", { name: /^eliminar requerimiento$/i }));
+      await fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
 
       expect(avanzadasStoreState.eliminarRequerimiento).not.toHaveBeenCalled();
+      expect(
+        screen.queryByText("¿Eliminar este requerimiento? Esta acción no se puede deshacer.")
+      ).not.toBeInTheDocument();
     });
 
     it("shows an inline error when the delete fails", async () => {
       setStoreState({ detalle: { "client-1": detalle({ requerimientos: [reqExistente()] }) } });
       avanzadasStoreState.eliminarRequerimiento.mockRejectedValue(new Error("network"));
-      vi.spyOn(window, "confirm").mockReturnValue(true);
       render(DetalleAvanzada);
 
-      await fireEvent.click(screen.getByRole("button", { name: /eliminar requerimiento/i }));
+      await fireEvent.click(screen.getByRole("button", { name: /^eliminar requerimiento$/i }));
+      await fireEvent.click(screen.getByRole("button", { name: "Eliminar" }));
 
       expect(await screen.findByText("network")).toBeInTheDocument();
     });

@@ -10,7 +10,9 @@
   import Alert from "../ui/Alert.svelte";
   import Button from "../ui/Button.svelte";
   import Icon from "../ui/Icon.svelte";
+  import Modal from "../ui/Modal.svelte";
   import RequerimientoFormFields from "./RequerimientoFormFields.svelte";
+  import EditarRequerimientoModal from "./EditarRequerimientoModal.svelte";
   import ViewHeader from "../ui/ViewHeader.svelte";
 
   /** Background refresh cadence while this view is mounted (see onMount): lets a
@@ -140,10 +142,10 @@
   let mostrarFormRequerimiento = false;
   let guardandoRequerimiento = false;
   let errorNuevoRequerimiento = "";
-
-  /** Set while editing an existing requerimiento (PATCH); null while adding a new one (POST). */
-  let editandoReqId: string | null = null;
   let capturandoGps = false;
+
+  /** Requerimiento actualmente en edición (abre el modal); null cuando ninguno. */
+  let reqEditando: RequerimientoAvanzada | null = null;
 
   let nuevoEntidades: string[] = [];
   let nuevoCategoria = "";
@@ -152,11 +154,6 @@
   let nuevoRequerimientoTexto = "";
   let nuevoUbicacion = "";
   let nuevoCoordenadas = "";
-
-  /** Edit mode: URLs of already-saved photos still attached (removable). */
-  let fotosExistentes: string[] = [];
-  /** Edit mode: subset of fotosExistentes the user removed, sent as fotos_eliminar. */
-  let fotosAEliminar: string[] = [];
 
   /** Each entry owns ONE object URL, created once when the file is added and
    * revoked when removed/cleared/unmounted — never re-created on every
@@ -174,8 +171,7 @@
     if (!input.files || input.files.length === 0) return;
     const nuevos = Array.from(input.files).map((file) => ({ file, previewUrl: URL.createObjectURL(file) }));
     const combined = [...nuevoFotos, ...nuevos];
-    // En edición las fotos ya guardadas cuentan contra el tope: existentes + nuevas.
-    if (fotosExistentes.length + combined.length > MAX_FOTOS_POR_REQUERIMIENTO) {
+    if (combined.length > MAX_FOTOS_POR_REQUERIMIENTO) {
       errorNuevoRequerimiento = `Máximo ${MAX_FOTOS_POR_REQUERIMIENTO} fotos permitidas`;
       nuevos.forEach((n) => URL.revokeObjectURL(n.previewUrl));
       input.value = "";
@@ -190,12 +186,6 @@
     nuevoFotos = nuevoFotos.filter((_, i) => i !== idx);
   }
 
-  /** Moves an already-saved photo from the visible list into the delete set. */
-  function quitarFotoExistente(url: string) {
-    fotosAEliminar = [...fotosAEliminar, url];
-    fotosExistentes = fotosExistentes.filter((u) => u !== url);
-  }
-
   /** Clears every nuevo* form field (blob URLs revoked); does not toggle visibility. */
   function resetFormRequerimiento() {
     nuevoEntidades = [];
@@ -207,42 +197,20 @@
     nuevoCoordenadas = "";
     nuevoFotos.forEach((f) => URL.revokeObjectURL(f.previewUrl));
     nuevoFotos = [];
-    fotosExistentes = [];
-    fotosAEliminar = [];
     errorNuevoRequerimiento = "";
   }
 
   function abrirFormRequerimiento() {
     resetFormRequerimiento();
-    editandoReqId = null;
     mostrarFormRequerimiento = true;
   }
 
   function abrirEdicionRequerimiento(req: RequerimientoAvanzada) {
-    resetFormRequerimiento();
-    editandoReqId = req.id;
-    // Fallback para docs viejos guardados antes de la multi-selección de organismos.
-    nuevoEntidades = req.entidades?.length ? [...req.entidades] : req.entidad ? [req.entidad] : [];
-    if (req.categoria_personalizada) {
-      nuevoUsandoCategoriaPersonalizada = true;
-      nuevoCategoriaPersonalizadaTexto = req.categoria_personalizada;
-      nuevoCategoria = "";
-    } else {
-      nuevoUsandoCategoriaPersonalizada = false;
-      nuevoCategoria = req.categoria || "";
-      nuevoCategoriaPersonalizadaTexto = "";
-    }
-    nuevoRequerimientoTexto = req.requerimiento;
-    nuevoUbicacion = req.ubicacion;
-    nuevoCoordenadas = req.coordenadas || "";
-    fotosExistentes = [...(req.fotos_urls || [])];
-    fotosAEliminar = [];
-    mostrarFormRequerimiento = true;
+    reqEditando = req;
   }
 
   function cerrarFormRequerimiento() {
     resetFormRequerimiento();
-    editandoReqId = null;
     mostrarFormRequerimiento = false;
   }
 
@@ -253,16 +221,31 @@
 
   /* ---- Eliminar requerimiento ---- */
   let errorEliminarReq = "";
+  let reqAEliminar: RequerimientoAvanzada | null = null;
+  let eliminandoReq = false;
 
-  async function eliminarRequerimiento(req: RequerimientoAvanzada) {
+  function pedirEliminarRequerimiento(req: RequerimientoAvanzada) {
     if (!req.id) return;
-    if (!window.confirm("¿Eliminar este requerimiento? Esta acción no se puede deshacer.")) return;
     errorEliminarReq = "";
+    reqAEliminar = req;
+  }
+
+  function cancelarEliminarRequerimiento() {
+    reqAEliminar = null;
+  }
+
+  async function confirmarEliminarRequerimiento() {
+    if (!reqAEliminar?.id) return;
+    const req = reqAEliminar;
+    eliminandoReq = true;
     try {
       await avanzadasStore.eliminarRequerimiento(clientId, req.id);
-      if (editandoReqId === req.id) cerrarFormRequerimiento();
+      if (reqEditando?.id === req.id) reqEditando = null;
+      reqAEliminar = null;
     } catch (err) {
       errorEliminarReq = err instanceof Error ? err.message : "No se pudo eliminar el requerimiento.";
+    } finally {
+      eliminandoReq = false;
     }
   }
 
@@ -328,25 +311,11 @@
         ubicacion: nuevoUbicacion.trim(),
         coordenadas: nuevoCoordenadas.trim() || null,
       };
-      if (editandoReqId) {
-        const datosEdit = fotosAEliminar.length > 0 ? { ...datos, fotos_eliminar: fotosAEliminar } : datos;
-        await avanzadasStore.actualizarRequerimiento(
-          clientId,
-          editandoReqId,
-          datosEdit,
-          nuevoFotos.map((f) => f.file)
-        );
-      } else {
-        await avanzadasStore.agregarRequerimiento(clientId, datos, nuevoFotos.map((f) => f.file));
-      }
+      await avanzadasStore.agregarRequerimiento(clientId, datos, nuevoFotos.map((f) => f.file));
       cerrarFormRequerimiento();
     } catch (err) {
       errorNuevoRequerimiento =
-        err instanceof Error
-          ? err.message
-          : editandoReqId
-            ? "No se pudo actualizar el requerimiento."
-            : "No se pudo agregar el requerimiento.";
+        err instanceof Error ? err.message : "No se pudo agregar el requerimiento.";
     } finally {
       guardandoRequerimiento = false;
     }
@@ -559,14 +528,6 @@
                 Evidencia fotográfica <small>(máx. {MAX_FOTOS_POR_REQUERIMIENTO})</small>
               </label>
               <div class="fotos-container">
-                {#each fotosExistentes as url (url)}
-                  <div class="foto-thumb-edit">
-                    <img src={toDisplayableImageUrl(url, "w400")} alt="Foto del requerimiento" />
-                    <button type="button" class="foto-del" aria-label="Eliminar foto" on:click={() => quitarFotoExistente(url)}>
-                      <Icon name="x" size={11} />
-                    </button>
-                  </div>
-                {/each}
                 {#each nuevoFotos as foto, fIdx (foto.previewUrl)}
                   <div class="foto-thumb-edit">
                     <img src={foto.previewUrl} alt={foto.file.name} />
@@ -595,7 +556,7 @@
                 Cancelar
               </Button>
               <Button type="button" on:click={guardarNuevoRequerimiento} loading={guardandoRequerimiento}>
-                {editandoReqId ? "Guardar cambios" : "Guardar requerimiento"}
+                Guardar requerimiento
               </Button>
             </div>
           </div>
@@ -657,7 +618,7 @@
                               type="button"
                               class="eliminar-req-btn"
                               aria-label="Eliminar requerimiento"
-                              on:click={() => eliminarRequerimiento(req)}
+                              on:click={() => pedirEliminarRequerimiento(req)}
                             >
                               <Icon name="trash" size={13} /> Eliminar
                             </button>
@@ -720,6 +681,26 @@
     {/if}
   </main>
 </div>
+
+<EditarRequerimientoModal
+  show={reqEditando !== null}
+  {clientId}
+  req={reqEditando}
+  on:close={() => (reqEditando = null)}
+  on:saved={() => (reqEditando = null)}
+/>
+
+<Modal show={reqAEliminar !== null} title="Eliminar requerimiento" on:close={cancelarEliminarRequerimiento}>
+  <p>¿Eliminar este requerimiento? Esta acción no se puede deshacer.</p>
+  <svelte:fragment slot="footer">
+    <Button type="button" variant="secondary" on:click={cancelarEliminarRequerimiento} disabled={eliminandoReq}>
+      Cancelar
+    </Button>
+    <Button type="button" variant="danger" on:click={confirmarEliminarRequerimiento} loading={eliminandoReq}>
+      Eliminar
+    </Button>
+  </svelte:fragment>
+</Modal>
 
 <!-- Lightbox -->
 {#if lightboxRawUrl}
