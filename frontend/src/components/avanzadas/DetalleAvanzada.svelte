@@ -3,6 +3,7 @@
   import { navigationStore } from "../../stores/navigationStore";
   import { avanzadasStore } from "../../stores/avanzadasStore";
   import { descargarReporteAvanzadaPdf, MAX_FOTOS_POR_REQUERIMIENTO } from "../../api/avanzadas";
+  import { getCurrentPosition, formatCoordinates, reverseGeocodeWithFallback } from "../../lib/geolocation";
   import { formatDate } from "../../lib/format-date";
   import { toDisplayableImageUrl, toOriginalUrl } from "../../lib/media-urls";
   import type { RequerimientoAvanzada } from "../../types/avanzadas";
@@ -140,6 +141,10 @@
   let guardandoRequerimiento = false;
   let errorNuevoRequerimiento = "";
 
+  /** Set while editing an existing requerimiento (PATCH); null while adding a new one (POST). */
+  let editandoReqId: string | null = null;
+  let capturandoGps = false;
+
   let nuevoEntidades: string[] = [];
   let nuevoCategoria = "";
   let nuevoUsandoCategoriaPersonalizada = false;
@@ -147,6 +152,11 @@
   let nuevoRequerimientoTexto = "";
   let nuevoUbicacion = "";
   let nuevoCoordenadas = "";
+
+  /** Edit mode: URLs of already-saved photos still attached (removable). */
+  let fotosExistentes: string[] = [];
+  /** Edit mode: subset of fotosExistentes the user removed, sent as fotos_eliminar. */
+  let fotosAEliminar: string[] = [];
 
   /** Each entry owns ONE object URL, created once when the file is added and
    * revoked when removed/cleared/unmounted — never re-created on every
@@ -164,7 +174,8 @@
     if (!input.files || input.files.length === 0) return;
     const nuevos = Array.from(input.files).map((file) => ({ file, previewUrl: URL.createObjectURL(file) }));
     const combined = [...nuevoFotos, ...nuevos];
-    if (combined.length > MAX_FOTOS_POR_REQUERIMIENTO) {
+    // En edición las fotos ya guardadas cuentan contra el tope: existentes + nuevas.
+    if (fotosExistentes.length + combined.length > MAX_FOTOS_POR_REQUERIMIENTO) {
       errorNuevoRequerimiento = `Máximo ${MAX_FOTOS_POR_REQUERIMIENTO} fotos permitidas`;
       nuevos.forEach((n) => URL.revokeObjectURL(n.previewUrl));
       input.value = "";
@@ -179,12 +190,14 @@
     nuevoFotos = nuevoFotos.filter((_, i) => i !== idx);
   }
 
-  function abrirFormRequerimiento() {
-    mostrarFormRequerimiento = true;
+  /** Moves an already-saved photo from the visible list into the delete set. */
+  function quitarFotoExistente(url: string) {
+    fotosAEliminar = [...fotosAEliminar, url];
+    fotosExistentes = fotosExistentes.filter((u) => u !== url);
   }
 
-  function cerrarFormRequerimiento() {
-    mostrarFormRequerimiento = false;
+  /** Clears every nuevo* form field (blob URLs revoked); does not toggle visibility. */
+  function resetFormRequerimiento() {
     nuevoEntidades = [];
     nuevoCategoria = "";
     nuevoUsandoCategoriaPersonalizada = false;
@@ -194,7 +207,94 @@
     nuevoCoordenadas = "";
     nuevoFotos.forEach((f) => URL.revokeObjectURL(f.previewUrl));
     nuevoFotos = [];
+    fotosExistentes = [];
+    fotosAEliminar = [];
     errorNuevoRequerimiento = "";
+  }
+
+  function abrirFormRequerimiento() {
+    resetFormRequerimiento();
+    editandoReqId = null;
+    mostrarFormRequerimiento = true;
+  }
+
+  function abrirEdicionRequerimiento(req: RequerimientoAvanzada) {
+    resetFormRequerimiento();
+    editandoReqId = req.id;
+    // Fallback para docs viejos guardados antes de la multi-selección de organismos.
+    nuevoEntidades = req.entidades?.length ? [...req.entidades] : req.entidad ? [req.entidad] : [];
+    if (req.categoria_personalizada) {
+      nuevoUsandoCategoriaPersonalizada = true;
+      nuevoCategoriaPersonalizadaTexto = req.categoria_personalizada;
+      nuevoCategoria = "";
+    } else {
+      nuevoUsandoCategoriaPersonalizada = false;
+      nuevoCategoria = req.categoria || "";
+      nuevoCategoriaPersonalizadaTexto = "";
+    }
+    nuevoRequerimientoTexto = req.requerimiento;
+    nuevoUbicacion = req.ubicacion;
+    nuevoCoordenadas = req.coordenadas || "";
+    fotosExistentes = [...(req.fotos_urls || [])];
+    fotosAEliminar = [];
+    mostrarFormRequerimiento = true;
+  }
+
+  function cerrarFormRequerimiento() {
+    resetFormRequerimiento();
+    editandoReqId = null;
+    mostrarFormRequerimiento = false;
+  }
+
+  /** Organismos solicitados de un requerimiento; fallback para docs viejos sin `entidades` (ver abrirEdicionRequerimiento). */
+  function organismosDe(req: RequerimientoAvanzada): string[] {
+    return req.entidades?.length ? req.entidades : req.entidad ? [req.entidad] : [];
+  }
+
+  /* ---- Eliminar requerimiento ---- */
+  let errorEliminarReq = "";
+
+  async function eliminarRequerimiento(req: RequerimientoAvanzada) {
+    if (!req.id) return;
+    if (!window.confirm("¿Eliminar este requerimiento? Esta acción no se puede deshacer.")) return;
+    errorEliminarReq = "";
+    try {
+      await avanzadasStore.eliminarRequerimiento(clientId, req.id);
+      if (editandoReqId === req.id) cerrarFormRequerimiento();
+    } catch (err) {
+      errorEliminarReq = err instanceof Error ? err.message : "No se pudo eliminar el requerimiento.";
+    }
+  }
+
+  /* ---- GPS: mismo patrón que RegistrarAvanzada, adaptado al estado plano ---- */
+  async function capturarGps() {
+    capturandoGps = true;
+    try {
+      const pos = await getCurrentPosition();
+      nuevoCoordenadas = formatCoordinates(pos);
+      await intentarRellenarUbicacion();
+    } catch (err) {
+      errorNuevoRequerimiento = err instanceof Error ? err.message : "No se pudo obtener el GPS del dispositivo.";
+    } finally {
+      capturandoGps = false;
+    }
+  }
+
+  async function intentarRellenarUbicacion() {
+    if (nuevoUbicacion.trim()) return;
+    const partes = nuevoCoordenadas.split(",").map((p) => p.trim());
+    if (partes.length !== 2) return;
+    const lat = parseFloat(partes[0]);
+    const lng = parseFloat(partes[1]);
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return;
+    try {
+      const r = await reverseGeocodeWithFallback(lat, lng);
+      if (r && r.direccion_formateada && !nuevoUbicacion.trim()) {
+        nuevoUbicacion = r.direccion_formateada;
+      }
+    } catch {
+      /* comodidad opcional, nunca bloquea */
+    }
   }
 
   async function guardarNuevoRequerimiento() {
@@ -228,10 +328,25 @@
         ubicacion: nuevoUbicacion.trim(),
         coordenadas: nuevoCoordenadas.trim() || null,
       };
-      await avanzadasStore.agregarRequerimiento(clientId, datos, nuevoFotos.map((f) => f.file));
+      if (editandoReqId) {
+        const datosEdit = fotosAEliminar.length > 0 ? { ...datos, fotos_eliminar: fotosAEliminar } : datos;
+        await avanzadasStore.actualizarRequerimiento(
+          clientId,
+          editandoReqId,
+          datosEdit,
+          nuevoFotos.map((f) => f.file)
+        );
+      } else {
+        await avanzadasStore.agregarRequerimiento(clientId, datos, nuevoFotos.map((f) => f.file));
+      }
       cerrarFormRequerimiento();
     } catch (err) {
-      errorNuevoRequerimiento = err instanceof Error ? err.message : "No se pudo agregar el requerimiento.";
+      errorNuevoRequerimiento =
+        err instanceof Error
+          ? err.message
+          : editandoReqId
+            ? "No se pudo actualizar el requerimiento."
+            : "No se pudo agregar el requerimiento.";
     } finally {
       guardandoRequerimiento = false;
     }
@@ -424,7 +539,19 @@
               bind:coordenadas={nuevoCoordenadas}
               dependencias={$avanzadasStore.catalogos.dependencias}
               categoriasCatalogo={$avanzadasStore.catalogos.categorias}
-            />
+              on:coordsblur={intentarRellenarUbicacion}
+            >
+              <Button
+                slot="gps"
+                type="button"
+                variant="primary"
+                size="sm"
+                loading={capturandoGps}
+                on:click={capturarGps}
+              >
+                GPS
+              </Button>
+            </RequerimientoFormFields>
 
             <div class="media-attachments">
               <!-- svelte-ignore a11y-label-has-associated-control -->
@@ -432,6 +559,14 @@
                 Evidencia fotográfica <small>(máx. {MAX_FOTOS_POR_REQUERIMIENTO})</small>
               </label>
               <div class="fotos-container">
+                {#each fotosExistentes as url (url)}
+                  <div class="foto-thumb-edit">
+                    <img src={toDisplayableImageUrl(url, "w400")} alt="Foto del requerimiento" />
+                    <button type="button" class="foto-del" aria-label="Eliminar foto" on:click={() => quitarFotoExistente(url)}>
+                      <Icon name="x" size={11} />
+                    </button>
+                  </div>
+                {/each}
                 {#each nuevoFotos as foto, fIdx (foto.previewUrl)}
                   <div class="foto-thumb-edit">
                     <img src={foto.previewUrl} alt={foto.file.name} />
@@ -460,10 +595,14 @@
                 Cancelar
               </Button>
               <Button type="button" on:click={guardarNuevoRequerimiento} loading={guardandoRequerimiento}>
-                Guardar requerimiento
+                {editandoReqId ? "Guardar cambios" : "Guardar requerimiento"}
               </Button>
             </div>
           </div>
+        {/if}
+
+        {#if errorEliminarReq}
+          <Alert type="error" message={errorEliminarReq} />
         {/if}
 
         <div class="filters-row">
@@ -504,7 +643,34 @@
                         <span class="categoria-badge">
                           {req.categoria_personalizada || req.categoria}
                         </span>
+                        {#if req.id}
+                          <div class="req-card-actions">
+                            <button
+                              type="button"
+                              class="editar-req-btn"
+                              aria-label="Editar requerimiento"
+                              on:click={() => abrirEdicionRequerimiento(req)}
+                            >
+                              <Icon name="edit" size={13} /> Editar
+                            </button>
+                            <button
+                              type="button"
+                              class="eliminar-req-btn"
+                              aria-label="Eliminar requerimiento"
+                              on:click={() => eliminarRequerimiento(req)}
+                            >
+                              <Icon name="trash" size={13} /> Eliminar
+                            </button>
+                          </div>
+                        {/if}
                       </div>
+                      {#if organismosDe(req).length > 0}
+                        <div class="req-organismos">
+                          {#each organismosDe(req) as organismo}
+                            <span class="entidad-chip">{organismo}</span>
+                          {/each}
+                        </div>
+                      {/if}
                       <p class="req-text">{req.requerimiento}</p>
                       <p class="req-ubicacion">
                         <Icon name="map-pin" size={13} />
@@ -1014,7 +1180,57 @@
     padding: 0.65rem 0.8rem;
   }
   .req-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
     margin-bottom: 0.3rem;
+  }
+  .req-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+  }
+  .editar-req-btn, .eliminar-req-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: none;
+    border: none;
+    padding: 0.15rem 0.3rem;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .editar-req-btn {
+    color: var(--primary);
+  }
+  .editar-req-btn:hover {
+    text-decoration: underline;
+  }
+  .eliminar-req-btn {
+    color: var(--error);
+  }
+  .eliminar-req-btn:hover {
+    text-decoration: underline;
+  }
+  .req-organismos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-bottom: 0.3rem;
+  }
+  .entidad-chip {
+    display: inline-block;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    color: var(--primary-darker);
+    background: var(--primary-light);
+    padding: 0.1rem 0.45rem;
+    border-radius: var(--radius-pill);
   }
   .categoria-badge {
     display: inline-block;

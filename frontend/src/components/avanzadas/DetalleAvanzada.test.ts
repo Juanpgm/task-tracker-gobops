@@ -46,6 +46,8 @@ const avanzadasStoreState = vi.hoisted(() => {
     loadAvanzadaDetalle: vi.fn(),
     loadCatalogos: vi.fn(),
     agregarRequerimiento: vi.fn(),
+    actualizarRequerimiento: vi.fn(),
+    eliminarRequerimiento: vi.fn(),
   };
 });
 
@@ -77,8 +79,18 @@ vi.mock("../../stores/avanzadasStore", () => ({
     loadAvanzadaDetalle: avanzadasStoreState.loadAvanzadaDetalle,
     loadCatalogos: avanzadasStoreState.loadCatalogos,
     agregarRequerimiento: avanzadasStoreState.agregarRequerimiento,
+    actualizarRequerimiento: avanzadasStoreState.actualizarRequerimiento,
+    eliminarRequerimiento: avanzadasStoreState.eliminarRequerimiento,
   },
 }));
+
+const geolocationMocks = vi.hoisted(() => ({
+  getCurrentPosition: vi.fn(),
+  formatCoordinates: vi.fn(),
+  reverseGeocodeWithFallback: vi.fn(),
+}));
+
+vi.mock("../../lib/geolocation", () => geolocationMocks);
 
 vi.mock("../../stores/navigationStore", () => ({
   navigationStore: {
@@ -120,6 +132,7 @@ function setStoreState(patch: Partial<ReturnType<typeof avanzadasStoreState.stor
 
 function requerimiento(overrides: Record<string, unknown> = {}) {
   return {
+    id: "req-1",
     entidad: "DAGMA",
     categoria: "Poda de árboles (autorización)",
     categoria_personalizada: null,
@@ -175,6 +188,9 @@ describe("DetalleAvanzada", () => {
       tipo_requerimiento: "",
       acciones_por_organismo: {},
     });
+    geolocationMocks.getCurrentPosition.mockResolvedValue({ latitud: 3.45, longitud: -76.53, accuracy: 5 });
+    geolocationMocks.formatCoordinates.mockReturnValue("3.450000, -76.530000");
+    geolocationMocks.reverseGeocodeWithFallback.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -399,6 +415,111 @@ describe("DetalleAvanzada", () => {
         expect(screen.queryByLabelText(/^Organismos/)).not.toBeInTheDocument();
       });
     });
+
+    it("GPS button captures the device position and fills the coordinates field", async () => {
+      setStoreState({ detalle: { "client-1": detalle() } });
+      render(DetalleAvanzada);
+      await fireEvent.click(screen.getByRole("button", { name: /agregar requerimiento/i }));
+
+      await fireEvent.click(screen.getByRole("button", { name: /^gps$/i }));
+
+      expect(geolocationMocks.getCurrentPosition).toHaveBeenCalledTimes(1);
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText("lat, lng")).toHaveValue("3.450000, -76.530000");
+      });
+    });
+  });
+
+  describe("edit requerimiento", () => {
+    beforeEach(() => {
+      avanzadasStoreState.store.set({
+        ...avanzadasStoreState.store.get(),
+        catalogos: {
+          estrategias: [],
+          equipo: [],
+          dependencias: [DAGMA],
+          categorias: { [DAGMA]: ["Poda de árboles (autorización)"] },
+        },
+      });
+    });
+
+    const reqExistente = () =>
+      requerimiento({
+        id: "req-42",
+        entidad: DAGMA,
+        entidades: [DAGMA],
+        requerimiento: "Poste caído",
+        ubicacion: "Calle 10",
+        coordenadas: "3.4, -76.5",
+      });
+
+    it("'Editar' on a req-card prefills the form with existing values and relabels the submit button", async () => {
+      setStoreState({ detalle: { "client-1": detalle({ requerimientos: [reqExistente()] }) } });
+      render(DetalleAvanzada);
+
+      await fireEvent.click(screen.getByRole("button", { name: /editar requerimiento/i }));
+
+      expect(screen.getByLabelText(/^Requerimiento/)).toHaveValue("Poste caído");
+      expect(screen.getByLabelText(/^Ubicación/)).toHaveValue("Calle 10");
+      expect(screen.getByText("Guardar cambios")).toBeInTheDocument();
+    });
+
+    it("submits an edit via avanzadasStore.actualizarRequerimiento with clientId, reqId, datos and files", async () => {
+      setStoreState({ detalle: { "client-1": detalle({ requerimientos: [reqExistente()] }) } });
+      avanzadasStoreState.actualizarRequerimiento.mockResolvedValue(reqExistente());
+      render(DetalleAvanzada);
+
+      await fireEvent.click(screen.getByRole("button", { name: /editar requerimiento/i }));
+      await fireEvent.input(screen.getByLabelText(/^Requerimiento/), { target: { value: "Poste reparado" } });
+      await fireEvent.click(screen.getByText("Guardar cambios"));
+
+      expect(avanzadasStoreState.actualizarRequerimiento).toHaveBeenCalledTimes(1);
+      const [calledClientId, calledReqId, datos, files] =
+        avanzadasStoreState.actualizarRequerimiento.mock.calls[0];
+      expect(calledClientId).toBe("client-1");
+      expect(calledReqId).toBe("req-42");
+      expect(datos.entidades).toEqual([DAGMA]);
+      expect(datos.requerimiento).toBe("Poste reparado");
+      expect(Array.isArray(files)).toBe(true);
+      expect(avanzadasStoreState.agregarRequerimiento).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("eliminar requerimiento", () => {
+    const reqExistente = () => requerimiento({ id: "req-42", entidad: DAGMA });
+
+    it("prompts confirm and calls avanzadasStore.eliminarRequerimiento when confirmed", async () => {
+      setStoreState({ detalle: { "client-1": detalle({ requerimientos: [reqExistente()] }) } });
+      avanzadasStoreState.eliminarRequerimiento.mockResolvedValue(undefined);
+      const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+      render(DetalleAvanzada);
+
+      await fireEvent.click(screen.getByRole("button", { name: /eliminar requerimiento/i }));
+
+      expect(confirmSpy).toHaveBeenCalledWith("¿Eliminar este requerimiento? Esta acción no se puede deshacer.");
+      expect(avanzadasStoreState.eliminarRequerimiento).toHaveBeenCalledWith("client-1", "req-42");
+    });
+
+    it("does not call avanzadasStore.eliminarRequerimiento when the confirm dialog is cancelled", async () => {
+      setStoreState({ detalle: { "client-1": detalle({ requerimientos: [reqExistente()] }) } });
+      vi.spyOn(window, "confirm").mockReturnValue(false);
+      render(DetalleAvanzada);
+
+      await fireEvent.click(screen.getByRole("button", { name: /eliminar requerimiento/i }));
+
+      expect(avanzadasStoreState.eliminarRequerimiento).not.toHaveBeenCalled();
+    });
+
+    it("shows an inline error when the delete fails", async () => {
+      setStoreState({ detalle: { "client-1": detalle({ requerimientos: [reqExistente()] }) } });
+      avanzadasStoreState.eliminarRequerimiento.mockRejectedValue(new Error("network"));
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      render(DetalleAvanzada);
+
+      await fireEvent.click(screen.getByRole("button", { name: /eliminar requerimiento/i }));
+
+      expect(await screen.findByText("network")).toBeInTheDocument();
+    });
   });
 
   describe("asistentes", () => {
@@ -515,6 +636,31 @@ describe("DetalleAvanzada", () => {
 
       expect(screen.getByText("Ningún requerimiento coincide con el filtro.")).toBeInTheDocument();
       expect(screen.queryByText("Esta avanzada no tiene requerimientos registrados.")).not.toBeInTheDocument();
+    });
+
+    it("renders a chip per organismo from entidades", () => {
+      setStoreState({
+        detalle: {
+          "client-1": detalle({
+            requerimientos: [requerimiento({ entidades: ["DAGMA", "UAESP"] })],
+          }),
+        },
+      });
+      render(DetalleAvanzada);
+      expect(screen.getByText("DAGMA", { selector: ".entidad-chip" })).toBeInTheDocument();
+      expect(screen.getByText("UAESP", { selector: ".entidad-chip" })).toBeInTheDocument();
+    });
+
+    it("falls back to entidad for a fixture without entidades", () => {
+      setStoreState({
+        detalle: {
+          "client-1": detalle({
+            requerimientos: [requerimiento({ entidad: "DAGMA" })],
+          }),
+        },
+      });
+      render(DetalleAvanzada);
+      expect(screen.getByText("DAGMA", { selector: ".entidad-chip" })).toBeInTheDocument();
     });
 
     it("an entidad group is collapsible", async () => {

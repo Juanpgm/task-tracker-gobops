@@ -19,6 +19,8 @@ import {
   crearAvanzada as crearAvanzadaAPI,
   actualizarAvanzada as actualizarAvanzadaAPI,
   agregarRequerimientoAvanzada as agregarRequerimientoAvanzadaAPI,
+  actualizarRequerimientoAvanzada as actualizarRequerimientoAvanzadaAPI,
+  eliminarRequerimientoAvanzada as eliminarRequerimientoAvanzadaAPI,
   listarAvanzadas,
   getAvanzada as getAvanzadaAPI,
   type CrearAvanzadaDatos,
@@ -228,6 +230,9 @@ function createAvanzadasStore() {
             const payload = item.payload as AvanzadaQueuePayload;
             return {
               ...payload.datos,
+              // Offline-created requerimientos have no server doc id yet (id is
+              // assigned on sync); "" marks them non-editable until then.
+              requerimientos: payload.datos.requerimientos.map((r) => ({ ...r, id: '' })),
               requerimientos_count: payload.datos.requerimientos.length,
               isOffline: true,
             };
@@ -277,6 +282,7 @@ function createAvanzadasStore() {
 
       const localItem: ListarAvanzadasItem = {
         ...datos,
+        requerimientos: datos.requerimientos.map((r) => ({ ...r, id: '' })),
         requerimientos_count: datos.requerimientos.length,
         isOffline: true,
       };
@@ -357,6 +363,7 @@ function createAvanzadasStore() {
             const payload = pending.payload as AvanzadaQueuePayload;
             const offlineDetalle: Avanzada = {
               ...payload.datos,
+              requerimientos: payload.datos.requerimientos.map((r) => ({ ...r, id: '' })),
               requerimientos_count: payload.datos.requerimientos.length,
               isOffline: true,
             };
@@ -441,6 +448,62 @@ function createAvanzadasStore() {
         };
       });
       return nuevo;
+    },
+
+    /**
+     * Actualiza un requerimiento existente (PATCH
+     * /avanzadas/{client_id}/requerimientos/{req_id}). En éxito, reemplaza en
+     * detalle[clientId] la entrada cuyo id coincide con el requerimiento
+     * devuelto por el backend (si el detalle está cargado).
+     */
+    actualizarRequerimiento: async (
+      clientId: string,
+      reqId: string,
+      datos: Partial<RequerimientoAvanzadaDatos> & { fotos_eliminar?: string[] },
+      fotos: File[] = []
+    ): Promise<RequerimientoAvanzada> => {
+      const actualizado = await actualizarRequerimientoAvanzadaAPI(clientId, reqId, datos, fotos);
+      update((s) => {
+        const actual = s.detalle[clientId];
+        if (!actual) return s;
+        return {
+          ...s,
+          detalle: {
+            ...s.detalle,
+            [clientId]: {
+              ...actual,
+              requerimientos: (actual.requerimientos || []).map((r) =>
+                r.id === reqId ? actualizado : r
+              ),
+            },
+          },
+        };
+      });
+      return actualizado;
+    },
+
+    /**
+     * Elimina un requerimiento existente (DELETE
+     * /avanzadas/{client_id}/requerimientos/{req_id}). En éxito, lo quita de
+     * detalle[clientId] y decrementa requerimientos_count (si el detalle está cargado).
+     */
+    eliminarRequerimiento: async (clientId: string, reqId: string): Promise<void> => {
+      await eliminarRequerimientoAvanzadaAPI(clientId, reqId);
+      update((s) => {
+        const actual = s.detalle[clientId];
+        if (!actual) return s;
+        return {
+          ...s,
+          detalle: {
+            ...s.detalle,
+            [clientId]: {
+              ...actual,
+              requerimientos: (actual.requerimientos || []).filter((r) => r.id !== reqId),
+              requerimientos_count: (actual.requerimientos_count ?? actual.requerimientos?.length ?? 0) - 1,
+            },
+          },
+        };
+      });
     },
 
     /** Reproduce la cola offline de avanzadas pendientes contra el backend. */

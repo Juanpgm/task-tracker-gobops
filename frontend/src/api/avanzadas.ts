@@ -30,7 +30,7 @@ export interface CrearAvanzadaDatos {
   coordenadas: string; // "lat, lng"
   encargados: string[];
   asistentes: AsistenteAvanzada[];
-  requerimientos: RequerimientoAvanzada[];
+  requerimientos: RequerimientoAvanzadaDatos[];
 }
 
 export interface CrearAvanzadaFiles {
@@ -107,7 +107,7 @@ export async function actualizarAvanzada(
  *  Campo 'datos' = JSON string con el requerimiento (sin fotos_urls).
  *  Archivos repetibles: 'fotos' (máx. MAX_FOTOS_POR_REQUERIMIENTO).
  * ============================================================ */
-export type RequerimientoAvanzadaDatos = Omit<RequerimientoAvanzada, 'fotos_urls'>;
+export type RequerimientoAvanzadaDatos = Omit<RequerimientoAvanzada, 'fotos_urls' | 'id'>;
 
 export async function agregarRequerimientoAvanzada(
   clientId: string,
@@ -125,6 +125,40 @@ export async function agregarRequerimientoAvanzada(
     `/avanzadas/${encodeURIComponent(clientId)}/requerimientos`,
     formData
   );
+}
+
+/* ============================================================
+ *  PATCH /avanzadas/{client_id}/requerimientos/{req_id} — multipart/form-data.
+ *  Campo 'datos' = JSON string con los campos a actualizar (parcial), más
+ *  'fotos_eliminar' (URLs de fotos existentes a borrar). Archivos repetibles:
+ *  'fotos' (fotos nuevas a agregar, máx. MAX_FOTOS_POR_REQUERIMIENTO en total).
+ *  Retorna el requerimiento completo ya actualizado.
+ * ============================================================ */
+export async function actualizarRequerimientoAvanzada(
+  clientId: string,
+  reqId: string,
+  datos: Partial<RequerimientoAvanzadaDatos> & { fotos_eliminar?: string[] },
+  nuevasFotos: File[] = []
+): Promise<RequerimientoAvanzada> {
+  const formData = new FormData();
+  formData.append('datos', JSON.stringify(datos));
+
+  nuevasFotos.slice(0, MAX_FOTOS_POR_REQUERIMIENTO).forEach((file) => {
+    formData.append('fotos', file);
+  });
+
+  return uploadApiClient.patchForm<RequerimientoAvanzada>(
+    `/avanzadas/${encodeURIComponent(clientId)}/requerimientos/${encodeURIComponent(reqId)}`,
+    formData
+  );
+}
+
+/* ============================================================
+ *  DELETE /avanzadas/{client_id}/requerimientos/{req_id} — 204 No Content,
+ *  sin cuerpo. Mismo patrón que eliminarCompromiso en api/jornadas.ts.
+ * ============================================================ */
+export async function eliminarRequerimientoAvanzada(clientId: string, reqId: string): Promise<void> {
+  await apiClient.delete(`/avanzadas/${encodeURIComponent(clientId)}/requerimientos/${encodeURIComponent(reqId)}`);
 }
 
 /* ============================================================

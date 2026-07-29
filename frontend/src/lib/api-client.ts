@@ -161,6 +161,9 @@ export class ApiClient {
       const errorBody = await response.text();
       throw new Error(`DELETE ${path} failed (${response.status}): ${errorBody}`);
     }
+    if (response.status === 204) {
+      return undefined as T;
+    }
     return response.json();
   }
 

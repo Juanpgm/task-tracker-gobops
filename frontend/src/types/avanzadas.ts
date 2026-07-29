@@ -16,6 +16,8 @@ export interface AsistenteAvanzada {
 
 /** Requerimiento levantado durante la avanzada, asignado a una entidad/categoría */
 export interface RequerimientoAvanzada {
+  /** Firestore doc id del requerimiento; presente en GET detalle y en el PATCH de actualización. */
+  id: string;
   entidad: string;
   /** Organismos destino (multi-selección); el backend deriva entidad = entidades[0] cuando se envía. */
   entidades?: string[];

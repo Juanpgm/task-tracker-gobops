@@ -17,6 +17,9 @@ const apiMocks = vi.hoisted(() => ({
   crearAvanzada: vi.fn(),
   listarAvanzadas: vi.fn(),
   getAvanzada: vi.fn(),
+  agregarRequerimientoAvanzada: vi.fn(),
+  actualizarRequerimientoAvanzada: vi.fn(),
+  eliminarRequerimientoAvanzada: vi.fn(),
 }));
 
 const queueMocks = vi.hoisted(() => ({
@@ -565,7 +568,11 @@ describe("avanzadasStore", () => {
       expect(state.detalle["pending-1"]).toBeDefined();
       expect(state.detalle["pending-1"].isOffline).toBe(true);
       expect(state.detalle["pending-1"].nombre_avanzada).toBe(baseDatosSinClientId.nombre_avanzada);
-      expect(state.detalle["pending-1"].requerimientos).toEqual(baseDatosSinClientId.requerimientos);
+      // Offline-created requerimientos are reincorporated with an empty id sentinel
+      // (no server doc id assigned until sync).
+      expect(state.detalle["pending-1"].requerimientos).toEqual(
+        baseDatosSinClientId.requerimientos.map((r) => ({ ...r, id: "" }))
+      );
     });
 
     it("keeps per-clientId state independent (loading one detail does not clobber another)", async () => {
@@ -636,6 +643,78 @@ describe("avanzadasStore", () => {
       const state = get(store);
       expect(state.detalle["client-1"].nombre_avanzada).toBe("Fresh");
       expect(state.detalleError["client-1"]).toBeNull();
+    });
+  });
+
+  describe("actualizarRequerimiento", () => {
+    async function seedDetalle(store: Awaited<ReturnType<typeof freshStore>>) {
+      apiMocks.getAvanzada.mockResolvedValueOnce({
+        client_id: "client-1",
+        nombre_avanzada: "X",
+        asistentes: [],
+        requerimientos: [
+          { id: "req-1", entidad: "DAGMA", requerimiento: "Original", ubicacion: "A", fotos_urls: [] },
+          { id: "req-2", entidad: "UAESP", requerimiento: "Otro", ubicacion: "B", fotos_urls: [] },
+        ],
+      });
+      await store.loadAvanzadaDetalle("client-1");
+    }
+
+    it("replaces the matching requerimiento by id in detalle with the backend response", async () => {
+      const store = await freshStore();
+      await seedDetalle(store);
+
+      const actualizado = {
+        id: "req-1",
+        entidad: "DAGMA",
+        requerimiento: "Editado",
+        ubicacion: "A2",
+        fotos_urls: ["https://s3/foo.jpg"],
+      };
+      apiMocks.actualizarRequerimientoAvanzada.mockResolvedValue(actualizado);
+
+      const result = await store.actualizarRequerimiento("client-1", "req-1", { requerimiento: "Editado" }, []);
+
+      expect(apiMocks.actualizarRequerimientoAvanzada).toHaveBeenCalledWith(
+        "client-1",
+        "req-1",
+        { requerimiento: "Editado" },
+        []
+      );
+      expect(result).toEqual(actualizado);
+
+      const reqs = get(store).detalle["client-1"].requerimientos;
+      expect(reqs.find((r) => r.id === "req-1")).toEqual(actualizado);
+      expect(reqs.find((r) => r.id === "req-2")!.requerimiento).toBe("Otro"); // others untouched
+    });
+  });
+
+  describe("eliminarRequerimiento", () => {
+    async function seedDetalle(store: Awaited<ReturnType<typeof freshStore>>) {
+      apiMocks.getAvanzada.mockResolvedValueOnce({
+        client_id: "client-1",
+        nombre_avanzada: "X",
+        asistentes: [],
+        requerimientos_count: 2,
+        requerimientos: [
+          { id: "req-1", entidad: "DAGMA", requerimiento: "Original", ubicacion: "A", fotos_urls: [] },
+          { id: "req-2", entidad: "UAESP", requerimiento: "Otro", ubicacion: "B", fotos_urls: [] },
+        ],
+      });
+      await store.loadAvanzadaDetalle("client-1");
+    }
+
+    it("filters the matching-id requerimiento out, decrements the count, and leaves other entries untouched", async () => {
+      const store = await freshStore();
+      await seedDetalle(store);
+      apiMocks.eliminarRequerimientoAvanzada.mockResolvedValue(undefined);
+
+      await store.eliminarRequerimiento("client-1", "req-1");
+
+      expect(apiMocks.eliminarRequerimientoAvanzada).toHaveBeenCalledWith("client-1", "req-1");
+      const detalle = get(store).detalle["client-1"];
+      expect(detalle.requerimientos.map((r: any) => r.id)).toEqual(["req-2"]);
+      expect(detalle.requerimientos_count).toBe(1);
     });
   });
 
