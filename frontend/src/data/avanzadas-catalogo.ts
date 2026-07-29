@@ -63,6 +63,8 @@ export const DEPENDENCIAS_AVANZADAS: string[] = [
   'UNIAJC - Institución Universitaria Antonio José Camacho',
   'IUIPC - Institución Universitaria de las Culturas y las Artes Populares',
   'ESE - Empresas Sociales del Estado (Red Pública de Salud)',
+  'Policía - Policía Metropolitana',
+  'CVC - Corporación Autónoma Regional del Valle del Cauca',
   'Otra entidad',
 ];
 

@@ -3,7 +3,6 @@
   import { navigationStore } from "../../stores/navigationStore";
   import { avanzadasStore } from "../../stores/avanzadasStore";
   import { getCurrentPosition, formatCoordinates, reverseGeocodeWithFallback } from "../../lib/geolocation";
-  import { getCategoriasParaEntidad } from "../../data/avanzadas-catalogo";
   import Button from "../ui/Button.svelte";
   import Alert from "../ui/Alert.svelte";
   import Card from "../ui/Card.svelte";
@@ -13,11 +12,11 @@
   import Textarea from "../ui/Textarea.svelte";
   import ViewHeader from "../ui/ViewHeader.svelte";
   import LocationPicker from "../shared/LocationPicker.svelte";
+  import RequerimientoFormFields from "./RequerimientoFormFields.svelte";
   import { lookupComunaBarrio } from "../../lib/geoLookup";
   import type { Avanzada } from "../../types/avanzadas";
 
   const MAX_FOTOS_POR_REQUERIMIENTO = 5;
-  const OPCION_CATEGORIA_PERSONALIZADA = "__personalizada__";
 
   /* ============================================================
    *  MODO EDICIÓN — presencia de client_id en los params de navegación
@@ -218,7 +217,7 @@
    *  SECCIÓN 4 — Requerimientos
    * ============================================================ */
   interface RequerimientoDraft {
-    entidad: string;
+    entidades: string[];
     categoria: string;
     usandoCategoriaPersonalizada: boolean;
     categoriaPersonalizadaTexto: string;
@@ -231,7 +230,7 @@
 
   function createEmptyRequerimiento(): RequerimientoDraft {
     return {
-      entidad: "",
+      entidades: [],
       categoria: "",
       usandoCategoriaPersonalizada: false,
       categoriaPersonalizadaTexto: "",
@@ -244,56 +243,6 @@
   }
 
   let requerimientos: RequerimientoDraft[] = [createEmptyRequerimiento()];
-
-  function categoriasPara(entidad: string): string[] {
-    return getCategoriasParaEntidad(entidad, $avanzadasStore.catalogos.categorias);
-  }
-
-  /**
-   * Mirrors the reference app's actualizarCategorias(): while no entidad is
-   * chosen yet the select stays disabled with no real options at all. Once
-   * an entidad has any text, the select is always enabled — even for an
-   * unknown/unlisted entidad — because "+ Agregar nueva categoría..." must
-   * stay reachable so the user can define one on the fly.
-   */
-  function categoriaOptions(entidad: string): { value: string; label: string }[] {
-    if (!entidad.trim()) return [];
-    return [
-      ...categoriasPara(entidad).map((cat) => ({ value: cat, label: cat })),
-      { value: OPCION_CATEGORIA_PERSONALIZADA, label: "+ Agregar nueva categoría..." },
-    ];
-  }
-
-  function categoriaPlaceholder(entidad: string): string {
-    if (!entidad.trim()) return "-- Primero selecciona una entidad --";
-    return categoriasPara(entidad).length > 0
-      ? "-- Selecciona categoría --"
-      : "-- Sin categorías predefinidas --";
-  }
-
-  function handleEntidadChange(idx: number) {
-    // Al cambiar de entidad, la categoría previamente elegida ya no aplica.
-    requerimientos[idx].categoria = "";
-    requerimientos[idx].usandoCategoriaPersonalizada = false;
-    requerimientos[idx].categoriaPersonalizadaTexto = "";
-    requerimientos = [...requerimientos];
-  }
-
-  function onCategoriaSelectChange(idx: number, event: Event) {
-    const select = event.target as HTMLSelectElement;
-    handleCategoriaChange(idx, select.value);
-  }
-
-  function handleCategoriaChange(idx: number, value: string) {
-    if (value === OPCION_CATEGORIA_PERSONALIZADA) {
-      requerimientos[idx].usandoCategoriaPersonalizada = true;
-      requerimientos[idx].categoria = "";
-    } else {
-      requerimientos[idx].usandoCategoriaPersonalizada = false;
-      requerimientos[idx].categoria = value;
-    }
-    requerimientos = [...requerimientos];
-  }
 
   async function capturarGpsRequerimiento(idx: number) {
     requerimientos[idx].capturandoGps = true;
@@ -443,7 +392,7 @@
       // exclusivos de modo edición, que nunca usa este autosave (ver onMount).
       asistentes: asistentes.map((a) => ({ nombre: a.nombre, organismo: a.organismo, celular: a.celular, correo: a.correo })),
       requerimientos: requerimientos.map((r) => ({
-        entidad: r.entidad,
+        entidades: r.entidades,
         categoria: r.categoria,
         usandoCategoriaPersonalizada: r.usandoCategoriaPersonalizada,
         categoriaPersonalizadaTexto: r.categoriaPersonalizadaTexto,
@@ -463,7 +412,7 @@
       !d.latitud &&
       d.encargadosSeleccionados.length === 0 &&
       d.asistentes.length === 0 &&
-      d.requerimientos.every((r) => !r.entidad.trim() && !r.requerimiento.trim() && !r.ubicacion.trim())
+      d.requerimientos.every((r) => r.entidades.length === 0 && !r.requerimiento.trim() && !r.ubicacion.trim())
     );
   }
 
@@ -529,8 +478,17 @@
         }));
       }
       if (Array.isArray(d.requerimientos) && d.requerimientos.length > 0) {
-        requerimientos = d.requerimientos.map((r) => ({
-          entidad: r.entidad || "",
+        requerimientos = d.requerimientos.map((r) => {
+          // Fallback para borradores previos que guardaron `entidad: string`
+          // (forma legacy, antes de la multi-selección de organismos).
+          const legacy = r as { entidad?: string; entidades?: string[] };
+          const entidades = Array.isArray(legacy.entidades)
+            ? legacy.entidades
+            : legacy.entidad
+              ? [legacy.entidad]
+              : [];
+          return {
+          entidades,
           categoria: r.categoria || "",
           usandoCategoriaPersonalizada: !!r.usandoCategoriaPersonalizada,
           categoriaPersonalizadaTexto: r.categoriaPersonalizadaTexto || "",
@@ -539,7 +497,8 @@
           coordenadas: r.coordenadas || "",
           capturandoGps: false,
           fotos: [],
-        }));
+          };
+        });
       }
 
       if (!draftEstaVacio(serializarDraft())) draftRestaurado = true;
@@ -726,7 +685,7 @@
     if (!modoEdicion) {
       requerimientos.forEach((r, i) => {
         const rerr: RequerimientoErrors = {};
-        if (!r.entidad.trim()) rerr.entidad = `Requerimiento #${i + 1}: la entidad es obligatoria.`;
+        if (r.entidades.length === 0) rerr.entidad = `Requerimiento #${i + 1}: la entidad es obligatoria.`;
         if (!r.requerimiento.trim()) rerr.requerimiento = `Requerimiento #${i + 1}: describa el requerimiento.`;
         if (!r.ubicacion.trim()) rerr.ubicacion = `Requerimiento #${i + 1}: indique la ubicación.`;
         errs.requerimientos[i] = rerr;
@@ -858,7 +817,10 @@
           correo: a.correo,
         })),
         requerimientos: requerimientos.map((r) => ({
-          entidad: r.entidad.trim(),
+          // El backend deriva entidad = entidades[0]; enviamos ambos para
+          // conservar el contrato legacy (entidad) además de la multi-selección.
+          entidad: r.entidades[0],
+          entidades: r.entidades,
           categoria: r.usandoCategoriaPersonalizada
             ? r.categoriaPersonalizadaTexto.trim()
             : r.categoria,
@@ -1231,86 +1193,31 @@
                 </button>
               </div>
 
-              <div class="field">
-                <Input
-                  id="req-entidad-{idx}"
-                  label="Entidad"
-                  required
-                  bind:value={req.entidad}
-                  list="dependencias-list"
-                  placeholder="Escribe para buscar (ej: DAGMA, EMCALI, Movilidad...)"
-                  on:change={() => handleEntidadChange(idx)}
-                  error={errors.requerimientos[idx]?.entidad}
-                />
-                <p class="req-hint">Escribe el acrónimo o nombre y selecciona de la lista.</p>
-              </div>
-
-              <div class="field">
-                <Select
-                  id="req-categoria-{idx}"
-                  label="Categoría"
-                  disabled={!req.entidad.trim()}
-                  value={req.usandoCategoriaPersonalizada ? OPCION_CATEGORIA_PERSONALIZADA : req.categoria}
-                  on:change={(e) => onCategoriaSelectChange(idx, e)}
-                  placeholder={categoriaPlaceholder(req.entidad)}
-                  options={categoriaOptions(req.entidad)}
-                />
-                {#if req.usandoCategoriaPersonalizada}
-                  <Input
-                    type="text"
-                    bind:value={req.categoriaPersonalizadaTexto}
-                    placeholder="Escribe la nueva categoría..."
-                  />
-                {/if}
-                <p class="req-hint">
-                  Tipo de intervención según la entidad. Si eliges "Otro", escribe una nueva y quedará disponible
-                  para todos.
-                </p>
-              </div>
-
-              <Textarea
-                id="req-detalle-{idx}"
-                label="Requerimiento"
-                required
-                bind:value={req.requerimiento}
-                rows={3}
-                placeholder="Descripción del requerimiento o hallazgo"
-                error={errors.requerimientos[idx]?.requerimiento}
-              />
-
-              <div class="row-2col">
-                <Input
-                  id="req-ubicacion-{idx}"
-                  label="Ubicación"
-                  required
-                  bind:value={req.ubicacion}
-                  placeholder="Ej: Cll 5 con Cra 23, Barrio San Fernando"
-                  error={errors.requerimientos[idx]?.ubicacion}
-                />
-
-                <div class="field">
-                  <!-- svelte-ignore a11y-label-has-associated-control -->
-                  <label class="field-label-subtle" for="req-coords-{idx}">Coordenadas GPS (lat, lng)</label>
-                  <div class="gps-row">
-                    <Input
-                      id="req-coords-{idx}"
-                      type="text"
-                      bind:value={req.coordenadas}
-                      placeholder="lat, lng"
-                      on:blur={() => handleCoordsBlur(idx)}
-                    />
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="sm"
-                      loading={req.capturandoGps}
-                      on:click={() => capturarGpsRequerimiento(idx)}
-                    >
-                      GPS
-                    </Button>
-                  </div>
-                </div>
-              </div>
+              <RequerimientoFormFields
+                idPrefix={idx}
+                bind:entidades={req.entidades}
+                bind:categoria={req.categoria}
+                bind:usandoCategoriaPersonalizada={req.usandoCategoriaPersonalizada}
+                bind:categoriaPersonalizadaTexto={req.categoriaPersonalizadaTexto}
+                bind:requerimiento={req.requerimiento}
+                bind:ubicacion={req.ubicacion}
+                bind:coordenadas={req.coordenadas}
+                dependencias={$avanzadasStore.catalogos.dependencias}
+                categoriasCatalogo={$avanzadasStore.catalogos.categorias}
+                errors={errors.requerimientos[idx] || {}}
+                on:coordsblur={() => handleCoordsBlur(idx)}
+              >
+                <Button
+                  slot="gps"
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  loading={req.capturandoGps}
+                  on:click={() => capturarGpsRequerimiento(idx)}
+                >
+                  GPS
+                </Button>
+              </RequerimientoFormFields>
 
               <div class="media-attachments">
                 <!-- svelte-ignore a11y-label-has-associated-control -->
@@ -1725,33 +1632,6 @@
     position: absolute;
     inset: -10px;
   }
-  .req-hint {
-    font-size: var(--fs-xs);
-    color: var(--text-muted);
-    margin: 0.1875rem 0 0;
-    line-height: 1.4;
-  }
-  /* The reference's ".row" — used only for Ubicación + Coordenadas GPS,
-     unlike Entidad/Categoría which stack full-width like the reference. */
-  .row-2col {
-    display: flex;
-    gap: 0.875rem;
-    flex-wrap: wrap;
-  }
-  .row-2col > :global(.input-group),
-  .row-2col > .field {
-    flex: 1;
-    min-width: 200px;
-  }
-  .gps-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.375rem;
-  }
-  .gps-row :global(.input-group) {
-    flex: 1;
-  }
-
   .fotos-container {
     display: flex;
     flex-wrap: wrap;

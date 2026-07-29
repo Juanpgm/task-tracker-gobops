@@ -11,7 +11,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import "@testing-library/jest-dom/vitest";
-import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/svelte";
+import { render, screen, fireEvent, cleanup, waitFor, within } from "@testing-library/svelte";
 
 /**
  * This machine's Node runtime defines a global `localStorage` backed by
@@ -149,7 +149,38 @@ vi.mock("../../lib/geoLookup", () => ({
   lookupComunaBarrio: geoLookupMocks.lookupComunaBarrio,
 }));
 
+// RequerimientoFormFields (rendered inside each requerimiento row) calls
+// clasificarRequerimiento on a debounce to auto-suggest organismos. It's a
+// non-blocking convenience with its own try/catch; here it's mocked to a
+// no-suggestion result so it never hits the network from a test.
+const avanzadasApiMocks = vi.hoisted(() => ({
+  clasificarRequerimiento: vi.fn(),
+}));
+vi.mock("../../api/avanzadas", () => ({
+  clasificarRequerimiento: avanzadasApiMocks.clasificarRequerimiento,
+}));
+
 import RegistrarAvanzada from "./RegistrarAvanzada.svelte";
+
+const DAGMA = "DAGMA - Departamento Administrativo de Gestión del Medio Ambiente";
+const UAESP = "UAESP - Unidad Administrativa Especial de Servicios Públicos Municipales";
+const MOVILIDAD = "Movilidad - Secretaría de Movilidad";
+
+/** The `.multiselect` container for the Organismos field at the given row index. */
+function organismoContainer(index = 0): HTMLElement {
+  const labels = screen.getAllByText("Organismos", { selector: ".ms-label" });
+  return labels[index].closest(".multiselect") as HTMLElement;
+}
+
+/** Type into the search box, click the matching option, then close via "Aceptar". */
+async function selectOrganismo(fullName: string, index = 0) {
+  const container = organismoContainer(index);
+  const input = container.querySelector(".ms-input") as HTMLInputElement;
+  await fireEvent.focus(input);
+  await fireEvent.input(input, { target: { value: fullName.slice(0, 5) } });
+  await fireEvent.click(within(container).getByText(fullName, { selector: ".option" }));
+  await fireEvent.click(within(container).getByText("Aceptar"));
+}
 
 async function openSection(name: string | RegExp) {
   const header = screen.getByText(name, { selector: ".section-title" }).closest("button")!;
@@ -166,7 +197,9 @@ async function fillMinimumValidForm() {
   await fireEvent.click(screen.getByText("Ana Maria Carabali"));
 
   await openSection("Requerimientos");
-  await fireEvent.input(screen.getByLabelText(/^Entidad/), { target: { value: "DAGMA" } });
+  // Select the organismo BEFORE typing the requerimiento so the debounced
+  // auto-classify short-circuits (it only runs when no organismo is chosen).
+  await selectOrganismo(DAGMA);
   await fireEvent.input(screen.getByLabelText(/^Requerimiento/), { target: { value: "Poda urgente" } });
   await fireEvent.input(screen.getByLabelText(/^Ubicación/), { target: { value: "Frente al parque" } });
 }
@@ -178,7 +211,11 @@ describe("RegistrarAvanzada", () => {
       catalogos: {
         estrategias: ["En Un 2x3", "Plan de Choque"],
         equipo: ["Ana Maria Carabali", "Jorge Leonardo Campaz"],
-        dependencias: ["DAGMA - Departamento Administrativo de Gestión del Medio Ambiente", "UAESP - Unidad Administrativa Especial de Servicios Públicos Municipales"],
+        dependencias: [
+          "DAGMA - Departamento Administrativo de Gestión del Medio Ambiente",
+          "UAESP - Unidad Administrativa Especial de Servicios Públicos Municipales",
+          "Movilidad - Secretaría de Movilidad",
+        ],
         categorias: {
           DAGMA: ["Poda de árboles (autorización)", "Otro — DAGMA"],
           UAESP: ["Otro — UAESP"],
@@ -196,6 +233,13 @@ describe("RegistrarAvanzada", () => {
       detalle: {},
       detalleLoading: {},
       detalleError: {},
+    });
+    avanzadasApiMocks.clasificarRequerimiento.mockResolvedValue({
+      organismos_sugeridos: [],
+      confianza: 0,
+      metodo: "test",
+      tipo_requerimiento: "",
+      acciones_por_organismo: {},
     });
     avanzadasStoreState.crearAvanzada.mockResolvedValue({ isOffline: false, client_id: "new-id" });
     navigationStoreState.store.set({ view: "programar-avanzada", params: {} });
@@ -295,7 +339,7 @@ describe("RegistrarAvanzada", () => {
       expect(datos.nombre_avanzada).toBe("Avanzada de prueba");
       expect(datos.encargados).toEqual(["Ana Maria Carabali"]);
       expect(datos.requerimientos).toHaveLength(1);
-      expect(datos.requerimientos[0]).toMatchObject({ entidad: "DAGMA", requerimiento: "Poda urgente", ubicacion: "Frente al parque" });
+      expect(datos.requerimientos[0]).toMatchObject({ entidades: [DAGMA], requerimiento: "Poda urgente", ubicacion: "Frente al parque" });
 
       expect(screen.getByText("Avanzada registrada correctamente.")).toBeInTheDocument();
     });
@@ -324,17 +368,15 @@ describe("RegistrarAvanzada", () => {
     });
   });
 
-  describe("entidad -> categoria", () => {
-    it("populates the categoria select options from the catalog when entidad changes", async () => {
+  describe("organismo -> categoria", () => {
+    it("populates the categoria select options from the catalog when an organismo is selected", async () => {
       render(RegistrarAvanzada);
       await openSection("Requerimientos");
 
       const categoriaSelect = screen.getByLabelText(/^Categoría/) as HTMLSelectElement;
-      expect(categoriaSelect).toBeDisabled(); // no entidad yet
+      expect(categoriaSelect).toBeDisabled(); // no organismo yet
 
-      const entidadInput = screen.getByLabelText(/^Entidad/);
-      await fireEvent.input(entidadInput, { target: { value: "DAGMA" } });
-      await fireEvent.change(entidadInput); // entidad uses on:change to trigger handleEntidadChange
+      await selectOrganismo(DAGMA);
 
       expect(categoriaSelect).not.toBeDisabled();
       const optionTexts = Array.from(categoriaSelect.options).map((o) => o.textContent);
@@ -342,31 +384,28 @@ describe("RegistrarAvanzada", () => {
       expect(optionTexts).toContain("Otro — DAGMA");
     });
 
-    it("resets the previously chosen categoria when entidad changes again", async () => {
+    it("resets the previously chosen categoria when the organismos change again", async () => {
       render(RegistrarAvanzada);
       await openSection("Requerimientos");
 
-      const entidadInput = screen.getByLabelText(/^Entidad/);
-      await fireEvent.input(entidadInput, { target: { value: "DAGMA" } });
-      await fireEvent.change(entidadInput);
+      await selectOrganismo(DAGMA);
 
       const categoriaSelect = screen.getByLabelText(/^Categoría/) as HTMLSelectElement;
       await fireEvent.change(categoriaSelect, { target: { value: "Otro — DAGMA" } });
       expect(categoriaSelect.value).toBe("Otro — DAGMA");
 
-      await fireEvent.input(entidadInput, { target: { value: "UAESP" } });
-      await fireEvent.change(entidadInput);
+      // Adding another organismo fires the change handler, which clears the
+      // now-possibly-stale categoria.
+      await selectOrganismo(UAESP);
 
       expect(categoriaSelect.value).toBe("");
     });
 
-    it("shows '-- Sin categorías predefinidas --' plus the 'agregar nueva' option for an entidad with no known categories", async () => {
+    it("shows '-- Sin categorías predefinidas --' plus the 'agregar nueva' option for an organismo with no known categories", async () => {
       render(RegistrarAvanzada);
       await openSection("Requerimientos");
 
-      const entidadInput = screen.getByLabelText(/^Entidad/);
-      await fireEvent.input(entidadInput, { target: { value: "Entidad Desconocida" } });
-      await fireEvent.change(entidadInput);
+      await selectOrganismo(MOVILIDAD); // present in dependencias, absent from categorias
 
       const categoriaSelect = screen.getByLabelText(/^Categoría/) as HTMLSelectElement;
       expect(categoriaSelect).not.toBeDisabled();
@@ -379,9 +418,7 @@ describe("RegistrarAvanzada", () => {
       render(RegistrarAvanzada);
       await openSection("Requerimientos");
 
-      const entidadInput = screen.getByLabelText(/^Entidad/);
-      await fireEvent.input(entidadInput, { target: { value: "DAGMA" } });
-      await fireEvent.change(entidadInput);
+      await selectOrganismo(DAGMA);
 
       expect(screen.queryByPlaceholderText("Escribe la nueva categoría...")).not.toBeInTheDocument();
 
@@ -442,19 +479,21 @@ describe("RegistrarAvanzada", () => {
       await fireEvent.click(screen.getByText("Agregar otro requerimiento"));
       await fireEvent.click(screen.getByText("Agregar otro requerimiento"));
 
-      const entidadInputs = screen.getAllByLabelText(/^Entidad/);
-      await fireEvent.input(entidadInputs[0], { target: { value: "Entidad A" } });
-      await fireEvent.input(entidadInputs[1], { target: { value: "Entidad B" } });
-      await fireEvent.input(entidadInputs[2], { target: { value: "Entidad C" } });
+      // Use the Requerimiento textarea (short values, no auto-classify) to
+      // prove per-row data survives a middle removal + renumber.
+      const reqInputs = screen.getAllByLabelText(/^Requerimiento/) as HTMLTextAreaElement[];
+      await fireEvent.input(reqInputs[0], { target: { value: "Req A" } });
+      await fireEvent.input(reqInputs[1], { target: { value: "Req B" } });
+      await fireEvent.input(reqInputs[2], { target: { value: "Req C" } });
 
-      await fireEvent.click(screen.getAllByText("Eliminar")[1]); // remove the middle card ("Entidad B")
+      await fireEvent.click(screen.getAllByText("Eliminar")[1]); // remove the middle card ("Req B")
 
       expect(screen.getByText("Requerimiento #1")).toBeInTheDocument();
       expect(screen.getByText("Requerimiento #2")).toBeInTheDocument();
       expect(screen.queryByText("Requerimiento #3")).not.toBeInTheDocument();
 
-      const remaining = screen.getAllByLabelText(/^Entidad/) as HTMLInputElement[];
-      expect(remaining.map((i) => i.value)).toEqual(["Entidad A", "Entidad C"]);
+      const remaining = screen.getAllByLabelText(/^Requerimiento/) as HTMLTextAreaElement[];
+      expect(remaining.map((i) => i.value)).toEqual(["Req A", "Req C"]);
     });
   });
 
@@ -584,9 +623,9 @@ describe("RegistrarAvanzada", () => {
     it("auto-opens a collapsed section that has a validation error", async () => {
       render(RegistrarAvanzada);
       await fillMinimumValidForm();
-      // Requerimientos section is left open by fillMinimumValidForm; blank
-      // its entidad, then collapse the section before submitting.
-      await fireEvent.input(screen.getByLabelText(/^Entidad/), { target: { value: "" } });
+      // Requerimientos section is left open by fillMinimumValidForm; remove the
+      // selected organismo (leaving entidades empty), then collapse the section.
+      await fireEvent.click(within(organismoContainer(0)).getByLabelText(/^Quitar/));
       await openSection("Requerimientos"); // collapses it (was open)
 
       await fireEvent.click(screen.getByText("Guardar Avanzada"));
@@ -602,8 +641,10 @@ describe("RegistrarAvanzada", () => {
 
       await openSection("Asistencia");
       await fireEvent.click(screen.getByText("Agregar asistente"));
-      // Nombre left empty; fill a different field to prove partial rows still block.
-      await fireEvent.input(screen.getByLabelText(/^Organismo/), { target: { value: "Alcaldía" } });
+      // Nombre left empty; fill a different field to prove partial rows still
+      // block. Target by id: the requerimiento "Organismos" multi-select also
+      // matches /^Organismo/, so a label regex would be ambiguous here.
+      await fireEvent.input(document.getElementById("asist-organismo-0") as HTMLInputElement, { target: { value: "Alcaldía" } });
 
       await fireEvent.click(screen.getByText("Guardar Avanzada"));
 
@@ -671,7 +712,7 @@ describe("RegistrarAvanzada", () => {
       try {
         const { unmount } = render(RegistrarAvanzada);
         await openSection("Requerimientos");
-        await fireEvent.input(screen.getByLabelText(/^Entidad/), { target: { value: "DAGMA" } });
+        await selectOrganismo(DAGMA);
         await fireEvent.input(screen.getByLabelText(/^Requerimiento/), { target: { value: "Poda urgente" } });
         await fireEvent.input(screen.getByLabelText(/^Ubicación/), { target: { value: "Frente al parque" } });
 
@@ -684,7 +725,8 @@ describe("RegistrarAvanzada", () => {
         render(RegistrarAvanzada);
         await openSection("Requerimientos");
 
-        expect((screen.getByLabelText(/^Entidad/) as HTMLInputElement).value).toBe("DAGMA");
+        // The organismo comes back as a selected chip in the multi-select.
+        expect(organismoContainer(0)).toHaveTextContent(/DAGMA/);
         expect((screen.getByLabelText(/^Requerimiento/) as HTMLTextAreaElement).value).toBe("Poda urgente");
         expect((screen.getByLabelText(/^Ubicación/) as HTMLInputElement).value).toBe("Frente al parque");
       } finally {

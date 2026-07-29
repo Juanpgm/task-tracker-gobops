@@ -152,6 +152,35 @@ export async function getAvanzada(clientId: string): Promise<Avanzada> {
 }
 
 /* ============================================================
+ *  POST /avanzadas/clasificar-requerimiento
+ *  Sugiere organismos destino a partir del texto libre del requerimiento
+ *  (clasificación automática). Usado por el formulario como autocompletado
+ *  no bloqueante — ver RequerimientoFormFields.svelte.
+ * ============================================================ */
+export interface ClasificarRequerimientoDatos {
+  texto: string;
+  tipo_requerimiento?: string;
+  observaciones?: string;
+}
+
+export interface ClasificarRequerimientoResponse {
+  organismos_sugeridos: string[];
+  confianza: number;
+  metodo: string;
+  tipo_requerimiento: string;
+  acciones_por_organismo: Record<string, unknown>;
+}
+
+export async function clasificarRequerimiento(
+  datos: ClasificarRequerimientoDatos
+): Promise<ClasificarRequerimientoResponse> {
+  return apiClient.post<ClasificarRequerimientoResponse>(
+    '/avanzadas/clasificar-requerimiento',
+    datos as unknown as Record<string, unknown>
+  );
+}
+
+/* ============================================================
  *  GET /avanzadas/{client_id}/reporte-pdf
  *  Descarga el informe PDF de la avanzada (reportes tipo informe de campo,
  *  con requerimientos por entidad y mapa de recorrido) y dispara la

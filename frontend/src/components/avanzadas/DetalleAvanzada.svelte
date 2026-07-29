@@ -5,17 +5,13 @@
   import { descargarReporteAvanzadaPdf, MAX_FOTOS_POR_REQUERIMIENTO } from "../../api/avanzadas";
   import { formatDate } from "../../lib/format-date";
   import { toDisplayableImageUrl, toOriginalUrl } from "../../lib/media-urls";
-  import { getCategoriasParaEntidad } from "../../data/avanzadas-catalogo";
   import type { RequerimientoAvanzada } from "../../types/avanzadas";
   import Alert from "../ui/Alert.svelte";
   import Button from "../ui/Button.svelte";
   import Icon from "../ui/Icon.svelte";
-  import Input from "../ui/Input.svelte";
-  import Select from "../ui/Select.svelte";
-  import Textarea from "../ui/Textarea.svelte";
+  import RequerimientoFormFields from "./RequerimientoFormFields.svelte";
   import ViewHeader from "../ui/ViewHeader.svelte";
 
-  const OPCION_CATEGORIA_PERSONALIZADA = "__personalizada__";
   /** Background refresh cadence while this view is mounted (see onMount): lets a
    * user see requerimientos added by other users/devices without a manual refresh. */
   const POLL_INTERVAL_MS = 40_000;
@@ -144,7 +140,7 @@
   let guardandoRequerimiento = false;
   let errorNuevoRequerimiento = "";
 
-  let nuevoEntidad = "";
+  let nuevoEntidades: string[] = [];
   let nuevoCategoria = "";
   let nuevoUsandoCategoriaPersonalizada = false;
   let nuevoCategoriaPersonalizadaTexto = "";
@@ -162,48 +158,6 @@
     previewUrl: string;
   }
   let nuevoFotos: NuevaFotoDraft[] = [];
-
-  $: dependenciaOptions = $avanzadasStore.catalogos.dependencias.map((d) => ({ value: d, label: d }));
-
-  function categoriasParaNuevaEntidad(entidad: string): string[] {
-    return getCategoriasParaEntidad(entidad, $avanzadasStore.catalogos.categorias);
-  }
-
-  // Mirrors RegistrarAvanzada.svelte's categoriaOptions()/categoriaPlaceholder()
-  // pattern exactly (entidad -> categoría dependiente + opción "+ Agregar
-  // nueva categoría..." para categoría libre) — ver ese componente para el
-  // razonamiento completo.
-  function nuevaCategoriaOptions(entidad: string): { value: string; label: string }[] {
-    if (!entidad.trim()) return [];
-    return [
-      ...categoriasParaNuevaEntidad(entidad).map((cat) => ({ value: cat, label: cat })),
-      { value: OPCION_CATEGORIA_PERSONALIZADA, label: "+ Agregar nueva categoría..." },
-    ];
-  }
-
-  function nuevaCategoriaPlaceholder(entidad: string): string {
-    if (!entidad.trim()) return "-- Primero selecciona una entidad --";
-    return categoriasParaNuevaEntidad(entidad).length > 0
-      ? "-- Selecciona categoría --"
-      : "-- Sin categorías predefinidas --";
-  }
-
-  function handleNuevaEntidadChange() {
-    nuevoCategoria = "";
-    nuevoUsandoCategoriaPersonalizada = false;
-    nuevoCategoriaPersonalizadaTexto = "";
-  }
-
-  function handleNuevaCategoriaChange(event: Event) {
-    const value = (event.target as HTMLSelectElement).value;
-    if (value === OPCION_CATEGORIA_PERSONALIZADA) {
-      nuevoUsandoCategoriaPersonalizada = true;
-      nuevoCategoria = "";
-    } else {
-      nuevoUsandoCategoriaPersonalizada = false;
-      nuevoCategoria = value;
-    }
-  }
 
   function handleNuevasFotos(event: Event) {
     const input = event.target as HTMLInputElement;
@@ -231,7 +185,7 @@
 
   function cerrarFormRequerimiento() {
     mostrarFormRequerimiento = false;
-    nuevoEntidad = "";
+    nuevoEntidades = [];
     nuevoCategoria = "";
     nuevoUsandoCategoriaPersonalizada = false;
     nuevoCategoriaPersonalizadaTexto = "";
@@ -245,8 +199,8 @@
 
   async function guardarNuevoRequerimiento() {
     errorNuevoRequerimiento = "";
-    if (!nuevoEntidad.trim()) {
-      errorNuevoRequerimiento = "La entidad es obligatoria.";
+    if (nuevoEntidades.length === 0) {
+      errorNuevoRequerimiento = "Seleccione al menos un organismo.";
       return;
     }
     if (!nuevoRequerimientoTexto.trim()) {
@@ -261,7 +215,11 @@
     guardandoRequerimiento = true;
     try {
       const datos = {
-        entidad: nuevoEntidad.trim(),
+        // El backend deriva entidad = entidades[0]; enviamos ambos para
+        // satisfacer el contrato legacy (entidad) sin dejar de mandar la
+        // multi-selección nueva (entidades).
+        entidad: nuevoEntidades[0],
+        entidades: nuevoEntidades,
         categoria: nuevoUsandoCategoriaPersonalizada ? nuevoCategoriaPersonalizadaTexto.trim() : nuevoCategoria,
         categoria_personalizada: nuevoUsandoCategoriaPersonalizada
           ? nuevoCategoriaPersonalizadaTexto.trim() || null
@@ -455,60 +413,18 @@
               <Alert type="error" message={errorNuevoRequerimiento} />
             {/if}
 
-            <Select
-              id="nuevo-req-entidad"
-              label="Entidad"
-              required
-              bind:value={nuevoEntidad}
-              options={dependenciaOptions}
-              placeholder="-- Selecciona una entidad --"
-              on:change={handleNuevaEntidadChange}
+            <RequerimientoFormFields
+              idPrefix="nuevo"
+              bind:entidades={nuevoEntidades}
+              bind:categoria={nuevoCategoria}
+              bind:usandoCategoriaPersonalizada={nuevoUsandoCategoriaPersonalizada}
+              bind:categoriaPersonalizadaTexto={nuevoCategoriaPersonalizadaTexto}
+              bind:requerimiento={nuevoRequerimientoTexto}
+              bind:ubicacion={nuevoUbicacion}
+              bind:coordenadas={nuevoCoordenadas}
+              dependencias={$avanzadasStore.catalogos.dependencias}
+              categoriasCatalogo={$avanzadasStore.catalogos.categorias}
             />
-
-            <div class="field">
-              <Select
-                id="nuevo-req-categoria"
-                label="Categoría"
-                disabled={!nuevoEntidad.trim()}
-                value={nuevoUsandoCategoriaPersonalizada ? OPCION_CATEGORIA_PERSONALIZADA : nuevoCategoria}
-                on:change={handleNuevaCategoriaChange}
-                placeholder={nuevaCategoriaPlaceholder(nuevoEntidad)}
-                options={nuevaCategoriaOptions(nuevoEntidad)}
-              />
-              {#if nuevoUsandoCategoriaPersonalizada}
-                <Input
-                  type="text"
-                  bind:value={nuevoCategoriaPersonalizadaTexto}
-                  placeholder="Escribe la nueva categoría..."
-                />
-              {/if}
-            </div>
-
-            <Textarea
-              id="nuevo-req-detalle"
-              label="Requerimiento"
-              required
-              bind:value={nuevoRequerimientoTexto}
-              rows={3}
-              placeholder="Descripción del requerimiento o hallazgo"
-            />
-
-            <div class="row-2col">
-              <Input
-                id="nuevo-req-ubicacion"
-                label="Ubicación"
-                required
-                bind:value={nuevoUbicacion}
-                placeholder="Ej: Cll 5 con Cra 23, Barrio San Fernando"
-              />
-              <Input
-                id="nuevo-req-coordenadas"
-                type="text"
-                label="Coordenadas GPS (lat, lng)"
-                bind:value={nuevoCoordenadas}
-                placeholder="lat, lng"
-              />
-            </div>
 
             <div class="media-attachments">
               <!-- svelte-ignore a11y-label-has-associated-control -->
@@ -956,11 +872,6 @@
     justify-content: flex-end;
     gap: 0.5rem;
   }
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
   .field-label-subtle {
     font-size: var(--fs-md);
     font-weight: 600;
@@ -969,15 +880,6 @@
   .field-label-subtle small {
     font-weight: 400;
     color: var(--text-muted);
-  }
-  .row-2col {
-    display: flex;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-  }
-  .row-2col > :global(.input-group) {
-    flex: 1;
-    min-width: 200px;
   }
   .media-actions {
     display: flex;

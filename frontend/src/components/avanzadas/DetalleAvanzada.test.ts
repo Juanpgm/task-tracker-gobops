@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import "@testing-library/jest-dom/vitest";
-import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/svelte";
+import { render, screen, fireEvent, cleanup, waitFor, within } from "@testing-library/svelte";
 
 const avanzadasStoreState = vi.hoisted(() => {
   function createMockStore(initial: any) {
@@ -89,14 +89,30 @@ vi.mock("../../stores/navigationStore", () => ({
 
 const avanzadasApiMocks = vi.hoisted(() => ({
   descargarReporteAvanzadaPdf: vi.fn(),
+  // RequerimientoFormFields (inside the inline add form) calls this on a
+  // debounce to auto-suggest organismos; mocked so it never hits the network.
+  clasificarRequerimiento: vi.fn(),
 }));
 
 vi.mock("../../api/avanzadas", () => ({
   descargarReporteAvanzadaPdf: avanzadasApiMocks.descargarReporteAvanzadaPdf,
+  clasificarRequerimiento: avanzadasApiMocks.clasificarRequerimiento,
   MAX_FOTOS_POR_REQUERIMIENTO: 5,
 }));
 
 import DetalleAvanzada from "./DetalleAvanzada.svelte";
+
+const DAGMA = "DAGMA - Departamento Administrativo de Gestión del Medio Ambiente";
+
+/** Type into the Organismos search box, click the option, close via "Aceptar". */
+async function selectOrganismo(fullName: string) {
+  const container = screen.getByText("Organismos", { selector: ".ms-label" }).closest(".multiselect") as HTMLElement;
+  const input = container.querySelector(".ms-input") as HTMLInputElement;
+  await fireEvent.focus(input);
+  await fireEvent.input(input, { target: { value: fullName.slice(0, 5) } });
+  await fireEvent.click(within(container).getByText(fullName, { selector: ".option" }));
+  await fireEvent.click(within(container).getByText("Aceptar"));
+}
 
 function setStoreState(patch: Partial<ReturnType<typeof avanzadasStoreState.store.get>>) {
   avanzadasStoreState.store.set({ ...avanzadasStoreState.store.get(), ...patch });
@@ -152,6 +168,13 @@ describe("DetalleAvanzada", () => {
       detalleError: {},
     });
     navigationStoreState.store.set({ view: "detalle-avanzada", params: { client_id: "client-1" } });
+    avanzadasApiMocks.clasificarRequerimiento.mockResolvedValue({
+      organismos_sugeridos: [],
+      confianza: 0,
+      metodo: "test",
+      tipo_requerimiento: "",
+      acciones_por_organismo: {},
+    });
   });
 
   afterEach(() => {
@@ -324,7 +347,7 @@ describe("DetalleAvanzada", () => {
 
       await fireEvent.click(screen.getByRole("button", { name: /agregar requerimiento/i }));
 
-      expect(screen.getByLabelText(/^Entidad/)).toBeInTheDocument();
+      expect(screen.getByLabelText(/^Organismos/)).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /agregar requerimiento/i })).not.toBeInTheDocument();
     });
 
@@ -335,7 +358,7 @@ describe("DetalleAvanzada", () => {
 
       await fireEvent.click(screen.getByText("Cancelar"));
 
-      expect(screen.queryByLabelText(/^Entidad/)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Organismos/)).not.toBeInTheDocument();
       expect(avanzadasStoreState.agregarRequerimiento).not.toHaveBeenCalled();
     });
 
@@ -346,21 +369,19 @@ describe("DetalleAvanzada", () => {
       await fireEvent.click(screen.getByRole("button", { name: /agregar requerimiento/i }));
       await fireEvent.click(screen.getByText("Guardar requerimiento"));
 
-      expect(screen.getByText("La entidad es obligatoria.")).toBeInTheDocument();
+      expect(screen.getByText("Seleccione al menos un organismo.")).toBeInTheDocument();
       expect(avanzadasStoreState.agregarRequerimiento).not.toHaveBeenCalled();
     });
 
     it("submits via avanzadasStore.agregarRequerimiento and closes the form on success", async () => {
       setStoreState({ detalle: { "client-1": detalle() } });
       avanzadasStoreState.agregarRequerimiento.mockResolvedValue(
-        requerimiento({ entidad: "DAGMA - Departamento Administrativo de Gestión del Medio Ambiente", requerimiento: "Árbol caído" })
+        requerimiento({ entidad: DAGMA, requerimiento: "Árbol caído" })
       );
       render(DetalleAvanzada);
 
       await fireEvent.click(screen.getByRole("button", { name: /agregar requerimiento/i }));
-      await fireEvent.change(screen.getByLabelText(/^Entidad/), {
-        target: { value: "DAGMA - Departamento Administrativo de Gestión del Medio Ambiente" },
-      });
+      await selectOrganismo(DAGMA);
       await fireEvent.input(screen.getByLabelText(/^Requerimiento/), { target: { value: "Árbol caído" } });
       await fireEvent.input(screen.getByLabelText(/^Ubicación/), { target: { value: "Frente al parque" } });
 
@@ -369,12 +390,13 @@ describe("DetalleAvanzada", () => {
       expect(avanzadasStoreState.agregarRequerimiento).toHaveBeenCalledTimes(1);
       const [calledClientId, datos] = avanzadasStoreState.agregarRequerimiento.mock.calls[0];
       expect(calledClientId).toBe("client-1");
-      expect(datos.entidad).toBe("DAGMA - Departamento Administrativo de Gestión del Medio Ambiente");
+      expect(datos.entidades).toEqual([DAGMA]);
+      expect(datos.entidad).toBe(DAGMA); // legacy field still sent (= entidades[0])
       expect(datos.requerimiento).toBe("Árbol caído");
       expect(datos.ubicacion).toBe("Frente al parque");
 
       await waitFor(() => {
-        expect(screen.queryByLabelText(/^Entidad/)).not.toBeInTheDocument();
+        expect(screen.queryByLabelText(/^Organismos/)).not.toBeInTheDocument();
       });
     });
   });

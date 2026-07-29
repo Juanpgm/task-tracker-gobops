@@ -17,6 +17,8 @@ export interface AsistenteAvanzada {
 /** Requerimiento levantado durante la avanzada, asignado a una entidad/categoría */
 export interface RequerimientoAvanzada {
   entidad: string;
+  /** Organismos destino (multi-selección); el backend deriva entidad = entidades[0] cuando se envía. */
+  entidades?: string[];
   categoria: string;
   categoria_personalizada: string | null;
   requerimiento: string;

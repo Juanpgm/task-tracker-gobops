@@ -364,6 +364,8 @@ export async function eliminarEncuesta(clientId: string): Promise<void> {
  * ------------------------------------------------------------ */
 export interface RequerimientoJornadaInput {
   entidad: string;
+  /** Organismos destino (multi-selección), mismo contrato que RequerimientoAvanzada.entidades. */
+  entidades?: string[];
   categoria: string;
   categoria_personalizada: string | null;
   requerimiento: string;
