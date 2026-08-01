@@ -6,5 +6,7 @@ import { test, expect } from '@playwright/test';
  */
 test('home se renderiza con accesos clave', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByText('Visitas Programadas', { exact: false })).toBeVisible();
+  // Pre-existing stale locator fixed while unblocking e2e for
+  // fix-token-401-network-errors — see auth.setup.ts for details.
+  await expect(page.getByRole('heading', { name: '¡Bienvenido!' })).toBeVisible();
 });

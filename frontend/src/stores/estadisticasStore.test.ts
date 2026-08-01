@@ -15,6 +15,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { get } from "svelte/store";
+import { SESSION_EXPIRED } from "../lib/auth-error-messages";
 
 const apiMocks = vi.hoisted(() => ({
   getEstadisticasAvanzadas: vi.fn(),
@@ -186,5 +187,16 @@ describe("estadisticasStore", () => {
     await p1;
 
     expect(get(store).data).toEqual(sampleUpdated);
+  });
+
+  it("translates a raw 401 failure into SESSION_EXPIRED, never the raw string", async () => {
+    const store = await freshStore();
+    apiMocks.getEstadisticasAvanzadas.mockRejectedValueOnce(
+      new Error("GET /avanzadas/estadisticas failed (401): Token inválido o expirado")
+    );
+
+    await store.load();
+
+    expect(get(store).error).toBe(SESSION_EXPIRED);
   });
 });

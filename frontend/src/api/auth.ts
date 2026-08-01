@@ -1,6 +1,6 @@
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged, getIdToken } from 'firebase/auth';
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged, onIdTokenChanged, getIdToken } from 'firebase/auth';
 import { auth } from '../lib/firebase';
-import { apiClient, projectApiClient, uploadApiClient } from '../lib/api-client';
+import { apiClient, projectApiClient, uploadApiClient, type RefreshResult } from '../lib/api-client';
 import { authStore } from '../stores/authStore';
 import type {
   UserProfile,
@@ -14,6 +14,46 @@ import type {
 let loginInProgress = false;
 
 /**
+ * Error Classification Table (Firebase code -> RefreshResult status), per
+ * design.md. A code NOT in either list (or an error with no `.code` at all)
+ * falls through to 'transient' as a fail-safe: an SDK code we don't
+ * recognize yet should never be the reason a user gets kicked to login.
+ */
+const TRANSIENT_CODES = new Set([
+  'auth/network-request-failed',
+  'auth/timeout',
+  'auth/internal-error',
+  'auth/too-many-requests',
+]);
+
+const SESSION_INVALID_CODES = new Set([
+  'auth/user-token-expired',
+  'auth/token-expired',
+  'auth/invalid-user-token',
+  'auth/user-disabled',
+  'auth/user-not-found',
+  'auth/requires-recent-login',
+]);
+
+function classifyRefreshError(err: unknown): 'transient' | 'session-invalid' {
+  const code = (err as { code?: unknown } | null)?.code;
+  if (typeof code === 'string' && SESSION_INVALID_CODES.has(code)) return 'session-invalid';
+  // Recognized transient codes AND anything unrecognized (no code, or a
+  // code we don't have an entry for) both fail safe to 'transient'.
+  return 'transient';
+}
+
+/**
+ * Single-flight promise shared by all 3 HTTP clients: a burst of concurrent
+ * 401s (one per client, or several requests on the same client) must
+ * trigger exactly one `getIdToken(user, true)` call, not one per caller.
+ * Cleared in `finally` — NOT cached beyond the in-flight call, so a later
+ * caller (after this one settles) always gets a fresh attempt instead of a
+ * stale transient failure replayed forever.
+ */
+let refreshInFlight: Promise<RefreshResult> | null = null;
+
+/**
  * Refresca el ID token de Firebase y lo sincroniza en los tres clientes HTTP.
  * Se registra en cada ApiClient como su `onUnauthorized` handler: la PWA
  * queda abierta horas en el campo, así que el token (válido ~1h) expira a
@@ -22,31 +62,43 @@ let loginInProgress = false;
  * una vista con datos ya cacheados) fallaba con 401 aunque el usuario
  * siguiera logueado.
  *
- * Si `auth.currentUser` es null acá, no es un token vencido refrescable: es
- * que la sesión real de Firebase ya no existe (ITP de iOS purgó su
- * IndexedDB, `signOut` en otra pestaña, storage borrado). authStore todavía
- * puede mostrar "logueado" gracias al fallback restoreSession()/
- * restoreSessionFromIdb() (que cachea el perfil + token para sobrevivir
- * exactamente esa purga de ITP) — pero ese token cacheado nunca va a poder
- * refrescarse sin la sesión real de Firebase detrás. Dejarlo así deja al
- * usuario viendo la app "logueada" mientras cualquier acción nueva falla
- * con 401 al azar; forzamos logout para que vea el login y pueda
- * autenticarse de nuevo en vez de quedar atascado.
+ * Devuelve un `RefreshResult` discriminado en vez de `string | null`: un
+ * fallo de refresh por causa de RED (Firebase `auth/network-request-failed`
+ * y códigos afines) NUNCA debe desloguear al usuario — antes se colapsaba
+ * junto con una sesión genuinamente muerta en el mismo `null`, forzando un
+ * logout indebido ante cualquier hipo de conectividad en campo. Sólo una
+ * sesión realmente inválida/revocada (o `auth.currentUser === null`, que
+ * significa que la sesión real de Firebase ya no existe — ITP de iOS purgó
+ * su IndexedDB, `signOut` en otra pestaña, storage borrado) fuerza logout.
  */
-async function refrescarTokenYSincronizar(): Promise<string | null> {
-  if (!auth || !auth.currentUser) {
-    authStore.logout();
-    return null;
-  }
+async function refrescarTokenYSincronizar(): Promise<RefreshResult> {
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async (): Promise<RefreshResult> => {
+    if (!auth || !auth.currentUser) {
+      authStore.logout();
+      return { status: 'session-invalid' };
+    }
+    try {
+      const idToken = await getIdToken(auth.currentUser, true);
+      apiClient.setToken(idToken);
+      projectApiClient.setToken(idToken);
+      uploadApiClient.setToken(idToken);
+      return { status: 'refreshed', token: idToken };
+    } catch (err) {
+      const classification = classifyRefreshError(err);
+      if (classification === 'session-invalid') {
+        authStore.logout();
+        return { status: 'session-invalid' };
+      }
+      return { status: 'transient' };
+    }
+  })();
+
   try {
-    const idToken = await getIdToken(auth.currentUser, true);
-    apiClient.setToken(idToken);
-    projectApiClient.setToken(idToken);
-    uploadApiClient.setToken(idToken);
-    return idToken;
-  } catch {
-    authStore.logout();
-    return null;
+    return await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
   }
 }
 
@@ -167,6 +219,30 @@ export function initAuthListener(): () => void {
     }
     return () => {};
   }
+
+  // Proactive refresh: the Firebase SDK refreshes the underlying ID token
+  // before it expires on its own schedule; this listener just picks that
+  // fresh token up and syncs it, shrinking the window during which a
+  // request can 401 due to plain expiry. Deliberately lightweight — it
+  // does NOT call /auth/validate-session or rebuild the profile (that's
+  // onAuthStateChanged's job on sign-in/out), or it would hammer the
+  // backend on every hourly token rotation. Guarded by `loginInProgress`
+  // for the same reason onAuthStateChanged is: don't race an active login().
+  onIdTokenChanged(auth, async (firebaseUser) => {
+    if (loginInProgress || !firebaseUser) return;
+    try {
+      const idToken = await getIdToken(firebaseUser);
+      apiClient.setToken(idToken);
+      projectApiClient.setToken(idToken);
+      uploadApiClient.setToken(idToken);
+      authStore.updateToken(idToken);
+    } catch (err) {
+      // Best-effort: a failure here just means the proactive refresh didn't
+      // land; the reactive 401 path (refrescarTokenYSincronizar) still
+      // covers it, so this is not worth surfacing to the user.
+      console.warn('onIdTokenChanged proactive refresh failed:', err);
+    }
+  });
 
   return onAuthStateChanged(auth, async (firebaseUser) => {
     // Skip if login() is already handling authentication

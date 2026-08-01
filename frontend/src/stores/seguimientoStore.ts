@@ -39,6 +39,7 @@ import {
   updateQueueReqId,
   updateOperationError,
 } from '../lib/offlineQueue';
+import { toUserMessage } from '../lib/auth-error-messages';
 
 function mapRequerimientoOutToRequerimiento(
   out: RequerimientoOut,
@@ -200,7 +201,7 @@ function createSeguimientoStore() {
         });
         update((s) => ({ ...s, visitas: mapped, loading: false }));
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Error al cargar visitas';
+        const msg = toUserMessage(err);
         console.error('loadVisitas failed:', err);
         update((s) => ({ ...s, loading: false, error: msg }));
       }
@@ -371,7 +372,7 @@ function createSeguimientoStore() {
           return { ...s, loading: false, requerimientos: merged };
         });
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Error al cargar requerimientos';
+        const msg = toUserMessage(err);
         console.error('loadRequerimientos failed:', err);
         update((s) => ({ ...s, loading: false, error: msg }));
       }

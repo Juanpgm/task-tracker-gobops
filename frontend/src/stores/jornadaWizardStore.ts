@@ -37,6 +37,7 @@ import {
   type RequerimientoJornadaInput,
   type JornadaListaItem,
 } from '../api/jornadas';
+import { toUserMessage } from '../lib/auth-error-messages';
 
 export const JORNADAS_LISTA_TTL_MS = 30_000;
 
@@ -155,7 +156,7 @@ function createJornadaWizardStore() {
         }));
         return { client_id: jornada.client_id };
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Error al crear la jornada';
+        const msg = toUserMessage(err);
         update((s) => ({ ...s, loadingCurrent: false, errorCurrent: msg }));
         throw err;
       }
@@ -171,7 +172,7 @@ function createJornadaWizardStore() {
         update((s) => ({ ...s, current: normalizeJornada(raw), loadingCurrent: false }));
       } catch (err) {
         if (token !== currentRequestToken) return; // superseded — discard
-        const msg = err instanceof Error ? err.message : 'Error al cargar la jornada';
+        const msg = toUserMessage(err);
         update((s) => ({ ...s, loadingCurrent: false, errorCurrent: msg }));
       }
     },
@@ -407,7 +408,7 @@ function createJornadaWizardStore() {
         }));
       } catch (err) {
         if (token !== listaRequestToken) return; // superseded — discard
-        const msg = err instanceof Error ? err.message : 'Error al cargar jornadas';
+        const msg = toUserMessage(err);
         update((s) => {
           if (s.lista.length > 0) {
             return { ...s, listaLoading: false, listaRevalidating: false, listaRevalidateError: msg };

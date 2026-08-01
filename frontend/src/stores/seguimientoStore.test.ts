@@ -10,6 +10,8 @@
  * returns the unified S3 shape { s3_url, s3_key, filename, content_type, size }.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { get } from "svelte/store";
+import { SESSION_EXPIRED } from "../lib/auth-error-messages";
 
 const apiMocks = vi.hoisted(() => ({
   actualizarEstadoVisitaAPI: vi.fn(),
@@ -138,5 +140,32 @@ describe("seguimientoStore.syncOfflineQueue", () => {
 
     expect(queueMocks.updateQueueReqId).toHaveBeenCalledWith("temp-1", "real-1");
     expect(queueMocks.dequeueOperation).toHaveBeenCalledWith("queue-1");
+  });
+});
+
+describe("seguimientoStore — UI error messaging translation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("loadVisitas translates a raw 401 failure into SESSION_EXPIRED, never the raw string", async () => {
+    apiMocks.obtenerVisitasProgramadas.mockRejectedValue(
+      new Error("GET /obtener-visitas-programadas failed (401): Token inválido o expirado")
+    );
+    const store = await freshStore();
+    await store.loadVisitas();
+    const state = get(store);
+    expect(state.error).toBe(SESSION_EXPIRED);
+  });
+
+  it("loadRequerimientos translates a raw 401 failure into SESSION_EXPIRED, never the raw string", async () => {
+    apiMocks.obtenerRequerimientos.mockRejectedValue(
+      new Error("GET /obtener-requerimientos failed (401): Token inválido o expirado")
+    );
+    queueMocks.getQueue.mockResolvedValue([]);
+    const store = await freshStore();
+    await store.loadRequerimientos();
+    const state = get(store);
+    expect(state.error).toBe(SESSION_EXPIRED);
   });
 });

@@ -19,8 +19,12 @@ setup('authenticate', async ({ page }) => {
   await page.locator('#password').fill(password);
   await page.getByRole('button', { name: /iniciar sesi[oó]n/i }).click();
 
-  // Tras login se redirige al Home, que muestra el card "Visitas Programadas".
-  await expect(page.getByText('Visitas Programadas', { exact: false })).toBeVisible({
+  // Tras login se redirige al Home, que muestra el heading de bienvenida.
+  // (Pre-existing bug found while unblocking e2e evidence for
+  // fix-token-401-network-errors: Home.svelte's action cards were renamed
+  // away from "Visitas Programadas" at some point but this locator was
+  // never updated, silently failing setup for every e2e spec.)
+  await expect(page.getByRole('heading', { name: '¡Bienvenido!' })).toBeVisible({
     timeout: 30_000,
   });
 

@@ -75,6 +75,28 @@ function createAuthStore() {
     clearError: () => {
       update((state) => ({ ...state, error: null }));
     },
+    /**
+     * Sincroniza un token refrescado proactivamente (via `onIdTokenChanged`)
+     * al estado y al storage, sin tocar `user`/`isAuthenticated`. A
+     * diferencia de `login()`, no dispara ningún efecto secundario de
+     * autenticación — sólo mantiene fresco lo que `restoreSession()` leería
+     * más tarde.
+     */
+    updateToken: (token: string) => {
+      update((state) => {
+        if (!state.user) return state;
+        const user = { ...state.user, token };
+        try {
+          localStorage.setItem('auth_user', JSON.stringify(user));
+          sessionStorage.setItem('auth_token', token);
+        } catch {
+          // Ignore storage errors
+        }
+        idbSet(IDB_USER_KEY, user).catch(() => undefined);
+        idbSet(IDB_TOKEN_KEY, token).catch(() => undefined);
+        return { ...state, token, user };
+      });
+    },
     restoreSession: () => {
       try {
         const savedUser = localStorage.getItem('auth_user');

@@ -14,6 +14,7 @@
  */
 import { writable, get } from 'svelte/store';
 import { getEstadisticasJornadas, type EstadisticasJornadas } from '../api/jornadas';
+import { toUserMessage } from '../lib/auth-error-messages';
 
 export const JORNADAS_TTL_MS = 60_000;
 
@@ -85,7 +86,7 @@ function createJornadasStore() {
         }));
       } catch (err) {
         if (token !== requestToken) return; // superseded — don't clobber fresher state
-        const msg = err instanceof Error ? err.message : 'Error al cargar estadísticas de jornadas';
+        const msg = toUserMessage(err);
         update((s) => {
           if (s.data !== null) {
             // Ya había datos en pantalla (stale-while-revalidate): no los

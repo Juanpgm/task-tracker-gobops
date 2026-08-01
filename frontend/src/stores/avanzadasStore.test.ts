@@ -11,6 +11,8 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { get } from "svelte/store";
+import { SESSION_EXPIRED, CONNECTION_RETRY } from "../lib/auth-error-messages";
+import { REFRESH_TRANSIENT } from "../lib/api-client";
 
 const apiMocks = vi.hoisted(() => ({
   getCatalogosAvanzadas: vi.fn(),
@@ -289,6 +291,32 @@ describe("avanzadasStore", () => {
       const state = get(store);
       expect(state.error).toBe("boom");
       expect(state.loading).toBe(false);
+    });
+
+    it("translates a raw 401 failure into the SESSION_EXPIRED user message, never the raw string", async () => {
+      apiMocks.listarAvanzadas.mockRejectedValue(new Error("GET /avanzadas failed (401): Token inválido o expirado"));
+      const store = await freshStore();
+      await store.loadAvanzadas();
+      const state = get(store);
+      expect(state.error).toBe(SESSION_EXPIRED);
+      expect(state.error).not.toContain("401");
+    });
+
+    it("translates a REFRESH_TRANSIENT background-revalidate failure into CONNECTION_RETRY on revalidateError", async () => {
+      vi.useFakeTimers();
+      apiMocks.listarAvanzadas.mockResolvedValueOnce([
+        { client_id: "a1", nombre_avanzada: "Old", requerimientos_count: 0 },
+      ]);
+      const store = await freshStore();
+      await store.loadAvanzadas();
+
+      vi.advanceTimersByTime(31_000);
+      apiMocks.listarAvanzadas.mockRejectedValueOnce(new Error(REFRESH_TRANSIENT));
+
+      await store.loadAvanzadas();
+
+      const state = get(store);
+      expect(state.revalidateError).toBe(CONNECTION_RETRY);
     });
 
     it("preserves an offline-created item that has not synced yet (present in the queue, absent from the server response)", async () => {

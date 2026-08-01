@@ -14,6 +14,7 @@
  */
 import { writable, get } from 'svelte/store';
 import { getEstadisticasAvanzadas, type EstadisticasAvanzadas } from '../api/avanzadas-estadisticas';
+import { toUserMessage } from '../lib/auth-error-messages';
 
 export const ESTADISTICAS_TTL_MS = 60_000;
 
@@ -85,7 +86,7 @@ function createEstadisticasStore() {
         }));
       } catch (err) {
         if (token !== requestToken) return; // superseded — don't clobber fresher state
-        const msg = err instanceof Error ? err.message : 'Error al cargar estadísticas';
+        const msg = toUserMessage(err);
         update((s) => {
           if (s.data !== null) {
             // Ya había datos en pantalla (stale-while-revalidate): no los

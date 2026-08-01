@@ -33,6 +33,7 @@ import {
 import { CATALOGO_AVANZADAS_FALLBACK, mergeCatalogos } from '../data/avanzadas-catalogo';
 import { enqueueOperation, getQueue, dequeueOperation, updateOperationError } from '../lib/offlineQueue';
 import { offlineStore } from './offlineStore';
+import { toUserMessage } from '../lib/auth-error-messages';
 
 /** Payload persistido en la cola offline para una avanzada pendiente de sincronizar. */
 interface AvanzadaQueuePayload {
@@ -248,7 +249,7 @@ function createAvanzadasStore() {
         }));
       } catch (err) {
         if (token !== avanzadasRequestToken) return; // superseded — don't clobber fresher state with a stale error
-        const msg = err instanceof Error ? err.message : 'Error al cargar avanzadas';
+        const msg = toUserMessage(err);
         update((s) => {
           if (s.avanzadas.length > 0) {
             // Ya había datos en pantalla (stale-while-revalidate): no los pisamos
