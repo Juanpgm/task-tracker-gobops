@@ -224,5 +224,5 @@ Después del despliegue, verifica:
 
 Para más información sobre la API:
 
-- Documentación completa: https://web-production-79739.up.railway.app/docs
+- Documentación completa: https://web-production-7707c.up.railway.app/docs
 - Endpoints: [API_ENDPOINTS.md](./API_ENDPOINTS.md)

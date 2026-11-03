@@ -11,7 +11,7 @@
 
 | Alias           | Variable ENV        | URL Actual                                            | Propósito                                          |
 | --------------- | ------------------- | ----------------------------------------------------- | -------------------------------------------------- |
-| **AUTH_API**    | `VITE_AUTH_API_URL` | `https://web-production-79739.up.railway.app`         | Autenticación, visitas campo, asistencia, reportes |
+| **AUTH_API**    | `VITE_AUTH_API_URL` | `https://web-production-7707c.up.railway.app`         | Autenticación, visitas campo, asistencia, reportes |
 | **PROJECT_API** | `VITE_API_URL`      | `https://gestorproyectoapi-production.up.railway.app` | Catálogo de Unidades de Proyecto                   |
 
 > **Nota:** Todos los endpoints autenticados envían header `Authorization: Bearer <Firebase_JWT_Token>`

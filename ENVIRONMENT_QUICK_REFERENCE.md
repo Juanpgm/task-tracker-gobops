@@ -50,7 +50,7 @@ bash scripts/setup-vercel.sh
    - `VITE_FIREBASE_MESSAGING_SENDER_ID`
    - `VITE_FIREBASE_APP_ID`
    - `VITE_API_URL` = `https://gestorproyectoapi-production.up.railway.app`
-   - `VITE_AUTH_API_URL` = `https://web-production-79739.up.railway.app`
+   - `VITE_AUTH_API_URL` = `https://web-production-7707c.up.railway.app`
 
 ### 3️⃣ Desplegar
 

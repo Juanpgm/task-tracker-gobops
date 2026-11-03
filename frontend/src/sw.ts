@@ -23,7 +23,7 @@ registerRoute(
 
 // Backend API (Railway)
 registerRoute(
-  ({ url }) => url.host === 'web-production-79739.up.railway.app',
+  ({ url }) => url.host === 'web-production-7707c.up.railway.app',
   new NetworkFirst({
     cacheName: 'api-cache',
     networkTimeoutSeconds: 5,

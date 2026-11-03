@@ -503,8 +503,8 @@ apiClient.setToken(accessToken);
 VITE_AUTH_API_URL=http://localhost:8000   # o /api/auth con proxy Vite
 
 # .env.production (Vercel)
-VITE_AUTH_API_URL=https://web-production-79739.up.railway.app
-VITE_UPLOAD_API_URL=https://web-production-79739.up.railway.app  # directo, sin proxy Vercel
+VITE_AUTH_API_URL=https://web-production-7707c.up.railway.app
+VITE_UPLOAD_API_URL=https://web-production-7707c.up.railway.app  # directo, sin proxy Vercel
 ```
 
 **Por qué `VITE_UPLOAD_API_URL` es diferente:** El proxy de Vercel puede corromper bodies multipart/form-data binarios. Los uploads de fotos y audios se hacen directamente al backend en Railway, sin pasar por Vercel.
@@ -518,7 +518,7 @@ VITE_UPLOAD_API_URL=https://web-production-79739.up.railway.app  # directo, sin 
 server: {
   proxy: {
     '/api/auth': {
-      target: 'https://web-production-79739.up.railway.app',
+      target: 'https://web-production-7707c.up.railway.app',
       changeOrigin: true,
       rewrite: (path) => path.replace(/^\/api\/auth/, ''),
     },

@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-$base = 'https://web-production-79739.up.railway.app'
+$base = 'https://web-production-7707c.up.railway.app'
 $apiKey = 'AIzaSyAET3L93mkCiGtXLW7XVL-wIck4k4rvzdM'
 $ts = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 $email = "prod.flow.$ts@example.com"

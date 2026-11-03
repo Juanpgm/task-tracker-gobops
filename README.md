@@ -105,7 +105,7 @@ El sistema implementa una arquitectura completa de **Administración y Control d
 
 - **Frontend**: Svelte 4 + TypeScript + Vite
 - **Backend APIs**:
-  - Auth API: `https://web-production-79739.up.railway.app`
+  - Auth API: `https://web-production-7707c.up.railway.app`
   - Project API: `https://gestorproyectoapi-production.up.railway.app`
 - **Base de datos**: Firebase + APIs externas
 - **PWA**: Service Worker con Workbox
@@ -117,7 +117,7 @@ Ver [API_ENDPOINTS.md](./API_ENDPOINTS.md) para documentación completa de endpo
 ### APIs disponibles
 
 - **Auth API** (Control de Accesos):
-  - Base: `https://web-production-79739.up.railway.app`
+  - Base: `https://web-production-7707c.up.railway.app`
   - Incluye: Autenticación, administración de usuarios y roles, permisos
 - **Project API** (Catálogo de Proyectos):
   - Base: `https://gestorproyectoapi-production.up.railway.app`

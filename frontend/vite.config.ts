@@ -122,7 +122,7 @@ export default defineConfig(({ mode }) => {
     port: 5173,
     proxy: {
       '/api/auth': {
-        target: env.VITE_AUTH_API_TARGET || 'https://web-production-79739.up.railway.app',
+        target: env.VITE_AUTH_API_TARGET || 'https://web-production-7707c.up.railway.app',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/auth/, ''),
         secure: false

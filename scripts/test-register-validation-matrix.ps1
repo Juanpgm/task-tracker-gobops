@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-$base = 'https://web-production-79739.up.railway.app'
+$base = 'https://web-production-7707c.up.railway.app'
 $ts = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 
 function Invoke-RegisterCase {
