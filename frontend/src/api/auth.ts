@@ -301,7 +301,7 @@ export function initAuthListener(): () => void {
  * con tokens de sesión previos en apiClient.
  */
 export async function registerUser(payload: RegisterUserPayload): Promise<string> {
-  const baseUrl = import.meta.env.VITE_AUTH_API_URL || '/api/auth';
+  const baseUrl = (import.meta.env.VITE_AUTH_API_URL || '/api/auth').replace(/\/+$/, '');
   const url = `${baseUrl}/auth/register`;
 
   try {

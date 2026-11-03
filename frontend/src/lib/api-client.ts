@@ -46,7 +46,8 @@ export class ApiClient {
   private onUnauthorized: UnauthorizedHandler | null = null;
 
   constructor(baseUrl: string) {
-    this.baseUrl = baseUrl;
+    // Strip trailing slashes: a base like "https://host/" + "/path" yields "//path" (404).
+    this.baseUrl = baseUrl.replace(/\/+$/, '');
   }
 
   setToken(token: string | null) {

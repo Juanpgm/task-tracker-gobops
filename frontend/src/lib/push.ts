@@ -9,7 +9,7 @@ import { authStore } from '../stores/authStore';
 import { get } from 'svelte/store';
 import { isStandalone, isIOS, iosVersion } from './pwa';
 
-const AUTH_API = import.meta.env.VITE_AUTH_API_URL || '/api/auth';
+const AUTH_API = (import.meta.env.VITE_AUTH_API_URL || '/api/auth').replace(/\/+$/, '');
 
 export type PushSupport =
   | { ok: true }
