@@ -24,6 +24,7 @@
    */
   import { onDestroy } from 'svelte';
   import L from 'leaflet';
+  import { CARTO_TILE_URL } from '../../lib/mapTiles';
   import 'leaflet/dist/leaflet.css';
   import { geoStore } from '../../stores/geoStore';
   import { navigationStore } from '../../stores/navigationStore';
@@ -256,10 +257,9 @@
     });
     map.fitBounds(CALI_BOUNDS, { animate: false });
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    L.tileLayer(CARTO_TILE_URL, {
       attribution: '',
       maxZoom: 19,
-      subdomains: 'abcd',
     }).addTo(map);
 
     // Orden de creación = orden de apilado (el último queda arriba):

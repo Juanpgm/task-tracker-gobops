@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from "svelte";
   import L from "leaflet";
+  import { CARTO_TILE_URL } from "../../lib/mapTiles";
   import {
     getCurrentPosition,
     reverseGeocodeWithFallback,
@@ -116,15 +117,11 @@
       attributionControl: true,
     });
 
-    L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-      {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: "abcd",
-        maxZoom: 20,
-      }
-    ).addTo(map);
+    L.tileLayer(CARTO_TILE_URL, {
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      maxZoom: 20,
+    }).addTo(map);
 
     // Fix default icon URLs (Vite no resuelve los assets por defecto de Leaflet).
     const defaultIcon = L.icon({
